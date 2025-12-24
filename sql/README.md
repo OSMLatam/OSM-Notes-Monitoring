@@ -29,9 +29,22 @@ createdb osm_notes_monitoring
 psql -d osm_notes_monitoring -f sql/init.sql
 ```
 
+### Testing the Schema
+
+Test the schema initialization:
+```bash
+./sql/test_schema.sh
+```
+
+This script will:
+- Create a test database
+- Initialize the schema
+- Run comprehensive tests (tables, indexes, functions, views, constraints)
+- Clean up the test database
+
 ### Test Database Setup
 
-For testing, create a separate database:
+For manual testing, create a separate database:
 ```bash
 createdb osm_notes_monitoring_test
 psql -d osm_notes_monitoring_test -f sql/init.sql

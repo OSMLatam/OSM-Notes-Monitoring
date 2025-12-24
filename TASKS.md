@@ -41,6 +41,8 @@
 ### Database Schema & Initialization
 
 - [x] Review and finalize `sql/init.sql` schema
+- [x] Create database initialization test script (`sql/test_schema.sh`)
+- [x] Test database initialization on clean database
 - [ ] Add database migration scripts structure
 - [ ] Create database backup/restore procedures
 - [ ] Document database schema (ER diagrams, table descriptions)
