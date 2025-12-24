@@ -1,0 +1,75 @@
+# Monitoring Configuration for OSM-Notes-Monitoring
+# Version: 2025-01-23
+#
+# This file contains monitoring-specific settings.
+# Main system properties are in etc/properties.sh
+#
+# Copy this file to monitoring.conf and configure:
+#   cp config/monitoring.conf.example config/monitoring.conf
+
+# Component-specific monitoring settings
+
+# Ingestion Monitoring
+INGESTION_ENABLED=true
+INGESTION_CHECK_TIMEOUT=300  # seconds
+INGESTION_MAX_ERROR_RATE=5   # percentage
+INGESTION_DATA_QUALITY_THRESHOLD=95  # percentage
+
+# Analytics Monitoring
+ANALYTICS_ENABLED=true
+ANALYTICS_CHECK_TIMEOUT=600  # seconds
+ANALYTICS_ETL_TIMEOUT=3600   # seconds (1 hour)
+ANALYTICS_DATA_FRESHNESS_THRESHOLD=3600  # seconds (1 hour)
+
+# WMS Monitoring
+WMS_ENABLED=true
+WMS_CHECK_TIMEOUT=30   # seconds
+WMS_RESPONSE_TIME_THRESHOLD=2000  # milliseconds
+WMS_ERROR_RATE_THRESHOLD=5  # percentage
+WMS_HEALTH_CHECK_URL="http://localhost:8080/health"
+
+# API Monitoring
+API_ENABLED=true
+API_CHECK_TIMEOUT=10   # seconds
+API_RESPONSE_TIME_THRESHOLD=500   # milliseconds
+API_ERROR_RATE_THRESHOLD=1   # percentage
+API_HEALTH_CHECK_URL="http://localhost:8081/health"
+
+# Data Freshness Monitoring
+DATA_ENABLED=true
+DATA_CHECK_TIMEOUT=60   # seconds
+DATA_BACKUP_FRESHNESS_THRESHOLD=86400  # seconds (24 hours)
+DATA_REPO_SYNC_CHECK_ENABLED=true
+
+# Infrastructure Monitoring
+INFRASTRUCTURE_ENABLED=true
+INFRASTRUCTURE_CHECK_TIMEOUT=30   # seconds
+INFRASTRUCTURE_CPU_THRESHOLD=80   # percentage
+INFRASTRUCTURE_MEMORY_THRESHOLD=85  # percentage
+INFRASTRUCTURE_DISK_THRESHOLD=90   # percentage
+
+# Metrics Collection
+METRICS_RETENTION_DAYS=90
+METRICS_CLEANUP_ENABLED=true
+METRICS_CLEANUP_SCHEDULE="0 2 * * *"  # Daily at 2 AM
+
+# Health Check Settings
+HEALTH_CHECK_ENABLED=true
+HEALTH_CHECK_INTERVAL=60  # seconds
+HEALTH_CHECK_RETRY_COUNT=3
+HEALTH_CHECK_RETRY_DELAY=10  # seconds
+
+# Performance Monitoring
+PERFORMANCE_MONITORING_ENABLED=true
+PERFORMANCE_SLOW_QUERY_THRESHOLD=1000  # milliseconds
+PERFORMANCE_TRACK_DB_QUERIES=true
+
+# Dependency Monitoring
+DEPENDENCY_CHECK_ENABLED=true
+DEPENDENCY_CHECK_INTERVAL=300  # seconds (5 minutes)
+
+# Notification Settings
+NOTIFY_ON_DEGRADED=true
+NOTIFY_ON_RECOVERY=true
+NOTIFY_ON_MAINTENANCE=false
+

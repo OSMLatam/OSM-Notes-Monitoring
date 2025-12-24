@@ -1,0 +1,35 @@
+# Properties for OSM-Notes-Monitoring
+# Copy this file to properties.sh and configure
+# Version: 2025-01-23
+
+# Database
+DBNAME="osm_notes_monitoring"
+DBHOST="localhost"
+DBPORT="5432"
+DBUSER="postgres"
+
+# Alerting
+ADMIN_EMAIL="admin@example.com"
+SEND_ALERT_EMAIL="true"
+SLACK_WEBHOOK_URL=""  # Optional
+
+# Monitoring Intervals (in seconds)
+INGESTION_CHECK_INTERVAL=300      # 5 minutes
+ANALYTICS_CHECK_INTERVAL=900       # 15 minutes
+WMS_CHECK_INTERVAL=300             # 5 minutes
+API_CHECK_INTERVAL=60              # 1 minute
+DATA_CHECK_INTERVAL=3600           # 1 hour
+INFRASTRUCTURE_CHECK_INTERVAL=300  # 5 minutes
+
+# Logging
+LOG_LEVEL="INFO"
+LOG_DIR="/var/log/osm-notes-monitoring"
+TMP_DIR="/var/tmp/osm-notes-monitoring"
+LOCK_DIR="/var/run/osm-notes-monitoring"
+
+# Repository Paths (adjust to your setup)
+INGESTION_REPO_PATH="/path/to/OSM-Notes-Ingestion"
+ANALYTICS_REPO_PATH="/path/to/OSM-Notes-Analytics"
+WMS_REPO_PATH="/path/to/OSM-Notes-WMS"
+DATA_REPO_PATH="/path/to/OSM-Notes-Data"
+

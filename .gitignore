@@ -1,0 +1,81 @@
+# Log files
+*.log
+logs/
+*.log.*
+
+# Temporary files
+*.tmp
+*.temp
+tmp/
+temp/
+
+# Metrics storage (if using files)
+metrics/*.json
+metrics/*.csv
+!metrics/.gitkeep
+
+# Configuration files with sensitive data (keep templates)
+etc/properties.sh
+config/*.conf
+!config/*.example
+!config/*.conf.example
+
+# Database files
+*.db
+*.sqlite
+
+# Backup files
+*.bak
+*.backup
+
+# Test output
+tests/output/
+tests/results/
+tests/tmp/
+coverage/
+test_coverage/
+
+# Node.js dependencies (if using any)
+node_modules/
+
+# Python virtual environments (if using any)
+venv/
+env/
+.venv/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Grafana data (if running locally)
+grafana/data/
+
+# Monitoring runtime data
+runtime/
+state/
+
+# Generated dashboards (if auto-generated)
+dashboards/generated/
+
+# Lock files
+*.lock
+
+# Environment files
+.env
+.env.local
+
+# Compiled files
+*.pyc
+__pycache__/
+
+# Documentation build
+docs/_build/
+docs/.doctrees/
+
