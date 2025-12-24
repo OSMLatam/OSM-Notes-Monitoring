@@ -6,6 +6,7 @@
 load "$(dirname "$0")/../../test_helper.bash"
 
 # Source the library
+# shellcheck disable=SC1091
 source "$(dirname "$0")/../../../bin/lib/loggingFunctions.sh"
 
 @test "log_info writes to log file" {
@@ -36,6 +37,7 @@ source "$(dirname "$0")/../../../bin/lib/loggingFunctions.sh"
     timestamp=$(get_timestamp)
     
     # Should match YYYY-MM-DD HH:MM:SS format
+    # shellcheck disable=SC1083
     assert [[ "${timestamp}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}\ [0-9]{2}:[0-9]{2}:[0-9]{2}$ ]]
 }
 
@@ -43,7 +45,7 @@ source "$(dirname "$0")/../../../bin/lib/loggingFunctions.sh"
     local test_log_file="${TEST_ROOT}/tests/tmp/test_level.log"
     
     init_logging "${test_log_file}" "test_script"
-    LOG_LEVEL=${LOG_LEVEL_INFO}
+    export LOG_LEVEL=${LOG_LEVEL_INFO}
     
     log_debug "Debug message"
     log_info "Info message"

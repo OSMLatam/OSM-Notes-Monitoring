@@ -8,14 +8,16 @@
 #
 
 # Source logging functions
+# shellcheck disable=SC1091
 if [[ -f "$(dirname "${BASH_SOURCE[0]}")/loggingFunctions.sh" ]]; then
     source "$(dirname "${BASH_SOURCE[0]}")/loggingFunctions.sh"
 fi
 
-# Alert levels
+# Alert levels (exported for external use)
 readonly ALERT_LEVEL_CRITICAL="critical"
 readonly ALERT_LEVEL_WARNING="warning"
 readonly ALERT_LEVEL_INFO="info"
+export ALERT_LEVEL_CRITICAL ALERT_LEVEL_WARNING ALERT_LEVEL_INFO
 
 ##
 # Initialize alerting
@@ -28,6 +30,7 @@ init_alerting() {
     project_root="$(dirname "$(dirname "${script_dir}")")"
     
     # Source alert configuration if available
+    # shellcheck disable=SC1091
     if [[ -f "${project_root}/config/alerts.conf" ]]; then
         source "${project_root}/config/alerts.conf"
     fi

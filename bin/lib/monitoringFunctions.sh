@@ -18,6 +18,7 @@ init_monitoring() {
     project_root="$(dirname "$(dirname "${script_dir}")")"
     
     # Source configuration if available
+    # shellcheck disable=SC1091
     if [[ -f "${project_root}/etc/properties.sh" ]]; then
         source "${project_root}/etc/properties.sh"
     fi

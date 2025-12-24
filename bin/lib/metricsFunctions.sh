@@ -8,11 +8,13 @@
 #
 
 # Source logging functions
+# shellcheck disable=SC1091
 if [[ -f "$(dirname "${BASH_SOURCE[0]}")/loggingFunctions.sh" ]]; then
     source "$(dirname "${BASH_SOURCE[0]}")/loggingFunctions.sh"
 fi
 
 # Source monitoring functions for database access
+# shellcheck disable=SC1091
 if [[ -f "$(dirname "${BASH_SOURCE[0]}")/monitoringFunctions.sh" ]]; then
     source "$(dirname "${BASH_SOURCE[0]}")/monitoringFunctions.sh"
 fi

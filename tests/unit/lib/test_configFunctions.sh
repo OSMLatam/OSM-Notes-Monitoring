@@ -6,6 +6,7 @@
 load "$(dirname "$0")/../../test_helper.bash"
 
 # Source the library
+# shellcheck disable=SC1091
 source "$(dirname "$0")/../../../bin/lib/configFunctions.sh"
 
 @test "get_project_root returns valid path" {

@@ -8,6 +8,7 @@
 #
 
 # Source logging functions
+# shellcheck disable=SC1091
 if [[ -f "$(dirname "${BASH_SOURCE[0]}")/loggingFunctions.sh" ]]; then
     source "$(dirname "${BASH_SOURCE[0]}")/loggingFunctions.sh"
 fi
@@ -47,6 +48,7 @@ load_main_config() {
     fi
     
     # Source configuration
+    # shellcheck disable=SC1090,SC1091
     if ! source "${config_file}"; then
         log_error "Failed to load configuration from ${config_file}"
         return 1
@@ -116,6 +118,7 @@ load_monitoring_config() {
         return 0
     fi
     
+    # shellcheck disable=SC1090,SC1091
     if ! source "${config_file}"; then
         log_error "Failed to load monitoring configuration from ${config_file}"
         return 1
@@ -144,6 +147,7 @@ load_alert_config() {
         return 0
     fi
     
+    # shellcheck disable=SC1090,SC1091
     if ! source "${config_file}"; then
         log_error "Failed to load alert configuration from ${config_file}"
         return 1
@@ -172,6 +176,7 @@ load_security_config() {
         return 0
     fi
     
+    # shellcheck disable=SC1090,SC1091
     if ! source "${config_file}"; then
         log_error "Failed to load security configuration from ${config_file}"
         return 1

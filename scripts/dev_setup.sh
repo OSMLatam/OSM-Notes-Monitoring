@@ -9,8 +9,12 @@
 
 set -euo pipefail
 
-readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-readonly PROJECT_ROOT="$(dirname "${SCRIPT_DIR}")"
+SCRIPT_DIR=""
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly SCRIPT_DIR
+PROJECT_ROOT=""
+PROJECT_ROOT="$(dirname "${SCRIPT_DIR}")"
+readonly PROJECT_ROOT
 
 # Colors
 readonly RED='\033[0;31m'

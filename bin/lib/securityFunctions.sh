@@ -8,6 +8,7 @@
 #
 
 # Source logging functions
+# shellcheck disable=SC1091
 if [[ -f "$(dirname "${BASH_SOURCE[0]}")/loggingFunctions.sh" ]]; then
     source "$(dirname "${BASH_SOURCE[0]}")/loggingFunctions.sh"
 fi
@@ -23,6 +24,7 @@ init_security() {
     project_root="$(dirname "$(dirname "${script_dir}")")"
     
     # Source security configuration if available
+    # shellcheck disable=SC1091
     if [[ -f "${project_root}/config/security.conf" ]]; then
         source "${project_root}/config/security.conf"
     fi
@@ -49,6 +51,7 @@ is_valid_ip() {
     if [[ "${ip}" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
         # Check each octet is 0-255
         local IFS='.'
+        # shellcheck disable=SC2206
         local -a octets=(${ip})
         for octet in "${octets[@]}"; do
             if [[ ${octet} -lt 0 || ${octet} -gt 255 ]]; then
