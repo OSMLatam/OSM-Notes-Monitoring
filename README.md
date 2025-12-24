@@ -186,33 +186,28 @@ open dashboards/html/overview.html
 
 ## Configuration
 
-### Main Configuration
+### Quick Setup
 
-Edit `etc/properties.sh`:
+Generate configuration files:
 ```bash
-# Database
-DBNAME="osm_notes_monitoring"
+# Interactive mode (recommended)
+./scripts/generate_config.sh -i
 
-# Alerting
-ADMIN_EMAIL="admin@example.com"
-SEND_ALERT_EMAIL="true"
-
-# Monitoring intervals
-INGESTION_CHECK_INTERVAL=300  # 5 minutes
-ANALYTICS_CHECK_INTERVAL=900  # 15 minutes
+# Or generate with defaults
+./scripts/generate_config.sh -a
 ```
 
-### Security Configuration
+### Configuration Files
 
-Edit `config/security.conf`:
-```bash
-# Rate Limiting
-RATE_LIMIT_PER_IP_PER_MINUTE=60
-RATE_LIMIT_PER_IP_PER_HOUR=1000
+- **Main Config**: `etc/properties.sh` - Database, intervals, logging
+- **Monitoring Config**: `config/monitoring.conf` - Component-specific settings
+- **Alert Config**: `config/alerts.conf` - Email, Slack, alert routing
+- **Security Config**: `config/security.conf` - Rate limiting, DDoS protection
 
-# DDoS Protection
-DDOS_THRESHOLD_REQUESTS_PER_SECOND=100
-```
+### Documentation
+
+For complete configuration reference, see:
+- **[Configuration Reference](./docs/CONFIGURATION_REFERENCE.md)**: All configuration options documented
 
 ## Documentation
 
