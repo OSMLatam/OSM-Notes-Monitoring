@@ -170,6 +170,11 @@ YYYYMMDD_HHMMSS_description.sql
 
 Applied migrations are tracked in the `schema_migrations` table, which is created automatically by `init.sql` or the first migration.
 
+## Schema Documentation
+
+For detailed schema documentation including ER diagrams, table descriptions, and relationships, see:
+- [Database Schema Documentation](../docs/DATABASE_SCHEMA.md)
+
 ## References
 
 - [PostgreSQL Documentation](https://www.postgresql.org/docs/)

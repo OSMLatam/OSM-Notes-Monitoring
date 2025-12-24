@@ -47,7 +47,7 @@
 - [x] Create migration runner script (`sql/migrations/run_migrations.sh`)
 - [x] Create migration tracking table in init.sql
 - [x] Create database backup/restore procedures
-- [ ] Document database schema (ER diagrams, table descriptions)
+- [x] Document database schema (ER diagrams, table descriptions)
 - [ ] Create database initialization test script
 - [ ] Test database initialization on clean database
 - [ ] Verify all indexes are created correctly
