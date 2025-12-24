@@ -20,6 +20,8 @@ OSM-Notes-Monitoring is the operational command center for the OSM Notes ecosyst
 This system monitors the following repositories:
 
 - **OSM-Notes-Ingestion**: Data ingestion status, processing health, data quality
+  - Integrates with existing monitoring scripts: `notesCheckVerifier.sh`, `processCheckPlanetNotes.sh`, `analyzeDatabasePerformance.sh`
+  - See [Existing Monitoring Components](./docs/Existing_Monitoring_Components.md) for details
 - **OSM-Notes-Analytics**: DWH/ETL job status, data freshness, query performance
 - **OSM-Notes-WMS**: Service availability, response times, tile generation
 - **OSM-Notes-API**: API availability, rate limiting, security incidents
@@ -72,6 +74,7 @@ For detailed architecture documentation, see:
 - [Monitoring Architecture Proposal](./docs/Monitoring_Architecture_Proposal.md)
 - [API Security Design](./docs/API_Security_Design.md)
 - [Monitoring Resumen Ejecutivo](./docs/Monitoring_Resumen_Ejecutivo.md) (Spanish)
+- [Existing Monitoring Components](./docs/Existing_Monitoring_Components.md): Integration with OSM-Notes-Ingestion monitoring scripts
 
 ## Features
 
@@ -215,7 +218,11 @@ DDOS_THRESHOLD_REQUESTS_PER_SECOND=100
 
 - **[Architecture Proposal](./docs/Monitoring_Architecture_Proposal.md)**: Complete system architecture
 - **[API Security Design](./docs/API_Security_Design.md)**: Security and protection mechanisms
+- **[Implementation Plan](./docs/IMPLEMENTATION_PLAN.md)**: Detailed implementation plan with testing and standards
+- **[Coding Standards](./docs/CODING_STANDARDS.md)**: Coding standards and best practices
+- **[Setup Guide](./docs/Monitoring_SETUP_Guide.md)**: Initial setup guide
 - **[Resumen Ejecutivo](./docs/Monitoring_Resumen_Ejecutivo.md)**: Executive summary (Spanish)
+- **[Existing Monitoring Components](./docs/Existing_Monitoring_Components.md)**: Integration with OSM-Notes-Ingestion monitoring scripts
 
 ## Related Repositories
 
