@@ -203,11 +203,13 @@ Generate configuration files:
 - **Monitoring Config**: `config/monitoring.conf` - Component-specific settings
 - **Alert Config**: `config/alerts.conf` - Email, Slack, alert routing
 - **Security Config**: `config/security.conf` - Rate limiting, DDoS protection
+- **Log Rotation**: `config/logrotate.conf` - Log rotation configuration
 
 ### Documentation
 
 For complete configuration reference, see:
 - **[Configuration Reference](./docs/CONFIGURATION_REFERENCE.md)**: All configuration options documented
+- **[Logging Guide](./docs/LOGGING.md)**: Logging setup, rotation, and best practices
 
 ## Documentation
 
