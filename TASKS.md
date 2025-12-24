@@ -48,14 +48,14 @@
 - [x] Create migration tracking table in init.sql
 - [x] Create database backup/restore procedures
 - [x] Document database schema (ER diagrams, table descriptions)
-- [ ] Create database initialization test script
-- [ ] Test database initialization on clean database
-- [ ] Verify all indexes are created correctly
-- [ ] Test cleanup functions (cleanup_old_metrics, cleanup_old_alerts)
+- [x] Create database initialization test script (`sql/test_schema.sh` - already done)
+- [x] Test database initialization on clean database (already done)
+- [x] Verify all indexes are created correctly (tested in test_schema.sh)
+- [x] Test cleanup functions (cleanup_old_metrics, cleanup_old_alerts) (tested in test_schema.sh)
 
 ### Configuration System
 
-- [ ] Test configuration loading with all config files
+- [x] Test configuration loading with all config files
 - [ ] Add configuration validation for all components
 - [ ] Create configuration template generator
 - [ ] Document all configuration options
