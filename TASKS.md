@@ -87,7 +87,7 @@
 - [x] Script execution status monitoring (implemented in `check_script_execution_status()`)
 - [x] Processing latency checks (implemented in `check_processing_latency()` and `check_processing_frequency()`)
 - [x] Data quality validation (implemented in `check_ingestion_data_quality()`, `check_data_completeness()`, `check_data_freshness()`)
-- [ ] Database performance monitoring
+- [x] Database performance monitoring (implemented in `check_ingestion_performance()` with connection, query, and table size checks)
 - [ ] Error rate tracking
 - [ ] Disk space monitoring
 - [ ] API download status checks

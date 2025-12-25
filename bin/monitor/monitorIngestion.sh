@@ -237,12 +237,165 @@ check_ingestion_health() {
 }
 
 ##
+# Check database connection performance
+##
+check_database_connection_performance() {
+    log_debug "${COMPONENT}: Checking database connection performance"
+    
+    if ! check_database_connection; then
+        log_warning "${COMPONENT}: Database connection check failed"
+        return 1
+    fi
+    
+    # Measure connection time
+    local start_time
+    start_time=$(date +%s%N 2>/dev/null || date +%s000)
+    
+    # Simple query to test connection speed
+    local test_query="SELECT 1;"
+    execute_sql_query "${test_query}" > /dev/null 2>&1
+    
+    local end_time
+    end_time=$(date +%s%N 2>/dev/null || date +%s000)
+    local duration_ms=$(((end_time - start_time) / 1000000))
+    
+    log_debug "${COMPONENT}: Database connection time: ${duration_ms}ms"
+    record_metric "${COMPONENT}" "db_connection_time_ms" "${duration_ms}" "component=ingestion"
+    
+    # Alert if connection is slow (> 1000ms)
+    if [[ ${duration_ms} -gt 1000 ]]; then
+        log_warning "${COMPONENT}: Slow database connection: ${duration_ms}ms"
+        send_alert "WARNING" "${COMPONENT}" "Slow database connection: ${duration_ms}ms"
+    fi
+    
+    return 0
+}
+
+##
+# Check database query performance
+##
+check_database_query_performance() {
+    log_debug "${COMPONENT}: Checking database query performance"
+    
+    if ! check_database_connection; then
+        return 1
+    fi
+    
+    # Test query performance with a simple count query
+    local test_query="SELECT COUNT(*) FROM notes;"
+    
+    local start_time
+    start_time=$(date +%s%N 2>/dev/null || date +%s000)
+    
+    local result
+    result=$(execute_sql_query "${test_query}" 2>/dev/null || echo "")
+    
+    local end_time
+    end_time=$(date +%s%N 2>/dev/null || date +%s000)
+    local duration_ms=$(((end_time - start_time) / 1000000))
+    
+    if [[ -n "${result}" ]]; then
+        log_debug "${COMPONENT}: Query performance test - Duration: ${duration_ms}ms, Result: ${result}"
+        record_metric "${COMPONENT}" "db_query_time_ms" "${duration_ms}" "component=ingestion,query=count_notes"
+        
+        # Check against slow query threshold
+        local slow_query_threshold="${PERFORMANCE_SLOW_QUERY_THRESHOLD:-1000}"
+        
+        if [[ ${duration_ms} -gt ${slow_query_threshold} ]]; then
+            log_warning "${COMPONENT}: Slow query detected: ${duration_ms}ms (threshold: ${slow_query_threshold}ms)"
+            send_alert "WARNING" "${COMPONENT}" "Slow query detected: ${duration_ms}ms"
+        fi
+    fi
+    
+    return 0
+}
+
+##
+# Check database connection pool
+##
+check_database_connections() {
+    log_debug "${COMPONENT}: Checking database connections"
+    
+    if ! check_database_connection; then
+        return 1
+    fi
+    
+    # Query to check active connections
+    # This is PostgreSQL-specific
+    local connections_query="
+        SELECT 
+            count(*) as total_connections,
+            count(*) FILTER (WHERE state = 'active') as active_connections,
+            count(*) FILTER (WHERE state = 'idle') as idle_connections
+        FROM pg_stat_activity
+        WHERE datname = current_database();
+    "
+    
+    local result
+    result=$(execute_sql_query "${connections_query}" 2>/dev/null || echo "")
+    
+    if [[ -n "${result}" ]]; then
+        log_debug "${COMPONENT}: Database connections: ${result}"
+        # Parse result and record metrics if needed
+        # Format: total_connections|active_connections|idle_connections
+    fi
+    
+    return 0
+}
+
+##
+# Check database table sizes and growth
+##
+check_database_table_sizes() {
+    log_debug "${COMPONENT}: Checking database table sizes"
+    
+    if ! check_database_connection; then
+        return 1
+    fi
+    
+    # Query to get table sizes (PostgreSQL-specific)
+    local size_query="
+        SELECT 
+            schemaname,
+            tablename,
+            pg_size_pretty(pg_total_relation_size(schemaname||'.'||tablename)) AS size,
+            pg_total_relation_size(schemaname||'.'||tablename) AS size_bytes
+        FROM pg_tables
+        WHERE schemaname NOT IN ('pg_catalog', 'information_schema')
+        ORDER BY pg_total_relation_size(schemaname||'.'||tablename) DESC
+        LIMIT 10;
+    "
+    
+    local result
+    result=$(execute_sql_query "${size_query}" 2>/dev/null || echo "")
+    
+    if [[ -n "${result}" ]]; then
+        log_debug "${COMPONENT}: Database table sizes:\n${result}"
+        # Could parse and record individual table sizes if needed
+    fi
+    
+    return 0
+}
+
+##
 # Check ingestion performance metrics using analyzeDatabasePerformance.sh
 ##
 check_ingestion_performance() {
-    log_info "${COMPONENT}: Starting performance check"
+    log_info "${COMPONENT}: Starting database performance check"
     
-    # Check if ingestion repository exists
+    # Check database connection performance
+    check_database_connection_performance
+    
+    # Check query performance
+    check_database_query_performance
+    
+    # Check database connections
+    check_database_connections
+    
+    # Check table sizes
+    check_database_table_sizes
+    
+    # Run analyzeDatabasePerformance.sh if available
     if [[ ! -d "${INGESTION_REPO_PATH}" ]]; then
         log_error "${COMPONENT}: Ingestion repository not found: ${INGESTION_REPO_PATH}"
         return 1
@@ -251,63 +404,62 @@ check_ingestion_performance() {
     # Path to analyzeDatabasePerformance.sh
     local perf_script="${INGESTION_REPO_PATH}/bin/monitor/analyzeDatabasePerformance.sh"
     
-    if [[ ! -f "${perf_script}" ]]; then
-        log_warning "${COMPONENT}: analyzeDatabasePerformance.sh not found: ${perf_script}"
-        log_info "${COMPONENT}: Skipping performance check (script not available)"
-        return 0
-    fi
-    
-    log_info "${COMPONENT}: Running analyzeDatabasePerformance.sh"
-    
-    # Run the performance analysis script
-    local start_time
-    start_time=$(date +%s)
-    
-    local exit_code=0
-    local output
-    output=$(cd "${INGESTION_REPO_PATH}" && bash "${perf_script}" 2>&1) || exit_code=$?
-    
-    local end_time
-    end_time=$(date +%s)
-    local duration=$((end_time - start_time))
-    
-    # Log the output
-    log_debug "${COMPONENT}: analyzeDatabasePerformance.sh output:\n${output}"
-    
-    # Check exit code
-    if [[ ${exit_code} -eq 0 ]]; then
-        log_info "${COMPONENT}: Performance check passed (duration: ${duration}s)"
-        record_metric "${COMPONENT}" "performance_check_status" "1" "component=ingestion,check=analyzeDatabasePerformance"
-        record_metric "${COMPONENT}" "performance_check_duration" "${duration}" "component=ingestion,check=analyzeDatabasePerformance"
+    if [[ -f "${perf_script}" ]]; then
+        log_info "${COMPONENT}: Running analyzeDatabasePerformance.sh"
         
-        # Parse output for performance metrics
-        # Look for PASS/FAIL/WARNING patterns
-        local pass_count
-        pass_count=$(echo "${output}" | grep -c "PASS\|✓" || echo "0")
-        local fail_count
-        fail_count=$(echo "${output}" | grep -c "FAIL\|✗" || echo "0")
-        local warning_count
-        warning_count=$(echo "${output}" | grep -c "WARNING\|⚠" || echo "0")
+        # Run the performance analysis script
+        local start_time
+        start_time=$(date +%s)
         
-        record_metric "${COMPONENT}" "performance_check_passes" "${pass_count}" "component=ingestion"
-        record_metric "${COMPONENT}" "performance_check_failures" "${fail_count}" "component=ingestion"
-        record_metric "${COMPONENT}" "performance_check_warnings" "${warning_count}" "component=ingestion"
+        local exit_code=0
+        local output
+        output=$(cd "${INGESTION_REPO_PATH}" && bash "${perf_script}" 2>&1) || exit_code=$?
         
-        if [[ ${fail_count} -gt 0 ]]; then
-            log_warning "${COMPONENT}: Performance check found ${fail_count} failures"
-            send_alert "WARNING" "${COMPONENT}" "Performance check found ${fail_count} failures, ${warning_count} warnings"
-        elif [[ ${warning_count} -gt 0 ]]; then
-            log_warning "${COMPONENT}: Performance check found ${warning_count} warnings"
+        local end_time
+        end_time=$(date +%s)
+        local duration=$((end_time - start_time))
+        
+        # Log the output
+        log_debug "${COMPONENT}: analyzeDatabasePerformance.sh output:\n${output}"
+        
+        # Check exit code
+        if [[ ${exit_code} -eq 0 ]]; then
+            log_info "${COMPONENT}: Performance analysis passed (duration: ${duration}s)"
+            record_metric "${COMPONENT}" "performance_check_status" "1" "component=ingestion,check=analyzeDatabasePerformance"
+            record_metric "${COMPONENT}" "performance_check_duration" "${duration}" "component=ingestion,check=analyzeDatabasePerformance"
+            
+            # Parse output for performance metrics
+            # Look for PASS/FAIL/WARNING patterns
+            local pass_count
+            pass_count=$(echo "${output}" | grep -c "PASS\|✓" || echo "0")
+            local fail_count
+            fail_count=$(echo "${output}" | grep -c "FAIL\|✗" || echo "0")
+            local warning_count
+            warning_count=$(echo "${output}" | grep -c "WARNING\|⚠" || echo "0")
+            
+            record_metric "${COMPONENT}" "performance_check_passes" "${pass_count}" "component=ingestion"
+            record_metric "${COMPONENT}" "performance_check_failures" "${fail_count}" "component=ingestion"
+            record_metric "${COMPONENT}" "performance_check_warnings" "${warning_count}" "component=ingestion"
+            
+            if [[ ${fail_count} -gt 0 ]]; then
+                log_warning "${COMPONENT}: Performance check found ${fail_count} failures"
+                send_alert "WARNING" "${COMPONENT}" "Performance check found ${fail_count} failures, ${warning_count} warnings"
+            elif [[ ${warning_count} -gt 0 ]]; then
+                log_warning "${COMPONENT}: Performance check found ${warning_count} warnings"
+            fi
+        else
+            log_error "${COMPONENT}: Performance analysis failed (exit_code: ${exit_code}, duration: ${duration}s)"
+            record_metric "${COMPONENT}" "performance_check_status" "0" "component=ingestion,check=analyzeDatabasePerformance"
+            record_metric "${COMPONENT}" "performance_check_duration" "${duration}" "component=ingestion,check=analyzeDatabasePerformance"
+            send_alert "ERROR" "${COMPONENT}" "Performance analysis failed: exit_code=${exit_code}"
         fi
-        
-        return 0
     else
-        log_error "${COMPONENT}: Performance check failed (exit_code: ${exit_code}, duration: ${duration}s)"
-        record_metric "${COMPONENT}" "performance_check_status" "0" "component=ingestion,check=analyzeDatabasePerformance"
-        record_metric "${COMPONENT}" "performance_check_duration" "${duration}" "component=ingestion,check=analyzeDatabasePerformance"
-        send_alert "ERROR" "${COMPONENT}" "Performance check failed: exit_code=${exit_code}"
-        return 1
+        log_warning "${COMPONENT}: analyzeDatabasePerformance.sh not found: ${perf_script}"
+        log_info "${COMPONENT}: Skipping script-based performance check (script not available)"
     fi
+    
+    log_info "${COMPONENT}: Database performance check completed"
+    return 0
 }
 
 ##
