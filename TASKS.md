@@ -90,7 +90,7 @@
 - [x] Database performance monitoring (implemented in `check_ingestion_performance()` with connection, query, and table size checks)
 - [x] Error rate tracking (implemented in `check_error_rate()` and `check_recent_error_spikes()`)
 - [x] Disk space monitoring (implemented in `check_disk_space()` and `check_system_disk_usage()`)
-- [ ] API download status checks
+- [x] API download status checks (implemented in `check_api_download_status()` and `check_api_download_success_rate()`)
 
 ### SQL Queries
 

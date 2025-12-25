@@ -59,6 +59,7 @@ Check Types:
     latency         Check processing latency
     error-rate      Check error rate from logs
     disk-space      Check disk space usage
+    api-download    Check API download status
     all             Run all checks (default)
 
 Examples:
@@ -920,6 +921,20 @@ run_all_checks() {
         checks_failed=$((checks_failed + 1))
     fi
     
+    # API download status check
+    if check_api_download_status; then
+        checks_passed=$((checks_passed + 1))
+    else
+        checks_failed=$((checks_failed + 1))
+    fi
+    
+    # API download success rate check
+    if check_api_download_success_rate; then
+        checks_passed=$((checks_passed + 1))
+    else
+        checks_failed=$((checks_failed + 1))
+    fi
+    
     log_info "${COMPONENT}: Monitoring checks completed - passed: ${checks_passed}, failed: ${checks_failed}"
     
     if [[ ${checks_failed} -gt 0 ]]; then
@@ -1035,6 +1050,13 @@ main() {
             ;;
         disk-space)
             if check_disk_space; then
+                exit 0
+            else
+                exit 1
+            fi
+            ;;
+        api-download)
+            if check_api_download_status && check_api_download_success_rate; then
                 exit 0
             else
                 exit 1

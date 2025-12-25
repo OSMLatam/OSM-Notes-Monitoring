@@ -33,3 +33,6 @@ ANALYTICS_REPO_PATH="/path/to/OSM-Notes-Analytics"
 WMS_REPO_PATH="/path/to/OSM-Notes-WMS"
 DATA_REPO_PATH="/path/to/OSM-Notes-Data"
 
+# API Configuration
+OSM_API_BASE_URL="https://api.openstreetmap.org/api/0.6/notes"  # OSM Notes API base URL
+
