@@ -94,11 +94,11 @@
 
 ### SQL Queries
 
-- [ ] Create `sql/ingestion/data_freshness.sql`
-- [ ] Create `sql/ingestion/processing_status.sql`
-- [ ] Create `sql/ingestion/performance_analysis.sql`
-- [ ] Create `sql/ingestion/data_quality.sql`
-- [ ] Create `sql/ingestion/error_analysis.sql`
+- [x] Create `sql/ingestion/data_freshness.sql`
+- [x] Create `sql/ingestion/processing_status.sql`
+- [x] Create `sql/ingestion/performance_analysis.sql`
+- [x] Create `sql/ingestion/data_quality.sql`
+- [x] Create `sql/ingestion/error_analysis.sql`
 - [ ] Test all SQL queries with sample data
 - [ ] Optimize queries for performance
 
