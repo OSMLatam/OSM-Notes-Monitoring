@@ -88,7 +88,7 @@
 - [x] Processing latency checks (implemented in `check_processing_latency()` and `check_processing_frequency()`)
 - [x] Data quality validation (implemented in `check_ingestion_data_quality()`, `check_data_completeness()`, `check_data_freshness()`)
 - [x] Database performance monitoring (implemented in `check_ingestion_performance()` with connection, query, and table size checks)
-- [ ] Error rate tracking
+- [x] Error rate tracking (implemented in `check_error_rate()` and `check_recent_error_spikes()`)
 - [ ] Disk space monitoring
 - [ ] API download status checks
 

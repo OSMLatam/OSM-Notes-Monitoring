@@ -57,6 +57,7 @@ Check Types:
     data-quality    Check data quality metrics
     execution-status Check script execution status
     latency         Check processing latency
+    error-rate      Check error rate from logs
     all             Run all checks (default)
 
 Examples:
@@ -134,6 +135,142 @@ check_script_execution_status() {
     
     # Check last execution time from log files
     check_last_execution_time
+    
+    return 0
+}
+
+##
+# Check error rate from log files
+##
+check_error_rate() {
+    log_info "${COMPONENT}: Starting error rate check"
+    
+    local ingestion_log_dir="${INGESTION_REPO_PATH}/logs"
+    
+    if [[ ! -d "${ingestion_log_dir}" ]]; then
+        log_warning "${COMPONENT}: Log directory not found: ${ingestion_log_dir}"
+        return 0
+    fi
+    
+    # Find recent log files (last 24 hours)
+    local log_files
+    mapfile -t log_files < <(find "${ingestion_log_dir}" -name "*.log" -type f -mtime -1 2>/dev/null | head -10)
+    
+    if [[ ${#log_files[@]} -eq 0 ]]; then
+        log_warning "${COMPONENT}: No recent log files found for error rate analysis"
+        return 0
+    fi
+    
+    local total_lines=0
+    local error_lines=0
+    local warning_lines=0
+    local info_lines=0
+    
+    # Parse log files for error patterns
+    for log_file in "${log_files[@]}"; do
+        # Count lines by log level
+        local file_errors
+        file_errors=$(grep -cE "\[ERROR\]|ERROR|error|failed|failure" "${log_file}" 2>/dev/null || echo "0")
+        local file_warnings
+        file_warnings=$(grep -cE "\[WARNING\]|WARNING|warning" "${log_file}" 2>/dev/null || echo "0")
+        local file_info
+        file_info=$(grep -cE "\[INFO\]|INFO|info" "${log_file}" 2>/dev/null || echo "0")
+        local file_total
+        file_total=$(wc -l < "${log_file}" 2>/dev/null || echo "0")
+        
+        error_lines=$((error_lines + file_errors))
+        warning_lines=$((warning_lines + file_warnings))
+        info_lines=$((info_lines + file_info))
+        total_lines=$((total_lines + file_total))
+    done
+    
+    if [[ ${total_lines} -eq 0 ]]; then
+        log_info "${COMPONENT}: No log lines found for error rate analysis"
+        return 0
+    fi
+    
+    # Calculate error rate percentage
+    local error_rate=0
+    if [[ ${total_lines} -gt 0 ]]; then
+        error_rate=$((error_lines * 100 / total_lines))
+    fi
+    
+    local warning_rate=0
+    if [[ ${total_lines} -gt 0 ]]; then
+        warning_rate=$((warning_lines * 100 / total_lines))
+    fi
+    
+    log_info "${COMPONENT}: Error rate analysis - Total: ${total_lines}, Errors: ${error_lines} (${error_rate}%), Warnings: ${warning_lines} (${warning_rate}%)"
+    
+    # Record metrics
+    record_metric "${COMPONENT}" "error_count" "${error_lines}" "component=ingestion"
+    record_metric "${COMPONENT}" "warning_count" "${warning_lines}" "component=ingestion"
+    record_metric "${COMPONENT}" "error_rate_percent" "${error_rate}" "component=ingestion"
+    record_metric "${COMPONENT}" "warning_rate_percent" "${warning_rate}" "component=ingestion"
+    record_metric "${COMPONENT}" "log_lines_total" "${total_lines}" "component=ingestion"
+    
+    # Check against threshold
+    local max_error_rate="${INGESTION_MAX_ERROR_RATE:-5}"
+    
+    if [[ ${error_rate} -gt ${max_error_rate} ]]; then
+        log_warning "${COMPONENT}: Error rate (${error_rate}%) exceeds threshold (${max_error_rate}%)"
+        send_alert "WARNING" "${COMPONENT}" "High error rate detected: ${error_rate}% (threshold: ${max_error_rate}%, errors: ${error_lines}/${total_lines})"
+        return 1
+    fi
+    
+    # Check for recent error spikes (errors in last hour)
+    check_recent_error_spikes
+    
+    log_info "${COMPONENT}: Error rate check passed - Rate: ${error_rate}%"
+    return 0
+}
+
+##
+# Check for recent error spikes
+##
+check_recent_error_spikes() {
+    log_debug "${COMPONENT}: Checking for recent error spikes"
+    
+    local ingestion_log_dir="${INGESTION_REPO_PATH}/logs"
+    
+    # Find log files modified in last hour
+    local recent_logs
+    mapfile -t recent_logs < <(find "${ingestion_log_dir}" -name "*.log" -type f -mmin -60 2>/dev/null)
+    
+    if [[ ${#recent_logs[@]} -eq 0 ]]; then
+        log_debug "${COMPONENT}: No recent log files found for spike detection"
+        return 0
+    fi
+    
+    local recent_errors=0
+    local recent_total=0
+    
+    for log_file in "${recent_logs[@]}"; do
+        # Count errors in last hour (check file modification time and content)
+        local file_errors
+        file_errors=$(grep -cE "\[ERROR\]|ERROR|error|failed|failure" "${log_file}" 2>/dev/null || echo "0")
+        local file_total
+        file_total=$(wc -l < "${log_file}" 2>/dev/null || echo "0")
+        
+        recent_errors=$((recent_errors + file_errors))
+        recent_total=$((recent_total + file_total))
+    done
+    
+    if [[ ${recent_total} -gt 0 ]]; then
+        local recent_error_rate=$((recent_errors * 100 / recent_total))
+        
+        log_debug "${COMPONENT}: Recent error rate (last hour): ${recent_error_rate}% (${recent_errors}/${recent_total})"
+        record_metric "${COMPONENT}" "recent_error_rate_percent" "${recent_error_rate}" "component=ingestion,period=1hour"
+        
+        # Alert if spike detected (error rate > 2x threshold)
+        local max_error_rate="${INGESTION_MAX_ERROR_RATE:-5}"
+        local spike_threshold=$((max_error_rate * 2))
+        
+        if [[ ${recent_error_rate} -gt ${spike_threshold} ]]; then
+            log_warning "${COMPONENT}: Error spike detected in last hour: ${recent_error_rate}%"
+            send_alert "WARNING" "${COMPONENT}" "Error spike detected: ${recent_error_rate}% in last hour (${recent_errors} errors)"
+        fi
+    fi
     
     return 0
 }
@@ -659,6 +796,13 @@ run_all_checks() {
         checks_failed=$((checks_failed + 1))
     fi
     
+    # Error rate check
+    if check_error_rate; then
+        checks_passed=$((checks_passed + 1))
+    else
+        checks_failed=$((checks_failed + 1))
+    fi
+    
     log_info "${COMPONENT}: Monitoring checks completed - passed: ${checks_passed}, failed: ${checks_failed}"
     
     if [[ ${checks_failed} -gt 0 ]]; then
@@ -760,6 +904,13 @@ main() {
             ;;
         latency)
             if check_processing_latency; then
+                exit 0
+            else
+                exit 1
+            fi
+            ;;
+        error-rate)
+            if check_error_rate; then
                 exit 0
             else
                 exit 1
