@@ -67,7 +67,7 @@
 - [x] Test logging with different log levels (`scripts/test_logging_levels.sh`, `tests/integration/test_logging_levels.sh`)
 - [x] Create log aggregation utilities (`scripts/log_aggregator.sh`, `scripts/log_analyzer.sh`)
 - [x] Document logging best practices (`docs/LOGGING_BEST_PRACTICES.md`)
-- [ ] Test logging performance
+- [x] Test logging performance (`scripts/test_logging_performance.sh`)
 
 ---
 

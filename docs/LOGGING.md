@@ -500,6 +500,45 @@ local0.* @@log-server:514
 
 ---
 
+## Performance Testing
+
+### Running Performance Tests
+
+Test logging performance with the performance test suite:
+
+```bash
+# Run all performance tests
+./scripts/test_logging_performance.sh
+```
+
+**Test Coverage:**
+- Single log write performance
+- Batch log write performance
+- Log level filtering performance
+- Concurrent logging performance
+- Log file size impact
+- Different log levels performance
+- Memory usage
+
+**Example Output:**
+```
+=== Testing Single Log Write Performance ===
+  Total time: 26630ms
+  Iterations: 10000
+  Average time per log: 2ms
+  Logs per second: 375
+  Log file size: 738894 bytes
+```
+
+**Performance Guidelines:**
+- Single log writes: ~2-3ms per message
+- Log level filtering adds minimal overhead
+- Concurrent logging scales well
+- File size impact decreases with larger files
+- Memory usage is minimal
+
+---
+
 ## Configuration Reference
 
 ### Environment Variables
