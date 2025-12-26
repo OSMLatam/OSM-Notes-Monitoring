@@ -147,6 +147,88 @@ get_latest_metric_value() {
 }
 
 ##
+# Record a metric (wrapper for store_metric with automatic unit detection)
+#
+# Arguments:
+#   $1 - Component name
+#   $2 - Metric name
+#   $3 - Metric value
+#   $4 - Metadata string (key=value pairs, comma-separated)
+#
+# Returns:
+#   0 on success, 1 on failure
+##
+record_metric() {
+    local component="${1:?Component required}"
+    local metric_name="${2:?Metric name required}"
+    local metric_value="${3:?Metric value required}"
+    local metadata_string="${4:-}"
+    
+    # Determine unit from metric name suffix
+    local metric_unit=""
+    case "${metric_name}" in
+        *_percent)
+            metric_unit="percent"
+            ;;
+        *_ms)
+            metric_unit="milliseconds"
+            ;;
+        *_seconds|*_duration)
+            metric_unit="seconds"
+            ;;
+        *_hours)
+            metric_unit="hours"
+            ;;
+        *_count|*_total|*_found|*_executable|*_running|*_errors|*_warnings|*_passes|*_failures)
+            metric_unit="count"
+            ;;
+        *_bytes)
+            metric_unit="bytes"
+            ;;
+        *_status|*_score)
+            # Boolean or percentage status metrics
+            if [[ "${metric_value}" == "0" ]] || [[ "${metric_value}" == "1" ]]; then
+                metric_unit="boolean"
+            else
+                metric_unit="percent"
+            fi
+            ;;
+        *)
+            # Default: no unit
+            metric_unit=""
+            ;;
+    esac
+    
+    # Convert metadata string to JSON
+    local metadata_json="null"
+    if [[ -n "${metadata_string}" ]]; then
+        # Parse key=value pairs and convert to JSON
+        local json_pairs=()
+        IFS=',' read -ra pairs <<< "${metadata_string}"
+        for pair in "${pairs[@]}"; do
+            local key="${pair%%=*}"
+            local value="${pair#*=}"
+            # Escape quotes in value
+            value="${value//\"/\\\"}"
+            json_pairs+=("\"${key}\":\"${value}\"")
+        done
+        metadata_json="{$(IFS=','; echo "${json_pairs[*]}")}"
+    fi
+    
+    # Normalize component name (convert to lowercase)
+    local component_lower
+    component_lower=$(echo "${component}" | tr '[:upper:]' '[:lower:]')
+    
+    # Call store_metric
+    if ! store_metric "${component_lower}" "${metric_name}" "${metric_value}" "${metric_unit}" "${metadata_json}"; then
+        log_error "Failed to record metric: ${component}/${metric_name}"
+        return 1
+    fi
+    
+    return 0
+}
+
+##
 # Aggregate metrics by time period
 #
 # Arguments:

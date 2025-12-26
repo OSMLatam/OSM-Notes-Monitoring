@@ -105,7 +105,7 @@
 ### Metrics & Alerts
 
 - [x] Define ingestion-specific metrics (`docs/INGESTION_METRICS.md` - comprehensive metrics definition document)
-- [ ] Implement metrics collection for ingestion
+- [x] Implement metrics collection for ingestion (implemented `record_metric()` function, added missing check functions, improved data freshness metrics)
 - [ ] Set alert thresholds for ingestion
 - [ ] Implement alert conditions
 - [ ] Test alert delivery for ingestion issues
@@ -517,5 +517,5 @@
 
 **Last Updated:** 2025-12-25  
 **Current Phase:** Phase 2 - Ingestion Monitoring  
-**Next Task:** Implement metrics collection for ingestion
+**Next Task:** Set alert thresholds for ingestion
 

@@ -761,7 +761,7 @@ check_data_freshness() {
     # This is a placeholder - actual queries depend on database schema
     local freshness_query="
         SELECT 
-            MAX(updated_at) as last_update,
+            EXTRACT(EPOCH FROM (NOW() - MAX(updated_at))) as freshness_seconds,
             COUNT(*) FILTER (WHERE updated_at > NOW() - INTERVAL '1 hour') as recent_updates
         FROM notes
         LIMIT 1;
@@ -773,7 +773,27 @@ check_data_freshness() {
     
     if [[ -n "${result}" ]]; then
         log_debug "${COMPONENT}: Data freshness check result: ${result}"
-        # Parse and record metrics if needed
+        
+        # Parse result (format: freshness_seconds|recent_updates)
+        local freshness_seconds
+        freshness_seconds=$(echo "${result}" | cut -d'|' -f1 | tr -d '[:space:]' || echo "")
+        local recent_updates
+        recent_updates=$(echo "${result}" | cut -d'|' -f2 | tr -d '[:space:]' || echo "")
+        
+        if [[ -n "${freshness_seconds}" ]] && [[ "${freshness_seconds}" =~ ^[0-9]+\.?[0-9]*$ ]]; then
+            log_debug "${COMPONENT}: Data freshness: ${freshness_seconds} seconds, Recent updates: ${recent_updates}"
+            record_metric "${COMPONENT}" "data_freshness_seconds" "${freshness_seconds}" "component=ingestion"
+            
+            # Check against threshold (default: 1 hour)
+            local freshness_threshold=3600
+            if (( $(echo "${freshness_seconds} > ${freshness_threshold}" | bc -l 2>/dev/null || echo "0") )); then
+                log_warning "${COMPONENT}: Data freshness (${freshness_seconds}s) exceeds threshold (${freshness_threshold}s)"
+            fi
+        fi
+        
+        if [[ -n "${recent_updates}" ]] && [[ "${recent_updates}" =~ ^[0-9]+$ ]]; then
+            record_metric "${COMPONENT}" "recent_updates_count" "${recent_updates}" "component=ingestion,period=1hour"
+        fi
     fi
     
     return 0
@@ -864,6 +884,235 @@ check_ingestion_data_quality() {
 }
 
 ##
+# Check processing latency
+##
+check_processing_latency() {
+    log_info "${COMPONENT}: Starting processing latency check"
+    
+    # Check database connection
+    if ! check_database_connection; then
+        log_warning "${COMPONENT}: Cannot check processing latency - database connection failed"
+        return 0
+    fi
+    
+    # Try to get latency from processing_log table if it exists
+    local latency_query="
+        SELECT 
+            EXTRACT(EPOCH FROM (NOW() - MAX(execution_time))) AS latency_seconds
+        FROM processing_log
+        WHERE status = 'success'
+        LIMIT 1;
+    "
+    
+    local latency_seconds
+    latency_seconds=$(execute_sql_query "${latency_query}" 2>/dev/null || echo "")
+    
+    if [[ -n "${latency_seconds}" ]] && [[ "${latency_seconds}" != "" ]]; then
+        # Remove any whitespace
+        latency_seconds=$(echo "${latency_seconds}" | tr -d '[:space:]')
+        
+        # Check if it's a valid number
+        if [[ "${latency_seconds}" =~ ^[0-9]+\.?[0-9]*$ ]]; then
+            log_info "${COMPONENT}: Processing latency: ${latency_seconds} seconds"
+            record_metric "${COMPONENT}" "processing_latency_seconds" "${latency_seconds}" "component=ingestion"
+            
+            # Check against threshold
+            local latency_threshold="${INGESTION_LATENCY_THRESHOLD:-300}"
+            if (( $(echo "${latency_seconds} > ${latency_threshold}" | bc -l 2>/dev/null || echo "0") )); then
+                log_warning "${COMPONENT}: Processing latency (${latency_seconds}s) exceeds threshold (${latency_threshold}s)"
+                send_alert "WARNING" "${COMPONENT}" "High processing latency: ${latency_seconds}s (threshold: ${latency_threshold}s)"
+                return 1
+            fi
+        fi
+    else
+        # Fallback: Use log file age as proxy for latency
+        local ingestion_log_dir="${INGESTION_REPO_PATH}/logs"
+        if [[ -d "${ingestion_log_dir}" ]]; then
+            local latest_log
+            latest_log=$(find "${ingestion_log_dir}" -name "*.log" -type f -printf '%T@ %p\n' 2>/dev/null | sort -n | tail -1 | cut -d' ' -f2-)
+            
+            if [[ -n "${latest_log}" ]]; then
+                local log_mtime
+                log_mtime=$(stat -c %Y "${latest_log}" 2>/dev/null || stat -f %m "${latest_log}" 2>/dev/null || echo "0")
+                local current_time
+                current_time=$(date +%s)
+                local latency_seconds=$((current_time - log_mtime))
+                
+                log_info "${COMPONENT}: Processing latency (from log age): ${latency_seconds} seconds"
+                record_metric "${COMPONENT}" "processing_latency_seconds" "${latency_seconds}" "component=ingestion,source=log_age"
+                
+                # Check against threshold
+                local latency_threshold="${INGESTION_LATENCY_THRESHOLD:-300}"
+                if [[ ${latency_seconds} -gt ${latency_threshold} ]]; then
+                    log_warning "${COMPONENT}: Processing latency (${latency_seconds}s) exceeds threshold (${latency_threshold}s)"
+                    send_alert "WARNING" "${COMPONENT}" "High processing latency: ${latency_seconds}s (threshold: ${latency_threshold}s)"
+                    return 1
+                fi
+            fi
+        fi
+    fi
+    
+    log_info "${COMPONENT}: Processing latency check passed"
+    return 0
+}
+
+##
+# Check processing frequency
+##
+check_processing_frequency() {
+    log_debug "${COMPONENT}: Checking processing frequency"
+    
+    # Check database connection
+    if ! check_database_connection; then
+        log_warning "${COMPONENT}: Cannot check processing frequency - database connection failed"
+        return 0
+    fi
+    
+    # Try to get frequency from processing_log table
+    local frequency_query="
+        SELECT 
+            AVG(EXTRACT(EPOCH FROM (execution_time - LAG(execution_time) OVER (ORDER BY execution_time)))) / 3600.0 AS avg_frequency_hours
+        FROM processing_log
+        WHERE status = 'success'
+          AND execution_time > NOW() - INTERVAL '7 days'
+        ORDER BY execution_time DESC
+        LIMIT 10;
+    "
+    
+    local frequency_hours
+    frequency_hours=$(execute_sql_query "${frequency_query}" 2>/dev/null | head -1 | tr -d '[:space:]' || echo "")
+    
+    if [[ -n "${frequency_hours}" ]] && [[ "${frequency_hours}" != "" ]] && [[ "${frequency_hours}" =~ ^[0-9]+\.?[0-9]*$ ]]; then
+        log_debug "${COMPONENT}: Average processing frequency: ${frequency_hours} hours"
+        record_metric "${COMPONENT}" "processing_frequency_hours" "${frequency_hours}" "component=ingestion"
+    fi
+    
+    return 0
+}
+
+##
+# Check API download status
+##
+check_api_download_status() {
+    log_info "${COMPONENT}: Starting API download status check"
+    
+    # Check if ingestion repository exists
+    if [[ ! -d "${INGESTION_REPO_PATH}" ]]; then
+        log_warning "${COMPONENT}: Ingestion repository not found: ${INGESTION_REPO_PATH}"
+        return 0
+    fi
+    
+    # Look for API download logs or status files
+    local ingestion_log_dir="${INGESTION_REPO_PATH}/logs"
+    local api_download_status=0  # 0 = unknown, 1 = success
+    
+    # Check for recent API download activity in logs
+    if [[ -d "${ingestion_log_dir}" ]]; then
+        # Look for API-related log entries
+        local recent_api_logs
+        mapfile -t recent_api_logs < <(find "${ingestion_log_dir}" -name "*api*" -o -name "*download*" -type f -mmin -60 2>/dev/null | head -5)
+        
+        if [[ ${#recent_api_logs[@]} -gt 0 ]]; then
+            # Check for success indicators
+            for log_file in "${recent_api_logs[@]}"; do
+                if grep -qE "success|completed|downloaded|200 OK" "${log_file}" 2>/dev/null; then
+                    api_download_status=1
+                    break
+                fi
+            done
+        fi
+    fi
+    
+    # Check for API download script execution
+    local api_script="${INGESTION_REPO_PATH}/bin/processAPINotes.sh"
+    if [[ -f "${api_script}" ]]; then
+        # Check if script ran recently (within last hour)
+        if [[ -x "${api_script}" ]]; then
+            local script_mtime
+            script_mtime=$(stat -c %Y "${api_script}" 2>/dev/null || stat -f %m "${api_script}" 2>/dev/null || echo "0")
+            local current_time
+            current_time=$(date +%s)
+            local age_seconds=$((current_time - script_mtime))
+            
+            # If script was modified recently, assume it ran
+            if [[ ${age_seconds} -lt 3600 ]]; then
+                api_download_status=1
+            fi
+        fi
+    fi
+    
+    log_info "${COMPONENT}: API download status: ${api_download_status}"
+    record_metric "${COMPONENT}" "api_download_status" "${api_download_status}" "component=ingestion"
+    
+    if [[ ${api_download_status} -eq 0 ]]; then
+        log_warning "${COMPONENT}: No recent API download activity detected"
+        send_alert "WARNING" "${COMPONENT}" "No recent API download activity detected"
+        return 1
+    fi
+    
+    log_info "${COMPONENT}: API download status check passed"
+    return 0
+}
+
+##
+# Check API download success rate
+##
+check_api_download_success_rate() {
+    log_info "${COMPONENT}: Starting API download success rate check"
+    
+    # Check if ingestion repository exists
+    if [[ ! -d "${INGESTION_REPO_PATH}" ]]; then
+        log_warning "${COMPONENT}: Ingestion repository not found: ${INGESTION_REPO_PATH}"
+        return 0
+    fi
+    
+    local ingestion_log_dir="${INGESTION_REPO_PATH}/logs"
+    local total_downloads=0
+    local successful_downloads=0
+    
+    # Analyze log files for download attempts
+    if [[ -d "${ingestion_log_dir}" ]]; then
+        # Find API-related log files from last 24 hours
+        local api_logs
+        mapfile -t api_logs < <(find "${ingestion_log_dir}" -name "*api*" -o -name "*download*" -type f -mtime -1 2>/dev/null | head -10)
+        
+        for log_file in "${api_logs[@]}"; do
+            # Count download attempts
+            local downloads
+            downloads=$(grep -cE "download|fetch|GET|POST" "${log_file}" 2>/dev/null || echo "0")
+            total_downloads=$((total_downloads + downloads))
+            
+            # Count successful downloads
+            local successes
+            successes=$(grep -cE "success|completed|200 OK|downloaded" "${log_file}" 2>/dev/null || echo "0")
+            successful_downloads=$((successful_downloads + successes))
+        done
+    fi
+    
+    # Calculate success rate
+    local success_rate=100
+    if [[ ${total_downloads} -gt 0 ]]; then
+        success_rate=$((successful_downloads * 100 / total_downloads))
+    fi
+    
+    log_info "${COMPONENT}: API download success rate: ${success_rate}% (${successful_downloads}/${total_downloads})"
+    record_metric "${COMPONENT}" "api_download_success_rate_percent" "${success_rate}" "component=ingestion"
+    record_metric "${COMPONENT}" "api_download_total_count" "${total_downloads}" "component=ingestion"
+    record_metric "${COMPONENT}" "api_download_successful_count" "${successful_downloads}" "component=ingestion"
+    
+    # Check against threshold (default: 95%)
+    local success_threshold=95
+    if [[ ${success_rate} -lt ${success_threshold} ]] && [[ ${total_downloads} -gt 0 ]]; then
+        log_warning "${COMPONENT}: API download success rate (${success_rate}%) below threshold (${success_threshold}%)"
+        send_alert "WARNING" "${COMPONENT}" "Low API download success rate: ${success_rate}% (${successful_downloads}/${total_downloads})"
+        return 1
+    fi
+    
+    log_info "${COMPONENT}: API download success rate check passed"
+    return 0
+}
+
+##
 # Run all checks
 ##
 run_all_checks() {
@@ -892,6 +1141,9 @@ run_all_checks() {
     else
         checks_failed=$((checks_failed + 1))
     fi
+    
+    # Processing frequency check
+    check_processing_frequency
     
     # Performance check
     if check_ingestion_performance; then
