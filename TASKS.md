@@ -109,7 +109,7 @@
 - [x] Set alert thresholds for ingestion (`config/monitoring.conf.example` - all thresholds added, `docs/INGESTION_ALERT_THRESHOLDS.md` - comprehensive documentation)
 - [x] Implement alert conditions (all thresholds now have corresponding alert conditions, replaced hardcoded values with configurable thresholds)
 - [x] Test alert delivery for ingestion issues (`tests/integration/test_alert_delivery.sh` - comprehensive test suite for alert delivery)
-- [ ] Document alert meanings and responses
+- [x] Document alert meanings and responses (`docs/INGESTION_ALERT_RUNBOOK.md` - comprehensive runbook with investigation steps and resolution procedures)
 
 ### Testing
 
@@ -517,5 +517,5 @@
 
 **Last Updated:** 2025-12-25  
 **Current Phase:** Phase 2 - Ingestion Monitoring  
-**Next Task:** Document alert meanings and responses
+**Next Task:** Unit tests for ingestion monitoring checks
 
