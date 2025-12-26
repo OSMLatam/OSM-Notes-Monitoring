@@ -1,7 +1,7 @@
 # OSM-Notes-Monitoring - Task List
 
 > **Purpose:** Ordered task list for implementation - follow this list step by step  
-> **Last Updated:** 2025-12-24  
+> **Last Updated:** 2025-12-25  
 > **Status:** Active
 
 ## How to Use This List
@@ -104,7 +104,7 @@
 
 ### Metrics & Alerts
 
-- [ ] Define ingestion-specific metrics
+- [x] Define ingestion-specific metrics (`docs/INGESTION_METRICS.md` - comprehensive metrics definition document)
 - [ ] Implement metrics collection for ingestion
 - [ ] Set alert thresholds for ingestion
 - [ ] Implement alert conditions
@@ -515,7 +515,7 @@
 
 ---
 
-**Last Updated:** 2025-12-24  
-**Current Phase:** Phase 1 - Core Infrastructure  
-**Next Task:** Review and finalize `sql/init.sql` schema
+**Last Updated:** 2025-12-25  
+**Current Phase:** Phase 2 - Ingestion Monitoring  
+**Next Task:** Implement metrics collection for ingestion
 
