@@ -12,9 +12,41 @@
 # Ingestion Monitoring
 INGESTION_ENABLED=true
 INGESTION_CHECK_TIMEOUT=300  # seconds
-INGESTION_MAX_ERROR_RATE=5   # percentage
-INGESTION_DATA_QUALITY_THRESHOLD=95  # percentage
+
+# Script Execution Thresholds
+INGESTION_SCRIPTS_FOUND_THRESHOLD=3  # minimum number of scripts that should be found
+INGESTION_LAST_LOG_AGE_THRESHOLD=24  # hours - alert if no log activity for this long
+
+# Error and Logging Thresholds
+INGESTION_MAX_ERROR_RATE=5   # percentage - maximum acceptable error rate
+INGESTION_ERROR_COUNT_THRESHOLD=1000  # maximum errors in 24 hours before alert
+INGESTION_WARNING_COUNT_THRESHOLD=2000  # maximum warnings in 24 hours before alert
+INGESTION_WARNING_RATE_THRESHOLD=15  # percentage - maximum acceptable warning rate
+INGESTION_ERROR_SPIKE_MULTIPLIER=2  # multiplier for error spike detection (2x = 10% if max is 5%)
+
+# Database Performance Thresholds
+INGESTION_DB_CONNECTION_TIME_THRESHOLD=1000  # milliseconds - alert if connection takes longer
+INGESTION_DB_QUERY_TIME_THRESHOLD=1000  # milliseconds - uses PERFORMANCE_SLOW_QUERY_THRESHOLD
+
+# Performance Check Thresholds
+INGESTION_PERFORMANCE_CHECK_DURATION_THRESHOLD=300  # seconds (5 minutes) - alert if check takes longer
+INGESTION_PERFORMANCE_CHECK_WARNINGS_THRESHOLD=10  # maximum warnings in performance check
+
+# Data Quality Thresholds
+INGESTION_DATA_QUALITY_THRESHOLD=95  # percentage - minimum acceptable data quality score
+INGESTION_DATA_QUALITY_CHECK_DURATION_THRESHOLD=600  # seconds (10 minutes) - alert if check takes longer
+INGESTION_DATA_FRESHNESS_THRESHOLD=3600  # seconds (1 hour) - alert if data is older than this
+
+# Processing Latency Thresholds
 INGESTION_LATENCY_THRESHOLD=300  # seconds (5 minutes) - threshold for processing latency
+INGESTION_PROCESSING_FREQUENCY_THRESHOLD=24  # hours - alert if processing frequency exceeds this
+
+# Planet Notes Check Thresholds
+INGESTION_PLANET_CHECK_DURATION_THRESHOLD=600  # seconds (10 minutes) - alert if check takes longer
+
+# API Download Thresholds
+INGESTION_API_DOWNLOAD_SUCCESS_RATE_THRESHOLD=95  # percentage - minimum acceptable success rate
+INGESTION_API_DOWNLOAD_DURATION_THRESHOLD=600  # seconds (10 minutes) - alert if download takes longer
 
 # Analytics Monitoring
 ANALYTICS_ENABLED=true
