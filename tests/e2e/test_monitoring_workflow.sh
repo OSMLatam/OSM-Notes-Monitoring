@@ -282,7 +282,7 @@ get_latest_metric_value() {
     skip_if_database_not_available
     
     # Execute mock scripts multiple times
-    for i in {1..3}; do
+    for _ in {1..3}; do
         "${MOCK_SCRIPTS_DIR}/processAPINotes.sh"
         sleep 1
         check_script_execution_status

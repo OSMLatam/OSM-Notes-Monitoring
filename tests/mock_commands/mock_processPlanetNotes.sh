@@ -53,7 +53,6 @@ fi
 
 # Simulate success or failure based on success rate
 if [[ "${MOCK_SUCCESS_RATE}" -lt 100 ]]; then
-    local random_value
     random_value=$((RANDOM % 100))
     if [[ "${random_value}" -ge "${MOCK_SUCCESS_RATE}" ]]; then
         log_message "ERROR" "Planet file download failed: Simulated failure"
