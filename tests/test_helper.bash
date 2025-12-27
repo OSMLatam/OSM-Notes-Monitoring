@@ -88,7 +88,16 @@ fi
 # Test configuration
 readonly TEST_DIR="$(cd "$(dirname "${BATS_TEST_FILENAME}")" && pwd)"
 readonly TEST_ROOT="$(dirname "${TEST_DIR}")"
-readonly TEST_DB_NAME="osm_notes_monitoring_test"
+# Allow override of TEST_DB_NAME in test files
+if [[ -z "${TEST_DB_NAME:-}" ]]; then
+    # Allow override of TEST_DB_NAME in test files before loading
+if [[ -z "${TEST_DB_NAME:-}" ]]; then
+    readonly TEST_DB_NAME="osm_notes_monitoring_test"
+fi
+else
+    # If already set, make it readonly
+    readonly TEST_DB_NAME
+fi
 
 # Colors for output
 readonly RED='\033[0;31m'

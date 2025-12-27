@@ -38,7 +38,8 @@ source "${BATS_TEST_DIRNAME}/../../bin/lib/loggingFunctions.sh"
         
         # Check syntax with bash -n
         run bash -n "${config_file}"
-        assert_success "Config file ${config} has invalid syntax"
+        # assert_success without message (it doesn't take messages)
+        assert_success
     done
 }
 

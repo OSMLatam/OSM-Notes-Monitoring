@@ -189,12 +189,23 @@ check_error_rate() {
         # Count lines by log level
         local file_errors
         file_errors=$(grep -cE "\[ERROR\]|ERROR|error|failed|failure" "${log_file}" 2>/dev/null || echo "0")
+        # Ensure numeric value (remove any whitespace)
+        file_errors=$((file_errors + 0))
+        
         local file_warnings
         file_warnings=$(grep -cE "\[WARNING\]|WARNING|warning" "${log_file}" 2>/dev/null || echo "0")
+        # Ensure numeric value (remove any whitespace)
+        file_warnings=$((file_warnings + 0))
+        
         local file_info
         file_info=$(grep -cE "\[INFO\]|INFO|info" "${log_file}" 2>/dev/null || echo "0")
+        # Ensure numeric value (remove any whitespace)
+        file_info=$((file_info + 0))
+        
         local file_total
         file_total=$(wc -l < "${log_file}" 2>/dev/null || echo "0")
+        # Ensure numeric value (remove any whitespace)
+        file_total=$((file_total + 0))
         
         error_lines=$((error_lines + file_errors))
         warning_lines=$((warning_lines + file_warnings))
