@@ -82,19 +82,44 @@ EOF
 ##
 validate_sql_syntax() {
     local query="${1}"
+    local db_available="${2:-false}"
     
-    # Use psql to validate syntax without executing
-    # Try to parse the query
-    if echo "${query}" | psql -d "${TEST_DBNAME}" -c "EXPLAIN (FORMAT JSON) ${query}" > /dev/null 2>&1; then
-        return 0
-    else
-        # If EXPLAIN fails, try basic syntax check
-        # This is a simple check - actual validation requires database connection
-        if echo "${query}" | grep -qiE "^(SELECT|INSERT|UPDATE|DELETE|CREATE|DROP|ALTER)" 2>/dev/null; then
-            return 0  # Assume valid if starts with SQL keyword
+    # If database is available, try EXPLAIN for real syntax validation
+    if [[ "${db_available}" == "true" ]]; then
+        if echo "${query}" | psql -d "${TEST_DBNAME}" -c "EXPLAIN (FORMAT JSON) ${query}" > /dev/null 2>&1; then
+            return 0
         fi
-        return 1
+        # If EXPLAIN fails, it might be a syntax error or missing tables
+        # Check if it's a syntax error by looking for common SQL errors
+        local error_output
+        error_output=$(echo "${query}" | psql -d "${TEST_DBNAME}" -c "EXPLAIN ${query}" 2>&1)
+        if echo "${error_output}" | grep -qiE "(syntax error|parse error)" 2>/dev/null; then
+            return 1  # Real syntax error
+        fi
+        # Otherwise, likely a missing table/schema issue, assume syntax is OK
+        return 0
     fi
+    
+    # Without database, do structural validation
+    # Check for basic SQL structure
+    if ! echo "${query}" | grep -qiE "^(SELECT|INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|WITH|DO|BEGIN)" 2>/dev/null; then
+        return 1  # Doesn't start with valid SQL keyword
+    fi
+    
+    # Check for balanced parentheses (basic check)
+    local open_parens
+    local close_parens
+    open_parens=$(echo "${query}" | grep -o '(' | wc -l)
+    close_parens=$(echo "${query}" | grep -o ')' | wc -l)
+    if [[ ${open_parens} -ne ${close_parens} ]]; then
+        return 1  # Unbalanced parentheses
+    fi
+    
+    # Note: We don't validate quotes balance here because SQL strings
+    # can contain escaped quotes, and proper validation would require
+    # a full SQL parser. The database connection check will catch real syntax errors.
+    
+    return 0  # Basic structure looks valid
 }
 
 ##
@@ -152,7 +177,9 @@ test_sql_file() {
         print_message "${YELLOW}" "  ⚠ No queries found in file (may be a single query file)"
         # Try to execute the whole file
         if [[ "${syntax_only}" == "true" ]]; then
-            if validate_sql_syntax "${sql_file}" "$(cat "${sql_file}")"; then
+            local file_content
+            file_content=$(cat "${sql_file}")
+            if validate_sql_syntax "${file_content}" "${DB_AVAILABLE:-false}"; then
                 print_message "${GREEN}" "  ✓ Syntax valid"
                 TESTS_PASSED=$((TESTS_PASSED + 1))
             else
@@ -183,35 +210,55 @@ test_sql_file() {
         local query
         query=$(extract_queries "${sql_file}" "${i}")
         
-        if [[ -z "${query}" ]]; then
-            continue
-        fi
-        
+        # Always test every query, even if empty
         queries_tested=$((queries_tested + 1))
         
-        # Basic validation: check if query is not empty and contains SQL keywords
-        if [[ -z "${query}" ]] || ! echo "${query}" | grep -qiE "(SELECT|INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|WITH)" 2>/dev/null; then
-            print_message "${YELLOW}" "    Query ${i}: ⚠ Empty or invalid query structure"
+        # Check if query is empty or whitespace only
+        if [[ -z "${query}" ]] || [[ -z "${query// }" ]]; then
+            print_message "${RED}" "    Query ${i}: ✗ Empty query"
+            # Don't count as passed
             continue
         fi
         
         if [[ "${syntax_only}" == "true" ]]; then
-            # For syntax-only mode, just check if query structure looks valid
-            if echo "${query}" | grep -qiE "^(SELECT|INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|WITH)" 2>/dev/null; then
-                print_message "${GREEN}" "    Query ${i}: ✓ Structure valid (full validation requires DB connection)"
+            # Validate syntax without database
+            if validate_sql_syntax "${query}" "${DB_AVAILABLE:-false}"; then
+                print_message "${GREEN}" "    Query ${i}: ✓ Syntax valid"
                 queries_passed=$((queries_passed + 1))
             else
-                print_message "${RED}" "    Query ${i}: ✗ Invalid query structure"
+                print_message "${RED}" "    Query ${i}: ✗ Syntax error or invalid structure"
+                # Don't count as passed
             fi
         else
-            # Try to execute query (may fail if tables don't exist)
+            # Try to execute query
+            local execution_error
+            local exit_code
             if echo "${query}" | psql -d "${TEST_DBNAME}" -q -t -A > /dev/null 2>&1; then
-                print_message "${GREEN}" "    Query ${i}: ✓ Executed"
+                exit_code=0
+            else
+                exit_code=1
+            fi
+            
+            if [[ ${exit_code} -eq 0 ]]; then
+                print_message "${GREEN}" "    Query ${i}: ✓ Executed successfully"
                 queries_passed=$((queries_passed + 1))
             else
-                print_message "${YELLOW}" "    Query ${i}: ⚠ Execution failed (may be expected if tables don't exist)"
-                # Count as passed if it's likely a schema issue (query structure is valid)
-                queries_passed=$((queries_passed + 1))
+                # Check if it's a syntax error or schema issue
+                execution_error=$(echo "${query}" | psql -d "${TEST_DBNAME}" 2>&1)
+                if echo "${execution_error}" | grep -qiE "(syntax error|parse error)" 2>/dev/null; then
+                    print_message "${RED}" "    Query ${i}: ✗ Syntax error"
+                    # Don't count as passed
+                else
+                    # Likely a schema/table issue, which is expected in test environments
+                    print_message "${YELLOW}" "    Query ${i}: ⚠ Execution failed (likely missing tables/schema - syntax OK)"
+                    # Validate syntax to ensure it's not a syntax error
+                    if validate_sql_syntax "${query}" "${DB_AVAILABLE:-true}"; then
+                        queries_passed=$((queries_passed + 1))
+                    else
+                        print_message "${RED}" "    Query ${i}: ✗ Syntax validation also failed"
+                        # Don't count as passed
+                    fi
+                fi
             fi
         fi
     done
@@ -312,20 +359,28 @@ main() {
     fi
     
     # Check database connection (if function available)
+    local db_available=false
     if command -v check_database_connection > /dev/null 2>&1; then
-        if ! check_database_connection 2>/dev/null; then
+        if check_database_connection 2>/dev/null; then
+            db_available=true
+        else
             print_message "${YELLOW}" "Warning: Cannot connect to database ${TEST_DBNAME}"
-            print_message "${YELLOW}" "Will only validate SQL syntax"
+            print_message "${YELLOW}" "Will validate SQL syntax and structure only"
             syntax_only=true
         fi
     else
         # Try direct connection test
-        if ! psql -d "${TEST_DBNAME}" -c "SELECT 1;" > /dev/null 2>&1; then
+        if psql -d "${TEST_DBNAME}" -c "SELECT 1;" > /dev/null 2>&1; then
+            db_available=true
+        else
             print_message "${YELLOW}" "Warning: Cannot connect to database ${TEST_DBNAME}"
-            print_message "${YELLOW}" "Will only validate SQL syntax"
+            print_message "${YELLOW}" "Will validate SQL syntax and structure only"
             syntax_only=true
         fi
     fi
+    
+    # Export db_available for use in test functions
+    export DB_AVAILABLE="${db_available}"
     
     # Test all queries
     test_all_queries "${syntax_only}"
