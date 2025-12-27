@@ -189,22 +189,26 @@ check_error_rate() {
         # Count lines by log level
         local file_errors
         file_errors=$(grep -cE "\[ERROR\]|ERROR|error|failed|failure" "${log_file}" 2>/dev/null || echo "0")
-        # Ensure numeric value (remove any whitespace)
+        # Ensure numeric value (remove any whitespace and non-numeric characters)
+        file_errors=$(echo "${file_errors}" | tr -d '[:space:]' | grep -E '^[0-9]+$' || echo "0")
         file_errors=$((file_errors + 0))
         
         local file_warnings
         file_warnings=$(grep -cE "\[WARNING\]|WARNING|warning" "${log_file}" 2>/dev/null || echo "0")
-        # Ensure numeric value (remove any whitespace)
+        # Ensure numeric value (remove any whitespace and non-numeric characters)
+        file_warnings=$(echo "${file_warnings}" | tr -d '[:space:]' | grep -E '^[0-9]+$' || echo "0")
         file_warnings=$((file_warnings + 0))
         
         local file_info
         file_info=$(grep -cE "\[INFO\]|INFO|info" "${log_file}" 2>/dev/null || echo "0")
-        # Ensure numeric value (remove any whitespace)
+        # Ensure numeric value (remove any whitespace and non-numeric characters)
+        file_info=$(echo "${file_info}" | tr -d '[:space:]' | grep -E '^[0-9]+$' || echo "0")
         file_info=$((file_info + 0))
         
         local file_total
         file_total=$(wc -l < "${log_file}" 2>/dev/null || echo "0")
-        # Ensure numeric value (remove any whitespace)
+        # Ensure numeric value (remove any whitespace and non-numeric characters)
+        file_total=$(echo "${file_total}" | tr -d '[:space:]' | grep -E '^[0-9]+$' || echo "0")
         file_total=$((file_total + 0))
         
         error_lines=$((error_lines + file_errors))
@@ -298,8 +302,15 @@ check_recent_error_spikes() {
         # Count errors in last hour (check file modification time and content)
         local file_errors
         file_errors=$(grep -cE "\[ERROR\]|ERROR|error|failed|failure" "${log_file}" 2>/dev/null || echo "0")
+        # Ensure numeric value (remove any whitespace and non-numeric characters)
+        file_errors=$(echo "${file_errors}" | tr -d '[:space:]' | grep -E '^[0-9]+$' || echo "0")
+        file_errors=$((file_errors + 0))
+        
         local file_total
         file_total=$(wc -l < "${log_file}" 2>/dev/null || echo "0")
+        # Ensure numeric value (remove any whitespace and non-numeric characters)
+        file_total=$(echo "${file_total}" | tr -d '[:space:]' | grep -E '^[0-9]+$' || echo "0")
+        file_total=$((file_total + 0))
         
         recent_errors=$((recent_errors + file_errors))
         recent_total=$((recent_total + file_total))
