@@ -378,7 +378,7 @@ INFO: Info 4"
     local alert_sent=false
     # shellcheck disable=SC2317
     send_alert() {
-        if [[ "${3}" == *"No recent activity"* ]]; then
+        if [[ "${4}" == *"No recent activity"* ]]; then
             alert_sent=true
         fi
         return 0
@@ -549,7 +549,7 @@ INFO: Info 4"
     local alert_sent=false
     # shellcheck disable=SC2317
     send_alert() {
-        if [[ "${3}" == *"Data freshness exceeded"* ]]; then
+        if [[ "${4}" == *"Data freshness exceeded"* ]]; then
             alert_sent=true
         fi
         return 0

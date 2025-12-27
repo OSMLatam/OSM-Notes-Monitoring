@@ -9,16 +9,16 @@
 
 # Log levels (only define if not already set to allow multiple sourcing)
 if [[ -z "${LOG_LEVEL_DEBUG:-}" ]]; then
-    readonly LOG_LEVEL_DEBUG=0
+readonly LOG_LEVEL_DEBUG=0
 fi
 if [[ -z "${LOG_LEVEL_INFO:-}" ]]; then
-    readonly LOG_LEVEL_INFO=1
+readonly LOG_LEVEL_INFO=1
 fi
 if [[ -z "${LOG_LEVEL_WARNING:-}" ]]; then
-    readonly LOG_LEVEL_WARNING=2
+readonly LOG_LEVEL_WARNING=2
 fi
 if [[ -z "${LOG_LEVEL_ERROR:-}" ]]; then
-    readonly LOG_LEVEL_ERROR=3
+readonly LOG_LEVEL_ERROR=3
 fi
 
 # Default log level

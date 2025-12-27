@@ -16,13 +16,13 @@ fi
 # Alert levels (exported for external use)
 # Only define if not already set to allow multiple sourcing
 if [[ -z "${ALERT_LEVEL_CRITICAL:-}" ]]; then
-    readonly ALERT_LEVEL_CRITICAL="critical"
+readonly ALERT_LEVEL_CRITICAL="critical"
 fi
 if [[ -z "${ALERT_LEVEL_WARNING:-}" ]]; then
-    readonly ALERT_LEVEL_WARNING="warning"
+readonly ALERT_LEVEL_WARNING="warning"
 fi
 if [[ -z "${ALERT_LEVEL_INFO:-}" ]]; then
-    readonly ALERT_LEVEL_INFO="info"
+readonly ALERT_LEVEL_INFO="info"
 fi
 export ALERT_LEVEL_CRITICAL ALERT_LEVEL_WARNING ALERT_LEVEL_INFO
 

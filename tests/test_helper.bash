@@ -12,7 +12,7 @@ if [[ -f "${BATS_TEST_DIRNAME}/../bats-support/load.bash" ]]; then
 elif [[ -f '/usr/local/lib/bats-support/load.bash' ]]; then
     load '/usr/local/lib/bats-support/load.bash'
 elif [[ -f '/usr/lib/bats-support/load.bash' ]]; then
-    load '/usr/lib/bats-support/load.bash'
+load '/usr/lib/bats-support/load.bash'
 fi
 
 if [[ -f "${BATS_TEST_DIRNAME}/../bats-assert/load.bash" ]]; then
@@ -20,7 +20,7 @@ if [[ -f "${BATS_TEST_DIRNAME}/../bats-assert/load.bash" ]]; then
 elif [[ -f '/usr/local/lib/bats-assert/load.bash' ]]; then
     load '/usr/local/lib/bats-assert/load.bash'
 elif [[ -f '/usr/lib/bats-assert/load.bash' ]]; then
-    load '/usr/lib/bats-assert/load.bash'
+load '/usr/lib/bats-assert/load.bash'
 fi
 
 # If bats-support/assert are not available, provide minimal compatibility
@@ -91,7 +91,7 @@ readonly TEST_ROOT="$(dirname "${TEST_DIR}")"
 # Allow override of TEST_DB_NAME in test files before loading
 # Only set as readonly if not already set (to allow test files to override)
 if [[ -z "${TEST_DB_NAME:-}" ]]; then
-    readonly TEST_DB_NAME="osm_notes_monitoring_test"
+readonly TEST_DB_NAME="osm_notes_monitoring_test"
 elif [[ "$(declare -p TEST_DB_NAME 2>/dev/null)" != *"readonly"* ]]; then
     # If already set but not readonly, make it readonly
     readonly TEST_DB_NAME

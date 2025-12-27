@@ -86,8 +86,8 @@ validate_sql_syntax() {
     
     # If database is available, try EXPLAIN for real syntax validation
     if [[ "${db_available}" == "true" ]]; then
-        if echo "${query}" | psql -d "${TEST_DBNAME}" -c "EXPLAIN (FORMAT JSON) ${query}" > /dev/null 2>&1; then
-            return 0
+    if echo "${query}" | psql -d "${TEST_DBNAME}" -c "EXPLAIN (FORMAT JSON) ${query}" > /dev/null 2>&1; then
+        return 0
         fi
         # If EXPLAIN fails, it might be a syntax error or missing tables
         # Check if it's a syntax error by looking for common SQL errors
@@ -253,7 +253,7 @@ test_sql_file() {
                     print_message "${YELLOW}" "    Query ${i}: ⚠ Execution failed (likely missing tables/schema - syntax OK)"
                     # Validate syntax to ensure it's not a syntax error
                     if validate_sql_syntax "${query}" "${DB_AVAILABLE:-true}"; then
-                        queries_passed=$((queries_passed + 1))
+                queries_passed=$((queries_passed + 1))
                     else
                         print_message "${RED}" "    Query ${i}: ✗ Syntax validation also failed"
                         # Don't count as passed

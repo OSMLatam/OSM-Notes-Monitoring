@@ -100,7 +100,7 @@ get_latest_alert_message() {
     skip_if_database_not_available
     
     # Send a test alert
-    send_alert "WARNING" "${TEST_COMPONENT}" "test_alert" "Test alert message"
+    send_alert "${TEST_COMPONENT}" "WARNING" "test_alert" "Test alert message"
     
     # Wait a moment for database write
     sleep 1
@@ -115,7 +115,7 @@ get_latest_alert_message() {
 @test "Alert has correct component name" {
     skip_if_database_not_available
     
-    send_alert "WARNING" "${TEST_COMPONENT}" "test_alert" "Test message"
+    send_alert "${TEST_COMPONENT}" "WARNING" "test_alert" "Test message"
     sleep 1
     
     local query="SELECT component FROM alerts WHERE component = '${TEST_COMPONENT}' LIMIT 1;"
@@ -128,7 +128,7 @@ get_latest_alert_message() {
 @test "Alert has correct alert level" {
     skip_if_database_not_available
     
-    send_alert "CRITICAL" "${TEST_COMPONENT}" "test_alert" "Critical test message"
+    send_alert "${TEST_COMPONENT}" "CRITICAL" "test_alert" "Critical test message"
     sleep 1
     
     local query="SELECT alert_level FROM alerts WHERE component = '${TEST_COMPONENT}' LIMIT 1;"
@@ -142,7 +142,7 @@ get_latest_alert_message() {
     skip_if_database_not_available
     
     local test_message="Test alert message for ingestion monitoring"
-    send_alert "WARNING" "${TEST_COMPONENT}" "test_alert" "${test_message}"
+    send_alert "${TEST_COMPONENT}" "WARNING" "test_alert" "${test_message}"
     sleep 1
     
     local result
@@ -154,11 +154,11 @@ get_latest_alert_message() {
 @test "Multiple alerts can be stored" {
     skip_if_database_not_available
     
-    send_alert "WARNING" "${TEST_COMPONENT}" "alert1" "First alert"
+    send_alert "${TEST_COMPONENT}" "WARNING" "alert1" "First alert"
     sleep 1
-    send_alert "WARNING" "${TEST_COMPONENT}" "alert2" "Second alert"
+    send_alert "${TEST_COMPONENT}" "WARNING" "alert2" "Second alert"
     sleep 1
-    send_alert "INFO" "${TEST_COMPONENT}" "alert3" "Third alert"
+    send_alert "${TEST_COMPONENT}" "INFO" "alert3" "Third alert"
     sleep 1
     
     local alert_count
@@ -170,11 +170,11 @@ get_latest_alert_message() {
 @test "Alerts are filtered by alert level" {
     skip_if_database_not_available
     
-    send_alert "CRITICAL" "${TEST_COMPONENT}" "critical_alert" "Critical alert"
+    send_alert "${TEST_COMPONENT}" "CRITICAL" "critical_alert" "Critical alert"
     sleep 1
-    send_alert "WARNING" "${TEST_COMPONENT}" "warning_alert" "Warning alert"
+    send_alert "${TEST_COMPONENT}" "WARNING" "warning_alert" "Warning alert"
     sleep 1
-    send_alert "INFO" "${TEST_COMPONENT}" "info_alert" "Info alert"
+    send_alert "${TEST_COMPONENT}" "INFO" "info_alert" "Info alert"
     sleep 1
     
     local critical_count
@@ -196,9 +196,9 @@ get_latest_alert_message() {
     export ALERT_DEDUPLICATION_ENABLED="true"
     
     # Send same alert twice
-    send_alert "WARNING" "${TEST_COMPONENT}" "duplicate_test" "Duplicate alert message"
+    send_alert "${TEST_COMPONENT}" "WARNING" "duplicate_test" "Duplicate alert message"
     sleep 1
-    send_alert "WARNING" "${TEST_COMPONENT}" "duplicate_test" "Duplicate alert message"
+    send_alert "${TEST_COMPONENT}" "WARNING" "duplicate_test" "Duplicate alert message"
     sleep 1
     
     local alert_count
@@ -212,7 +212,7 @@ get_latest_alert_message() {
     skip_if_database_not_available
     
     local metadata='{"source":"test","metric":"error_rate","value":10}'
-    send_alert "WARNING" "${TEST_COMPONENT}" "metadata_test" "Test with metadata" "${metadata}"
+    send_alert "${TEST_COMPONENT}" "WARNING" "metadata_test" "Test with metadata" "${metadata}"
     sleep 1
     
     local query="SELECT metadata FROM alerts WHERE component = '${TEST_COMPONENT}' LIMIT 1;"
@@ -227,7 +227,7 @@ get_latest_alert_message() {
 @test "Alert status is active by default" {
     skip_if_database_not_available
     
-    send_alert "WARNING" "${TEST_COMPONENT}" "status_test" "Test status"
+    send_alert "${TEST_COMPONENT}" "WARNING" "status_test" "Test status"
     sleep 1
     
     local query="SELECT status FROM alerts WHERE component = '${TEST_COMPONENT}' LIMIT 1;"
@@ -243,7 +243,7 @@ get_latest_alert_message() {
     local before_time
     before_time=$(date +%s)
     
-    send_alert "WARNING" "${TEST_COMPONENT}" "timestamp_test" "Test timestamp"
+    send_alert "${TEST_COMPONENT}" "WARNING" "timestamp_test" "Test timestamp"
     sleep 1
     
     local after_time
@@ -276,9 +276,9 @@ get_latest_alert_message() {
 @test "Alert can be queried by alert type" {
     skip_if_database_not_available
     
-    send_alert "WARNING" "${TEST_COMPONENT}" "error_rate" "High error rate"
+    send_alert "${TEST_COMPONENT}" "WARNING" "error_rate" "High error rate"
     sleep 1
-    send_alert "WARNING" "${TEST_COMPONENT}" "data_quality" "Low data quality"
+    send_alert "${TEST_COMPONENT}" "WARNING" "data_quality" "Low data quality"
     sleep 1
     
     local error_rate_count
@@ -297,7 +297,7 @@ get_latest_alert_message() {
     export SEND_ALERT_EMAIL="false"
     
     # This should not fail even if mutt is not configured
-    send_alert "WARNING" "${TEST_COMPONENT}" "email_test" "Test email alert"
+    send_alert "${TEST_COMPONENT}" "WARNING" "email_test" "Test email alert"
     sleep 1
     
     # Alert should still be stored in database
@@ -310,11 +310,11 @@ get_latest_alert_message() {
 @test "Multiple alert types for same component are stored separately" {
     skip_if_database_not_available
     
-    send_alert "WARNING" "${TEST_COMPONENT}" "script_execution" "Script execution failed"
+    send_alert "${TEST_COMPONENT}" "WARNING" "script_execution" "Script execution failed"
     sleep 1
-    send_alert "WARNING" "${TEST_COMPONENT}" "data_quality" "Data quality below threshold"
+    send_alert "${TEST_COMPONENT}" "WARNING" "data_quality" "Data quality below threshold"
     sleep 1
-    send_alert "CRITICAL" "${TEST_COMPONENT}" "health_status" "Component health check failed"
+    send_alert "${TEST_COMPONENT}" "CRITICAL" "health_status" "Component health check failed"
     sleep 1
     
     local total_count

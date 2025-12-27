@@ -264,7 +264,7 @@ calculate_average() {
     # Measure execution time multiple times
     for _ in $(seq 1 "${PERFORMANCE_ITERATIONS}"); do
         local duration
-        duration=$(measure_time send_alert "INFO" "INGESTION" "Test alert message")
+        duration=$(measure_time send_alert "INGESTION" "INFO" "test_alert" "Test alert message")
         times+=("${duration}")
     done
     
