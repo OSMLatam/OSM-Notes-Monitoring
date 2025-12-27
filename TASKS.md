@@ -142,10 +142,10 @@
 
 ### SQL Queries
 
-- [ ] Create `sql/analytics/etl_status.sql`
-- [ ] Create `sql/analytics/data_freshness.sql`
-- [ ] Create `sql/analytics/performance.sql`
-- [ ] Create `sql/analytics/storage.sql`
+- [x] Create `sql/analytics/etl_status.sql` (created with 8 queries for ETL execution summary, success/failure tracking, performance trends, and execution gaps)
+- [x] Create `sql/analytics/data_freshness.sql` (created with 6 queries for data warehouse freshness, data mart freshness, stale data detection, and update activity)
+- [x] Create `sql/analytics/performance.sql` (created with 10 queries for slow queries, index usage, table statistics, connection stats, and query execution distribution)
+- [x] Create `sql/analytics/storage.sql` (created with 10 queries for database size, table sizes, index sizes, storage growth, and bloat estimation)
 - [ ] Test all SQL queries
 
 ### Metrics & Alerts
@@ -517,5 +517,5 @@
 
 **Last Updated:** 2025-12-26  
 **Current Phase:** Phase 3 - Analytics Monitoring  
-**Next Task:** Create SQL queries for analytics monitoring
+**Next Task:** Test all SQL queries
 
