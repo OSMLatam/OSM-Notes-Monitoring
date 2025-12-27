@@ -160,7 +160,7 @@ create_test_log() {
     local alert_sent=false
     # shellcheck disable=SC2317
     send_alert() {
-        if [[ "${3}" == *"Low number of scripts found"* ]]; then
+        if [[ "${4}" == *"Low number of scripts found"* ]]; then
             alert_sent=true
         fi
         return 0
@@ -188,7 +188,7 @@ create_test_log() {
     local alert_sent=false
     # shellcheck disable=SC2317
     send_alert() {
-        if [[ "${3}" == *"Scripts executable count"* ]]; then
+        if [[ "${4}" == *"Scripts executable count"* ]]; then
             alert_sent=true
         fi
         return 0
@@ -253,7 +253,7 @@ INFO: Info 4"
     unset -f send_alert 2>/dev/null || true
     # shellcheck disable=SC2317
     send_alert() {
-        if [[ "${3}" == *"High error rate detected"* ]]; then
+        if [[ "${4}" == *"High error rate detected"* ]]; then
             alert_sent=true
         fi
         return 0
@@ -289,7 +289,7 @@ INFO: Info 4"
     unset -f send_alert 2>/dev/null || true
     # shellcheck disable=SC2317
     send_alert() {
-        if [[ "${3}" == *"High error count"* ]]; then
+        if [[ "${4}" == *"High error count"* ]]; then
             alert_sent=true
         fi
         return 0
@@ -351,7 +351,7 @@ INFO: Info 4"
     local alert_sent=false
     # shellcheck disable=SC2317
     send_alert() {
-        if [[ "${3}" == *"High disk usage"* ]]; then
+        if [[ "${4}" == *"High disk usage"* ]]; then
             alert_sent=true
         fi
         return 0
@@ -627,7 +627,7 @@ INFO: Info 4"
     unset -f send_alert 2>/dev/null || true
     # shellcheck disable=SC2317
     send_alert() {
-        if [[ "${3}" == *"High processing latency"* ]]; then
+        if [[ "${4}" == *"High processing latency"* ]]; then
             alert_sent=true
         fi
         return 0
@@ -675,7 +675,7 @@ INFO: 200 OK"
     unset -f send_alert 2>/dev/null || true
     # shellcheck disable=SC2317
     send_alert() {
-        if [[ "${3}" == *"No recent API download activity"* ]]; then
+        if [[ "${4}" == *"No recent API download activity"* ]]; then
             alert_sent=true
         fi
         return 0
@@ -740,7 +740,7 @@ ERROR: 500 Error"
     unset -f send_alert 2>/dev/null || true
     # shellcheck disable=SC2317
     send_alert() {
-        if [[ "${3}" == *"Low API download success rate"* ]]; then
+        if [[ "${4}" == *"Low API download success rate"* ]]; then
             alert_sent=true
         fi
         return 0
@@ -822,7 +822,7 @@ ERROR: 500 Error"
     unset -f send_alert 2>/dev/null || true
     # shellcheck disable=SC2317
     send_alert() {
-        if [[ "${3}" == *"Data quality below threshold"* ]]; then
+        if [[ "${4}" == *"Data quality below threshold"* ]]; then
             alert_sent=true
         fi
         return 0
