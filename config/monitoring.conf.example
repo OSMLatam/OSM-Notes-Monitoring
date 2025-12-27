@@ -63,6 +63,9 @@ ANALYTICS_DATA_MART_AVG_UPDATE_AGE_THRESHOLD=1800  # seconds (30 minutes) - aler
 ANALYTICS_SLOW_QUERY_THRESHOLD=1000  # milliseconds - alert if query execution time exceeds this
 ANALYTICS_AVG_QUERY_TIME_THRESHOLD=500  # milliseconds - alert if average query time exceeds this
 ANALYTICS_MAX_QUERY_TIME_THRESHOLD=5000  # milliseconds - alert if maximum query time exceeds this
+ANALYTICS_DB_SIZE_THRESHOLD=107374182400  # bytes (100 GB) - alert if database size exceeds this
+ANALYTICS_LARGEST_TABLE_SIZE_THRESHOLD=10737418240  # bytes (10 GB) - alert if largest table size exceeds this
+ANALYTICS_DISK_USAGE_THRESHOLD=85  # percentage - alert if disk usage exceeds this
 
 # WMS Monitoring
 WMS_ENABLED=true

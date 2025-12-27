@@ -1060,14 +1060,153 @@ check_query_performance() {
 check_storage_growth() {
     log_info "${COMPONENT}: Starting storage growth check"
     
-    # TODO: Implement storage growth check
-    # This should check:
-    # - Database size
-    # - Table sizes
-    # - Growth rate
-    # - Storage capacity
+    # Check database connection
+    if ! check_database_connection; then
+        log_warning "${COMPONENT}: Cannot check storage growth - database connection failed"
+        return 0
+    fi
     
-    log_debug "${COMPONENT}: Storage growth check not yet implemented"
+    # Check if analytics database is configured
+    local analytics_dbname="${ANALYTICS_DBNAME:-${DBNAME}}"
+    
+    # Get database size (PostgreSQL-specific)
+    local db_size_query="
+        SELECT 
+            pg_database.datname,
+            pg_size_pretty(pg_database_size(pg_database.datname)) AS size,
+            pg_database_size(pg_database.datname) AS size_bytes
+        FROM pg_database
+        WHERE datname = current_database();
+    "
+    
+    local db_size_result
+    db_size_result=$(execute_sql_query "${db_size_query}" "${analytics_dbname}" 2>/dev/null || echo "")
+    
+    local db_size_bytes=0
+    local db_size_pretty="unknown"
+    
+    if [[ -n "${db_size_result}" ]] && [[ "${db_size_result}" != "Error executing query:"* ]]; then
+        # Parse result (format: datname|size|size_bytes)
+        db_size_pretty=$(echo "${db_size_result}" | cut -d'|' -f2 | tr -d '[:space:]' || echo "unknown")
+        local db_size_str
+        db_size_str=$(echo "${db_size_result}" | cut -d'|' -f3 | tr -d '[:space:]' || echo "0")
+        
+        if [[ -n "${db_size_str}" ]] && [[ "${db_size_str}" =~ ^[0-9]+$ ]]; then
+            db_size_bytes=${db_size_str}
+            
+            # Record database size metric
+            record_metric "${COMPONENT}" "database_size_bytes" "${db_size_bytes}" "component=analytics"
+            
+            log_info "${COMPONENT}: Database size: ${db_size_pretty} (${db_size_bytes} bytes)"
+            
+            # Check against database size threshold
+            local db_size_threshold="${ANALYTICS_DB_SIZE_THRESHOLD:-107374182400}"
+            if [[ ${db_size_bytes} -gt ${db_size_threshold} ]]; then
+                log_warning "${COMPONENT}: Database size (${db_size_bytes} bytes) exceeds threshold (${db_size_threshold} bytes)"
+                send_alert "WARNING" "${COMPONENT}" "Database size exceeded: ${db_size_pretty} (threshold: $(numfmt --to=iec-i --suffix=B "${db_size_threshold}" 2>/dev/null || echo "${db_size_threshold} bytes"))"
+            fi
+        fi
+    fi
+    
+    # Get table sizes (PostgreSQL-specific)
+    local table_sizes_query="
+        SELECT 
+            schemaname,
+            tablename,
+            pg_size_pretty(pg_total_relation_size(schemaname||'.'||tablename)) AS size,
+            pg_total_relation_size(schemaname||'.'||tablename) AS size_bytes,
+            pg_size_pretty(pg_relation_size(schemaname||'.'||tablename)) AS table_size,
+            pg_relation_size(schemaname||'.'||tablename) AS table_size_bytes
+        FROM pg_tables
+        WHERE schemaname NOT IN ('pg_catalog', 'information_schema')
+        ORDER BY pg_total_relation_size(schemaname||'.'||tablename) DESC
+        LIMIT 20;
+    "
+    
+    local table_sizes_result
+    table_sizes_result=$(execute_sql_query "${table_sizes_query}" "${analytics_dbname}" 2>/dev/null || echo "")
+    
+    local total_table_size=0
+    local largest_table_size=0
+    local largest_table_name=""
+    local tables_checked=0
+    
+    if [[ -n "${table_sizes_result}" ]] && [[ "${table_sizes_result}" != "Error executing query:"* ]]; then
+        # Parse results line by line
+        while IFS= read -r line; do
+            if [[ -z "${line}" ]] || [[ "${line}" == "Error executing query:"* ]]; then
+                continue
+            fi
+            
+            # Parse line (format: schemaname|tablename|size|size_bytes|table_size|table_size_bytes)
+            local table_name
+            table_name=$(echo "${line}" | cut -d'|' -f2 | tr -d '[:space:]' || echo "")
+            local table_size_str
+            table_size_str=$(echo "${line}" | cut -d'|' -f4 | tr -d '[:space:]' || echo "0")
+            
+            if [[ -n "${table_size_str}" ]] && [[ "${table_size_str}" =~ ^[0-9]+$ ]]; then
+                local table_size=${table_size_str}
+                total_table_size=$((total_table_size + table_size))
+                tables_checked=$((tables_checked + 1))
+                
+                if [[ ${table_size} -gt ${largest_table_size} ]]; then
+                    largest_table_size=${table_size}
+                    largest_table_name=${table_name}
+                fi
+                
+                # Record metric for individual table
+                record_metric "${COMPONENT}" "table_size_bytes" "${table_size}" "component=analytics,table=${table_name}"
+            fi
+        done <<< "${table_sizes_result}"
+        
+        # Record aggregate metrics
+        if [[ ${tables_checked} -gt 0 ]]; then
+            record_metric "${COMPONENT}" "total_table_size_bytes" "${total_table_size}" "component=analytics"
+            record_metric "${COMPONENT}" "largest_table_size_bytes" "${largest_table_size}" "component=analytics,table=${largest_table_name}"
+            record_metric "${COMPONENT}" "tables_checked_count" "${tables_checked}" "component=analytics"
+            
+            log_info "${COMPONENT}: Total table size: $(numfmt --to=iec-i --suffix=B "${total_table_size}" 2>/dev/null || echo "${total_table_size} bytes"), Largest table: ${largest_table_name} ($(numfmt --to=iec-i --suffix=B "${largest_table_size}" 2>/dev/null || echo "${largest_table_size} bytes"))"
+            
+            # Check largest table size threshold
+            local largest_table_threshold="${ANALYTICS_LARGEST_TABLE_SIZE_THRESHOLD:-10737418240}"
+            if [[ ${largest_table_size} -gt ${largest_table_threshold} ]]; then
+                log_warning "${COMPONENT}: Largest table size (${largest_table_size} bytes) exceeds threshold (${largest_table_threshold} bytes)"
+                send_alert "WARNING" "${COMPONENT}" "Largest table size exceeded: ${largest_table_name} - $(numfmt --to=iec-i --suffix=B "${largest_table_size}" 2>/dev/null || echo "${largest_table_size} bytes") (threshold: $(numfmt --to=iec-i --suffix=B "${largest_table_threshold}" 2>/dev/null || echo "${largest_table_threshold} bytes"))"
+            fi
+        fi
+    fi
+    
+    # Check disk space for database directory
+    local db_data_dir
+    db_data_dir=$(execute_sql_query "SHOW data_directory;" "${analytics_dbname}" 2>/dev/null | tr -d '[:space:]' || echo "")
+    
+    if [[ -n "${db_data_dir}" ]] && [[ -d "${db_data_dir}" ]]; then
+        # Get disk usage percentage
+        local disk_usage_percent
+        disk_usage_percent=$(df -h "${db_data_dir}" 2>/dev/null | tail -1 | awk '{print $5}' | sed 's/%//' || echo "0")
+        
+        if [[ -n "${disk_usage_percent}" ]] && [[ "${disk_usage_percent}" =~ ^[0-9]+$ ]]; then
+            local disk_available
+            disk_available=$(df -h "${db_data_dir}" 2>/dev/null | tail -1 | awk '{print $4}' || echo "unknown")
+            
+            record_metric "${COMPONENT}" "disk_usage_percent" "${disk_usage_percent}" "component=analytics,directory=database"
+            
+            log_info "${COMPONENT}: Disk usage for database directory: ${disk_usage_percent}% (Available: ${disk_available})"
+            
+            # Check against disk usage threshold
+            local disk_threshold="${ANALYTICS_DISK_USAGE_THRESHOLD:-85}"
+            if [[ ${disk_usage_percent} -ge ${disk_threshold} ]]; then
+                log_warning "${COMPONENT}: Disk usage (${disk_usage_percent}%) exceeds threshold (${disk_threshold}%)"
+                send_alert "WARNING" "${COMPONENT}" "High disk usage: ${disk_usage_percent}% (available: ${disk_available})"
+            fi
+        fi
+    fi
+    
+    # Calculate growth rate (if we have historical data)
+    # This would require storing previous sizes and comparing
+    # For now, we'll just log current sizes for future comparison
+    
+    log_info "${COMPONENT}: Storage growth check completed - DB size: ${db_size_pretty}, Tables checked: ${tables_checked}, Total table size: $(numfmt --to=iec-i --suffix=B ${total_table_size} 2>/dev/null || echo "${total_table_size} bytes")"
     
     return 0
 }

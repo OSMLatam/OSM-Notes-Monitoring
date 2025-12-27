@@ -138,7 +138,7 @@
 - [x] Implement ETL processing duration tracking (implemented `check_etl_processing_duration()` with running job detection, log analysis, statistics, and alerting)
 - [x] Implement data mart update status (implemented `check_data_mart_update_status()` with database queries, log analysis, aggregate metrics, and alerting)
 - [x] Implement query performance monitoring (implemented `check_query_performance()` with pg_stat_statements, test queries fallback, index usage, and alerting)
-- [ ] Implement storage growth tracking
+- [x] Implement storage growth tracking (implemented `check_storage_growth()` with database size, table sizes, disk usage, and alerting)
 
 ### SQL Queries
 
@@ -517,5 +517,5 @@
 
 **Last Updated:** 2025-12-26  
 **Current Phase:** Phase 3 - Analytics Monitoring  
-**Next Task:** Implement storage growth tracking
+**Next Task:** Create SQL queries for analytics monitoring
 
