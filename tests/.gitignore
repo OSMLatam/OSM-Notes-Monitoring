@@ -1,0 +1,9 @@
+# BATS dependencies (can be installed locally)
+bats-support/
+bats-assert/
+
+# Test output files
+tmp/
+output/
+*.log
+

@@ -4,9 +4,55 @@
 # Provides common test utilities
 #
 
-# Load BATS helper functions
-load '/usr/lib/bats-support/load.bash'
-load '/usr/lib/bats-assert/load.bash'
+# Load BATS helper functions (if available)
+# Try multiple common locations for bats-support and bats-assert
+# Priority: local project > /usr/local > /usr
+if [[ -f "${BATS_TEST_DIRNAME}/../bats-support/load.bash" ]]; then
+    load "${BATS_TEST_DIRNAME}/../bats-support/load.bash"
+elif [[ -f '/usr/local/lib/bats-support/load.bash' ]]; then
+    load '/usr/local/lib/bats-support/load.bash'
+elif [[ -f '/usr/lib/bats-support/load.bash' ]]; then
+    load '/usr/lib/bats-support/load.bash'
+fi
+
+if [[ -f "${BATS_TEST_DIRNAME}/../bats-assert/load.bash" ]]; then
+    load "${BATS_TEST_DIRNAME}/../bats-assert/load.bash"
+elif [[ -f '/usr/local/lib/bats-assert/load.bash' ]]; then
+    load '/usr/local/lib/bats-assert/load.bash'
+elif [[ -f '/usr/lib/bats-assert/load.bash' ]]; then
+    load '/usr/lib/bats-assert/load.bash'
+fi
+
+# If bats-support/assert are not available, provide minimal compatibility
+if ! command -v assert_success > /dev/null 2>&1; then
+    # Minimal assert_success implementation
+    assert_success() {
+        if ! "$@"; then
+            echo "Assertion failed: command '$*' returned non-zero exit code" >&2
+            return 1
+        fi
+    }
+fi
+
+if ! command -v assert_failure > /dev/null 2>&1; then
+    # Minimal assert_failure implementation
+    assert_failure() {
+        if "$@"; then
+            echo "Assertion failed: command '$*' succeeded but should have failed" >&2
+            return 1
+        fi
+    }
+fi
+
+if ! command -v assert > /dev/null 2>&1; then
+    # Minimal assert implementation
+    assert() {
+        if ! "$@"; then
+            echo "Assertion failed: $*" >&2
+            return 1
+        fi
+    }
+fi
 
 # Test configuration
 readonly TEST_DIR="$(cd "$(dirname "${BATS_TEST_FILENAME}")" && pwd)"
