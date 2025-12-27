@@ -832,14 +832,224 @@ check_data_mart_update_status() {
 check_query_performance() {
     log_info "${COMPONENT}: Starting query performance check"
     
-    # TODO: Implement query performance check
-    # This should check:
-    # - Slow queries
-    # - Query execution times
-    # - Query frequency
-    # - Index usage
+    # Check database connection
+    if ! check_database_connection; then
+        log_warning "${COMPONENT}: Cannot check query performance - database connection failed"
+        return 0
+    fi
     
-    log_debug "${COMPONENT}: Query performance check not yet implemented"
+    # Check if analytics database is configured
+    local analytics_dbname="${ANALYTICS_DBNAME:-${DBNAME}}"
+    
+    local slow_query_count=0
+    local total_query_time=0
+    local max_query_time=0
+    local avg_query_time=0
+    local queries_checked=0
+    
+    # Check if pg_stat_statements extension is available (PostgreSQL-specific)
+    local pg_stat_check_query="
+        SELECT COUNT(*) 
+        FROM pg_extension 
+        WHERE extname = 'pg_stat_statements';
+    "
+    
+    local pg_stat_available
+    pg_stat_available=$(execute_sql_query "${pg_stat_check_query}" "${analytics_dbname}" 2>/dev/null | tr -d '[:space:]' || echo "0")
+    
+    if [[ "${pg_stat_available}" == "1" ]]; then
+        # Use pg_stat_statements to get slow queries
+        local slow_query_threshold="${ANALYTICS_SLOW_QUERY_THRESHOLD:-1000}"
+        # shellcheck disable=SC2016
+        local slow_queries_query="
+            SELECT 
+                COUNT(*) as slow_query_count,
+                SUM(mean_exec_time) as total_time_ms,
+                MAX(mean_exec_time) as max_time_ms,
+                AVG(mean_exec_time) as avg_time_ms,
+                SUM(calls) as total_calls
+            FROM pg_stat_statements
+            WHERE mean_exec_time > ${slow_query_threshold}
+              AND dbid = (SELECT oid FROM pg_database WHERE datname = current_database())
+            LIMIT 100;
+        "
+        
+        local slow_queries_result
+        slow_queries_result=$(execute_sql_query "${slow_queries_query}" "${analytics_dbname}" 2>/dev/null || echo "")
+        
+        if [[ -n "${slow_queries_result}" ]] && [[ "${slow_queries_result}" != "Error executing query:"* ]]; then
+            # Parse result (format: slow_query_count|total_time_ms|max_time_ms|avg_time_ms|total_calls)
+            local slow_count
+            slow_count=$(echo "${slow_queries_result}" | cut -d'|' -f1 | tr -d '[:space:]' || echo "0")
+            local total_time
+            total_time=$(echo "${slow_queries_result}" | cut -d'|' -f2 | tr -d '[:space:]' || echo "0")
+            local max_time
+            max_time=$(echo "${slow_queries_result}" | cut -d'|' -f3 | tr -d '[:space:]' || echo "0")
+            local avg_time
+            avg_time=$(echo "${slow_queries_result}" | cut -d'|' -f4 | tr -d '[:space:]' || echo "0")
+            local total_calls
+            total_calls=$(echo "${slow_queries_result}" | cut -d'|' -f5 | tr -d '[:space:]' || echo "0")
+            
+            if [[ -n "${slow_count}" ]] && [[ "${slow_count}" =~ ^[0-9]+$ ]] && [[ ${slow_count} -gt 0 ]]; then
+                slow_query_count=${slow_count}
+                queries_checked=${slow_count}
+                
+                if [[ -n "${total_time}" ]] && [[ "${total_time}" =~ ^[0-9]+\.?[0-9]*$ ]]; then
+                    total_query_time=$(printf "%.0f" "${total_time}" 2>/dev/null || echo "${total_time}")
+                fi
+                
+                if [[ -n "${max_time}" ]] && [[ "${max_time}" =~ ^[0-9]+\.?[0-9]*$ ]]; then
+                    max_query_time=$(printf "%.0f" "${max_time}" 2>/dev/null || echo "${max_time}")
+                fi
+                
+                if [[ -n "${avg_time}" ]] && [[ "${avg_time}" =~ ^[0-9]+\.?[0-9]*$ ]]; then
+                    avg_query_time=$(printf "%.0f" "${avg_time}" 2>/dev/null || echo "${avg_time}")
+                fi
+                
+                # Record metrics
+                record_metric "${COMPONENT}" "slow_query_count" "${slow_query_count}" "component=analytics"
+                record_metric "${COMPONENT}" "query_max_time_ms" "${max_query_time}" "component=analytics"
+                record_metric "${COMPONENT}" "query_avg_time_ms" "${avg_query_time}" "component=analytics"
+                
+                if [[ -n "${total_calls}" ]] && [[ "${total_calls}" =~ ^[0-9]+$ ]]; then
+                    record_metric "${COMPONENT}" "query_total_calls" "${total_calls}" "component=analytics"
+                fi
+                
+                # Alert if there are slow queries
+                local slow_query_threshold="${ANALYTICS_SLOW_QUERY_THRESHOLD:-1000}"
+                if [[ ${slow_query_count} -gt 0 ]]; then
+                    log_warning "${COMPONENT}: Found ${slow_query_count} slow queries (threshold: ${slow_query_threshold}ms)"
+                    send_alert "WARNING" "${COMPONENT}" "Slow queries detected: ${slow_query_count} queries exceed ${slow_query_threshold}ms (max: ${max_query_time}ms, avg: ${avg_query_time}ms)"
+                fi
+            fi
+        fi
+        
+        # Get top slow queries for detailed analysis
+        local top_slow_queries_query="
+            SELECT 
+                LEFT(query, 100) as query_preview,
+                mean_exec_time as avg_time_ms,
+                calls as call_count,
+                total_exec_time as total_time_ms
+            FROM pg_stat_statements
+            WHERE mean_exec_time > ${slow_query_threshold}
+              AND dbid = (SELECT oid FROM pg_database WHERE datname = current_database())
+            ORDER BY mean_exec_time DESC
+            LIMIT 5;
+        "
+        
+        local top_queries_result
+        top_queries_result=$(execute_sql_query "${top_slow_queries_query}" "${analytics_dbname}" 2>/dev/null || echo "")
+        
+        if [[ -n "${top_queries_result}" ]] && [[ "${top_queries_result}" != "Error executing query:"* ]]; then
+            log_debug "${COMPONENT}: Top slow queries:\n${top_queries_result}"
+        fi
+    else
+        # Fallback: Test query performance with sample queries
+        log_debug "${COMPONENT}: pg_stat_statements not available, using fallback method"
+        
+        # Test common analytics queries
+        local test_queries=(
+            "SELECT COUNT(*) FROM notes;"
+            "SELECT COUNT(*) FROM note_comments;"
+            "SELECT COUNT(*) FROM notes_summary;"
+        )
+        
+        for test_query in "${test_queries[@]}"; do
+            local start_time
+            start_time=$(date +%s%N 2>/dev/null || date +%s000)
+            
+            local result
+            result=$(execute_sql_query "${test_query}" "${analytics_dbname}" 2>/dev/null || echo "")
+            
+            local end_time
+            end_time=$(date +%s%N 2>/dev/null || date +%s000)
+            local duration_ms=$(((end_time - start_time) / 1000000))
+            
+            if [[ -n "${result}" ]]; then
+                queries_checked=$((queries_checked + 1))
+                total_query_time=$((total_query_time + duration_ms))
+                
+                if [[ ${duration_ms} -gt ${max_query_time} ]]; then
+                    max_query_time=${duration_ms}
+                fi
+                
+                # Record metric for this query
+                local query_hash
+                query_hash=$(echo -n "${test_query}" | sha256sum | cut -d' ' -f1 | cut -c1-8)
+                record_metric "${COMPONENT}" "query_time_ms" "${duration_ms}" "component=analytics,query_hash=${query_hash}"
+                
+                # Check against slow query threshold
+                local slow_query_threshold="${ANALYTICS_SLOW_QUERY_THRESHOLD:-1000}"
+                if [[ ${duration_ms} -gt ${slow_query_threshold} ]]; then
+                    slow_query_count=$((slow_query_count + 1))
+                    log_warning "${COMPONENT}: Slow query detected: ${duration_ms}ms (threshold: ${slow_query_threshold}ms)"
+                    send_alert "WARNING" "${COMPONENT}" "Slow query detected: ${duration_ms}ms (query: ${test_query:0:50}...)"
+                fi
+            fi
+        done
+        
+        # Calculate average
+        if [[ ${queries_checked} -gt 0 ]]; then
+            avg_query_time=$((total_query_time / queries_checked))
+            record_metric "${COMPONENT}" "query_avg_time_ms" "${avg_query_time}" "component=analytics,source=test_queries"
+            record_metric "${COMPONENT}" "query_max_time_ms" "${max_query_time}" "component=analytics,source=test_queries"
+        fi
+    fi
+    
+    # Check index usage (PostgreSQL-specific)
+    local index_usage_query="
+        SELECT 
+            schemaname,
+            tablename,
+            indexname,
+            idx_scan as index_scans,
+            idx_tup_read as tuples_read,
+            idx_tup_fetch as tuples_fetched
+        FROM pg_stat_user_indexes
+        WHERE schemaname = 'public'
+          AND idx_scan = 0
+        ORDER BY pg_relation_size(indexrelid) DESC
+        LIMIT 10;
+    "
+    
+    local unused_indexes_result
+    unused_indexes_result=$(execute_sql_query "${index_usage_query}" "${analytics_dbname}" 2>/dev/null || echo "")
+    
+    if [[ -n "${unused_indexes_result}" ]] && [[ "${unused_indexes_result}" != "Error executing query:"* ]]; then
+        local unused_index_count
+        unused_index_count=$(echo "${unused_indexes_result}" | wc -l | tr -d '[:space:]' || echo "0")
+        
+        if [[ ${unused_index_count} -gt 0 ]]; then
+            log_debug "${COMPONENT}: Found ${unused_index_count} potentially unused indexes"
+            record_metric "${COMPONENT}" "unused_index_count" "${unused_index_count}" "component=analytics"
+        fi
+    fi
+    
+    # Record aggregate metrics
+    if [[ ${queries_checked} -gt 0 ]]; then
+        record_metric "${COMPONENT}" "queries_checked_count" "${queries_checked}" "component=analytics"
+    fi
+    
+    if [[ ${slow_query_count} -gt 0 ]]; then
+        record_metric "${COMPONENT}" "slow_query_count" "${slow_query_count}" "component=analytics"
+    fi
+    
+    # Check average query time threshold
+    local avg_query_time_threshold="${ANALYTICS_AVG_QUERY_TIME_THRESHOLD:-500}"
+    if [[ ${avg_query_time} -gt ${avg_query_time_threshold} ]]; then
+        log_warning "${COMPONENT}: Average query time (${avg_query_time}ms) exceeds threshold (${avg_query_time_threshold}ms)"
+        send_alert "WARNING" "${COMPONENT}" "Average query time exceeded: ${avg_query_time}ms (threshold: ${avg_query_time_threshold}ms)"
+    fi
+    
+    # Check max query time threshold
+    local max_query_time_threshold="${ANALYTICS_MAX_QUERY_TIME_THRESHOLD:-5000}"
+    if [[ ${max_query_time} -gt ${max_query_time_threshold} ]]; then
+        log_warning "${COMPONENT}: Maximum query time (${max_query_time}ms) exceeds threshold (${max_query_time_threshold}ms)"
+        send_alert "WARNING" "${COMPONENT}" "Maximum query time exceeded: ${max_query_time}ms (threshold: ${max_query_time_threshold}ms)"
+    fi
+    
+    log_info "${COMPONENT}: Query performance check completed - Queries checked: ${queries_checked}, Slow: ${slow_query_count}, Avg: ${avg_query_time}ms, Max: ${max_query_time}ms"
     
     return 0
 }

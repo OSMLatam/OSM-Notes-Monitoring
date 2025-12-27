@@ -60,6 +60,9 @@ ANALYTICS_ETL_AVG_DURATION_THRESHOLD=1800  # seconds (30 minutes) - alert if ave
 ANALYTICS_ETL_MAX_DURATION_THRESHOLD=7200  # seconds (2 hours) - alert if maximum ETL duration exceeds this
 ANALYTICS_DATA_MART_UPDATE_AGE_THRESHOLD=3600  # seconds (1 hour) - alert if a data mart hasn't been updated for this long
 ANALYTICS_DATA_MART_AVG_UPDATE_AGE_THRESHOLD=1800  # seconds (30 minutes) - alert if average data mart update age exceeds this
+ANALYTICS_SLOW_QUERY_THRESHOLD=1000  # milliseconds - alert if query execution time exceeds this
+ANALYTICS_AVG_QUERY_TIME_THRESHOLD=500  # milliseconds - alert if average query time exceeds this
+ANALYTICS_MAX_QUERY_TIME_THRESHOLD=5000  # milliseconds - alert if maximum query time exceeds this
 
 # WMS Monitoring
 WMS_ENABLED=true
