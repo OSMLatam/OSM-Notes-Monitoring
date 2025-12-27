@@ -28,6 +28,9 @@ source "${PROJECT_ROOT}/bin/lib/alertFunctions.sh"
 # shellcheck disable=SC1091
 source "${PROJECT_ROOT}/bin/lib/metricsFunctions.sh"
 
+# Set default LOG_DIR if not set
+export LOG_DIR="${LOG_DIR:-${PROJECT_ROOT}/logs}"
+
 # Initialize logging
 init_logging "${LOG_DIR}/ingestion.log" "monitorIngestion"
 
@@ -932,6 +935,9 @@ check_ingestion_data_quality() {
             # Parse output for error details
             local error_count
             error_count=$(echo "${output}" | grep -c "error\|failed\|discrepancy" || echo "0")
+            # Ensure numeric value (remove any whitespace and non-numeric characters)
+            error_count=$(echo "${error_count}" | tr -d '[:space:]' | grep -E '^[0-9]+$' || echo "0")
+            error_count=$((error_count + 0))
             
             if [[ ${error_count} -gt 0 ]]; then
                 log_warning "${COMPONENT}: Found ${error_count} potential issues in notesCheckVerifier"
@@ -1162,11 +1168,17 @@ check_api_download_success_rate() {
             # Count download attempts
             local downloads
             downloads=$(grep -cE "download|fetch|GET|POST" "${log_file}" 2>/dev/null || echo "0")
+            # Ensure numeric value (remove any whitespace and non-numeric characters)
+            downloads=$(echo "${downloads}" | tr -d '[:space:]' | grep -E '^[0-9]+$' || echo "0")
+            downloads=$((downloads + 0))
             total_downloads=$((total_downloads + downloads))
             
             # Count successful downloads
             local successes
             successes=$(grep -cE "success|completed|200 OK|downloaded" "${log_file}" 2>/dev/null || echo "0")
+            # Ensure numeric value (remove any whitespace and non-numeric characters)
+            successes=$(echo "${successes}" | tr -d '[:space:]' | grep -E '^[0-9]+$' || echo "0")
+            successes=$((successes + 0))
             successful_downloads=$((successful_downloads + successes))
         done
     fi

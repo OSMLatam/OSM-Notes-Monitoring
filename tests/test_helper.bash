@@ -88,14 +88,12 @@ fi
 # Test configuration
 readonly TEST_DIR="$(cd "$(dirname "${BATS_TEST_FILENAME}")" && pwd)"
 readonly TEST_ROOT="$(dirname "${TEST_DIR}")"
-# Allow override of TEST_DB_NAME in test files
-if [[ -z "${TEST_DB_NAME:-}" ]]; then
-    # Allow override of TEST_DB_NAME in test files before loading
+# Allow override of TEST_DB_NAME in test files before loading
+# Only set as readonly if not already set (to allow test files to override)
 if [[ -z "${TEST_DB_NAME:-}" ]]; then
     readonly TEST_DB_NAME="osm_notes_monitoring_test"
-fi
-else
-    # If already set, make it readonly
+elif [[ "$(declare -p TEST_DB_NAME 2>/dev/null)" != *"readonly"* ]]; then
+    # If already set but not readonly, make it readonly
     readonly TEST_DB_NAME
 fi
 

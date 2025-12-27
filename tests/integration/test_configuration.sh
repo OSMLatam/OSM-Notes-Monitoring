@@ -56,10 +56,10 @@ source "${BATS_TEST_DIRNAME}/../../bin/lib/loggingFunctions.sh"
     source "${project_root}/tests/tmp/test_properties.sh"
     
     # Check required variables are set
-    assert [[ -n "${DBNAME:-}" ]]
-    assert [[ -n "${DBHOST:-}" ]]
-    assert [[ -n "${DBPORT:-}" ]]
-    assert [[ -n "${DBUSER:-}" ]]
+    assert [ -n "${DBNAME:-}" ]
+    assert [ -n "${DBHOST:-}" ]
+    assert [ -n "${DBPORT:-}" ]
+    assert [ -n "${DBUSER:-}" ]
 }
 
 @test "configuration validation works" {

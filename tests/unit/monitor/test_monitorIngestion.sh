@@ -251,7 +251,7 @@ INFO: Info 4"
     local alert_sent=false
     # shellcheck disable=SC2317
     send_alert() {
-        if [[ "${3}" == *"High error rate"* ]]; then
+        if [[ "${3}" == *"High error rate detected"* ]]; then
             alert_sent=true
         fi
         return 0
