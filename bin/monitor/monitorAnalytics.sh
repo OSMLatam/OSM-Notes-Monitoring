@@ -390,13 +390,240 @@ check_data_warehouse_freshness() {
 check_etl_processing_duration() {
     log_info "${COMPONENT}: Starting ETL processing duration check"
     
-    # TODO: Implement ETL processing duration check
-    # This should check:
-    # - Average ETL processing duration
-    # - Long-running ETL jobs
-    # - Duration trends
+    # Check database connection
+    if ! check_database_connection; then
+        log_warning "${COMPONENT}: Cannot check ETL processing duration - database connection failed"
+        return 0
+    fi
     
-    log_debug "${COMPONENT}: ETL processing duration check not yet implemented"
+    # Define ETL scripts to monitor
+    local etl_scripts=(
+        "extract_data.sh"
+        "load_data.sh"
+        "transform_data.sh"
+    )
+    
+    local scripts_dir="${ANALYTICS_REPO_PATH}/bin"
+    local log_dir="${ANALYTICS_LOG_DIR:-${ANALYTICS_REPO_PATH}/logs}"
+    local current_time
+    current_time=$(date +%s)
+    
+    local total_duration=0
+    local job_count=0
+    local max_duration=0
+    local min_duration=999999
+    local long_running_jobs=0
+    local running_jobs_duration=0
+    
+    # Check currently running ETL jobs
+    for script_name in "${etl_scripts[@]}"; do
+        local script_path="${scripts_dir}/${script_name}"
+        
+        if [[ ! -f "${script_path}" ]]; then
+            continue
+        fi
+        
+        local script_basename
+        script_basename=$(basename "${script_path}")
+        
+        # Check if script process is running
+        if pgrep -f "${script_basename}" > /dev/null 2>&1; then
+            local pid
+            pid=$(pgrep -f "${script_basename}" | head -1)
+            
+            if [[ -n "${pid}" ]]; then
+                # Get process start time
+                local start_time
+                if [[ -f "/proc/${pid}/stat" ]]; then
+                    # Linux: get start time from /proc
+                    local starttime
+                    starttime=$(awk '{print $22}' "/proc/${pid}/stat" 2>/dev/null || echo "0")
+                    local uptime
+                    uptime=$(awk '{print $1}' /proc/uptime 2>/dev/null || echo "0")
+                    local clk_tck
+                    clk_tck=$(getconf CLK_TCK 2>/dev/null || echo "100")
+                    
+                    if [[ ${starttime} -gt 0 ]] && [[ ${uptime} -gt 0 ]]; then
+                        start_time=$((current_time - (uptime - starttime / clk_tck)))
+                    else
+                        start_time=${current_time}
+                    fi
+                else
+                    # macOS/BSD: use ps to get elapsed time
+                    local etime_str
+                    etime_str=$(ps -o etime= -p "${pid}" 2>/dev/null | tr -d ' ' || echo "")
+                    
+                    if [[ -n "${etime_str}" ]]; then
+                        # Parse elapsed time (format: [[DD-]HH:]MM:SS or MM:SS)
+                        local etime_seconds=0
+                        # shellcheck disable=SC1073,SC2001
+                        if [[ "${etime_str}" =~ ^([0-9]+)-([0-9]{2}):([0-9]{2}):([0-9]{2})$ ]]; then
+                            # DD-HH:MM:SS format
+                            local days="${BASH_REMATCH[1]}"
+                            local hours="${BASH_REMATCH[2]}"
+                            local minutes="${BASH_REMATCH[3]}"
+                            local seconds="${BASH_REMATCH[4]}"
+                            etime_seconds=$((days * 86400 + hours * 3600 + minutes * 60 + seconds))
+                        elif [[ "${etime_str}" =~ ^([0-9]{2}):([0-9]{2}):([0-9]{2})$ ]]; then
+                            # HH:MM:SS format
+                            local hours="${BASH_REMATCH[1]}"
+                            local minutes="${BASH_REMATCH[2]}"
+                            local seconds="${BASH_REMATCH[3]}"
+                            etime_seconds=$((hours * 3600 + minutes * 60 + seconds))
+                        elif [[ "${etime_str}" =~ ^([0-9]{2}):([0-9]{2})$ ]]; then
+                            # MM:SS format
+                            local minutes="${BASH_REMATCH[1]}"
+                            local seconds="${BASH_REMATCH[2]}"
+                            etime_seconds=$((minutes * 60 + seconds))
+                        fi
+                        
+                        start_time=$((current_time - etime_seconds))
+                    else
+                        start_time=${current_time}
+                    fi
+                fi
+                
+                local job_duration=$((current_time - start_time))
+                running_jobs_duration=$((running_jobs_duration + job_duration))
+                
+                log_info "${COMPONENT}: ETL job ${script_name} is running (duration: ${job_duration}s, PID: ${pid})"
+                
+                # Check if job is running too long
+                local duration_threshold="${ANALYTICS_ETL_DURATION_THRESHOLD:-3600}"
+                if [[ ${job_duration} -gt ${duration_threshold} ]]; then
+                    long_running_jobs=$((long_running_jobs + 1))
+                    log_warning "${COMPONENT}: ETL job ${script_name} has been running for ${job_duration}s (threshold: ${duration_threshold}s)"
+                    send_alert "WARNING" "${COMPONENT}" "Long-running ETL job detected: ${script_name} has been running for ${job_duration}s (threshold: ${duration_threshold}s)"
+                fi
+                
+                # Track statistics
+                if [[ ${job_duration} -gt ${max_duration} ]]; then
+                    max_duration=${job_duration}
+                fi
+                if [[ ${job_duration} -lt ${min_duration} ]]; then
+                    min_duration=${job_duration}
+                fi
+                
+                total_duration=$((total_duration + job_duration))
+                job_count=$((job_count + 1))
+            fi
+        fi
+    done
+    
+    # Check historical durations from logs
+    if [[ -d "${log_dir}" ]]; then
+        # Look for ETL execution logs (last 7 days)
+        local log_files
+        log_files=$(find "${log_dir}" -name "*etl*.log" -o -name "*extract*.log" -o -name "*load*.log" -o -name "*transform*.log" -type f -mtime -7 2>/dev/null | head -20)
+        
+        if [[ -n "${log_files}" ]]; then
+            while IFS= read -r logfile; do
+                if [[ ! -f "${logfile}" ]]; then
+                    continue
+                fi
+                
+                # Try to extract duration from log file
+                # Look for patterns like "duration: 123s", "took 123 seconds", "completed in 123s"
+                local log_durations
+                log_durations=$(grep -oE "(duration|took|completed in|execution time)[: ]*[0-9]+[ ]*(seconds?|s|sec)" "${logfile}" 2>/dev/null | grep -oE "[0-9]+" | head -5)
+                
+                if [[ -n "${log_durations}" ]]; then
+                    while IFS= read -r duration_str; do
+                        if [[ "${duration_str}" =~ ^[0-9]+$ ]]; then
+                            local duration=${duration_str}
+                            
+                            # Track statistics
+                            if [[ ${duration} -gt ${max_duration} ]]; then
+                                max_duration=${duration}
+                            fi
+                            if [[ ${duration} -lt ${min_duration} ]]; then
+                                min_duration=${duration}
+                            fi
+                            
+                            total_duration=$((total_duration + duration))
+                            job_count=$((job_count + 1))
+                        fi
+                    done <<< "${log_durations}"
+                fi
+                
+                # Also check log file modification time as proxy for execution duration
+                # (if log was modified recently, it might indicate a recent execution)
+                local log_mtime
+                if stat -c %Y "${logfile}" > /dev/null 2>&1; then
+                    log_mtime=$(stat -c %Y "${logfile}")
+                elif stat -f %m "${logfile}" > /dev/null 2>&1; then
+                    log_mtime=$(stat -f %m "${logfile}")
+                else
+                    log_mtime=0
+                fi
+                
+                # If log was modified in last hour, use file size as proxy for duration
+                # (larger files might indicate longer executions)
+                if [[ ${log_mtime} -gt 0 ]]; then
+                    local log_age=$((current_time - log_mtime))
+                    if [[ ${log_age} -lt 3600 ]]; then
+                        local log_size
+                        log_size=$(stat -c %s "${logfile}" 2>/dev/null || stat -f %z "${logfile}" 2>/dev/null || echo "0")
+                        # Estimate duration from log size (rough approximation: 1KB = 1 second)
+                        local estimated_duration=$((log_size / 1024))
+                        
+                        if [[ ${estimated_duration} -gt 0 ]] && [[ ${estimated_duration} -lt 86400 ]]; then
+                            if [[ ${estimated_duration} -gt ${max_duration} ]]; then
+                                max_duration=${estimated_duration}
+                            fi
+                            if [[ ${estimated_duration} -lt ${min_duration} ]]; then
+                                min_duration=${estimated_duration}
+                            fi
+                            
+                            total_duration=$((total_duration + estimated_duration))
+                            job_count=$((job_count + 1))
+                        fi
+                    fi
+                fi
+            done <<< "${log_files}"
+        fi
+    fi
+    
+    # Calculate average duration
+    local avg_duration=0
+    if [[ ${job_count} -gt 0 ]]; then
+        avg_duration=$((total_duration / job_count))
+    fi
+    
+    # Record metrics
+    if [[ ${job_count} -gt 0 ]]; then
+        record_metric "${COMPONENT}" "etl_processing_duration_avg_seconds" "${avg_duration}" "component=analytics,period=7days"
+        record_metric "${COMPONENT}" "etl_processing_duration_max_seconds" "${max_duration}" "component=analytics,period=7days"
+        record_metric "${COMPONENT}" "etl_processing_duration_min_seconds" "${min_duration}" "component=analytics,period=7days"
+        record_metric "${COMPONENT}" "etl_processing_duration_total_seconds" "${total_duration}" "component=analytics,period=7days"
+        record_metric "${COMPONENT}" "etl_job_count" "${job_count}" "component=analytics,period=7days"
+    fi
+    
+    if [[ ${running_jobs_duration} -gt 0 ]]; then
+        record_metric "${COMPONENT}" "etl_running_jobs_duration_seconds" "${running_jobs_duration}" "component=analytics"
+    fi
+    
+    if [[ ${long_running_jobs} -gt 0 ]]; then
+        record_metric "${COMPONENT}" "etl_long_running_jobs_count" "${long_running_jobs}" "component=analytics"
+    fi
+    
+    # Check average duration threshold
+    local avg_duration_threshold="${ANALYTICS_ETL_AVG_DURATION_THRESHOLD:-1800}"
+    # shellcheck disable=SC1073
+    if [[ "${avg_duration}" -gt "${avg_duration_threshold}" ]]; then
+        log_warning "${COMPONENT}: Average ETL processing duration (${avg_duration}s) exceeds threshold (${avg_duration_threshold}s)"
+        send_alert "WARNING" "${COMPONENT}" "Average ETL processing duration exceeded: ${avg_duration}s (threshold: ${avg_duration_threshold}s)"
+    fi
+    
+    # Check max duration threshold
+    local max_duration_threshold="${ANALYTICS_ETL_MAX_DURATION_THRESHOLD:-7200}"
+    # shellcheck disable=SC1073
+    if [[ "${max_duration}" -gt "${max_duration_threshold}" ]]; then
+        log_warning "${COMPONENT}: Maximum ETL processing duration (${max_duration}s) exceeds threshold (${max_duration_threshold}s)"
+        send_alert "WARNING" "${COMPONENT}" "Maximum ETL processing duration exceeded: ${max_duration}s (threshold: ${max_duration_threshold}s)"
+    fi
+    
+    log_info "${COMPONENT}: ETL processing duration check completed - Jobs: ${job_count}, Avg: ${avg_duration}s, Max: ${max_duration}s, Min: ${min_duration}s"
     
     return 0
 }

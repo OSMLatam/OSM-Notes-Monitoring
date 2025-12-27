@@ -55,6 +55,9 @@ ANALYTICS_ETL_TIMEOUT=3600   # seconds (1 hour)
 ANALYTICS_DATA_FRESHNESS_THRESHOLD=3600  # seconds (1 hour)
 ANALYTICS_ETL_SCRIPTS_FOUND_THRESHOLD=2  # minimum number of ETL scripts that should be found
 ANALYTICS_ETL_LAST_EXECUTION_AGE_THRESHOLD=3600  # seconds (1 hour) - alert if no ETL execution for this long
+ANALYTICS_ETL_DURATION_THRESHOLD=3600  # seconds (1 hour) - alert if a single ETL job runs longer than this
+ANALYTICS_ETL_AVG_DURATION_THRESHOLD=1800  # seconds (30 minutes) - alert if average ETL duration exceeds this
+ANALYTICS_ETL_MAX_DURATION_THRESHOLD=7200  # seconds (2 hours) - alert if maximum ETL duration exceeds this
 
 # WMS Monitoring
 WMS_ENABLED=true

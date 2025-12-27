@@ -135,7 +135,7 @@
 - [x] Create `bin/monitor/monitorAnalytics.sh` (script skeleton created with structure for all monitoring checks)
 - [x] Implement ETL job execution monitoring (implemented `check_etl_job_execution_status()` with script detection, running status, log analysis, and alerting)
 - [x] Implement data warehouse freshness checks (implemented `check_data_warehouse_freshness()` with database queries, table stats, and log-based fallback)
-- [ ] Implement ETL processing duration tracking
+- [x] Implement ETL processing duration tracking (implemented `check_etl_processing_duration()` with running job detection, log analysis, statistics, and alerting)
 - [ ] Implement data mart update status
 - [ ] Implement query performance monitoring
 - [ ] Implement storage growth tracking
@@ -517,5 +517,5 @@
 
 **Last Updated:** 2025-12-26  
 **Current Phase:** Phase 3 - Analytics Monitoring  
-**Next Task:** Implement ETL processing duration tracking
+**Next Task:** Implement data mart update status
 
