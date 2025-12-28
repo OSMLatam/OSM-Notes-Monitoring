@@ -296,9 +296,9 @@
 ### Testing
 
 - [x] Unit tests for all security functions (created 4 test files: test_rateLimiter.sh (20 tests), test_ddosProtection.sh (14 tests), test_abuseDetection.sh (13 tests), test_ipBlocking.sh (19 tests))
-- [x] Integration tests for rate limiting (created `tests/integration/test_rateLimiter_integration.sh` with 12 integration tests)
+- [x] Integration tests for rate limiting (created `tests/integration/test_rateLimiter_integration.sh` with 11 integration tests)
 - [x] Load tests for DDoS protection (created `tests/performance/test_ddosProtection_load.sh` with 7 load tests)
-- [x] Security testing (created `tests/security/test_security_basic.sh` with 12 security validation tests)
+- [x] Security testing (created `tests/security/test_security_basic.sh` with 13 security validation tests)
 
 ### Documentation
 
