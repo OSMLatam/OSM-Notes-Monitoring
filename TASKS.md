@@ -159,7 +159,7 @@
 
 - [x] Unit tests for analytics checks (created `tests/unit/monitor/test_monitorAnalytics.sh` with 23 tests covering all monitoring functions)
 - [x] Integration tests with test DWH (created `tests/integration/test_monitorAnalytics_integration.sh` with 20 tests covering all monitoring functions with test database)
-- [ ] Performance tests for queries
+- [x] Performance tests for queries (created `tests/performance/test_analytics_query_performance.sh` with 15 tests measuring query performance and system overhead)
 
 ### Documentation
 
