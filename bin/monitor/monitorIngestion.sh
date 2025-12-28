@@ -937,6 +937,10 @@ check_ingestion_data_quality() {
             issues_found=$((issues_found + 1))
             quality_score=$((quality_score - 10))
             
+            if [[ "${TEST_MODE:-false}" == "true" ]]; then
+                echo "DEBUG: Verifier failed, quality_score after -10: ${quality_score}" >&2
+            fi
+            
             # Parse output for error details
             local error_count
             error_count=$(echo "${output}" | grep -c "error\|failed\|discrepancy" || echo "0")
@@ -944,9 +948,16 @@ check_ingestion_data_quality() {
             error_count=$(echo "${error_count}" | tr -d '[:space:]' | grep -E '^[0-9]+$' || echo "0")
             error_count=$((error_count + 0))
             
+            if [[ "${TEST_MODE:-false}" == "true" ]]; then
+                echo "DEBUG: Error count from output: ${error_count}" >&2
+            fi
+            
             if [[ ${error_count} -gt 0 ]]; then
                 log_warning "${COMPONENT}: Found ${error_count} potential issues in notesCheckVerifier"
                 quality_score=$((quality_score - (error_count * 5)))
+                if [[ "${TEST_MODE:-false}" == "true" ]]; then
+                    echo "DEBUG: quality_score after subtracting ${error_count}*5: ${quality_score}" >&2
+                fi
             fi
         fi
     else
@@ -1118,6 +1129,10 @@ check_api_download_status() {
             mapfile -t recent_api_logs < <(find "${ingestion_log_dir}" \( -name "*api*" -o -name "*download*" \) -type f -mmin -60 2>/dev/null | head -5)
         fi
         
+        if [[ "${TEST_MODE:-false}" == "true" ]]; then
+            echo "DEBUG: Found ${#recent_api_logs[@]} API/download log files" >&2
+        fi
+        
         if [[ ${#recent_api_logs[@]} -gt 0 ]]; then
             # Check for success indicators
             for log_file in "${recent_api_logs[@]}"; do
@@ -1130,10 +1145,16 @@ check_api_download_status() {
                     local age_seconds=$((current_time - log_mtime))
                     # Skip logs older than 1 hour in test mode
                     if [[ ${age_seconds} -gt 3600 ]]; then
+                        if [[ "${TEST_MODE:-false}" == "true" ]]; then
+                            echo "DEBUG: Skipping old log: ${log_file} (age: ${age_seconds}s)" >&2
+                        fi
                         continue
                     fi
                 fi
                 if grep -qE "success|completed|downloaded|200 OK" "${log_file}" 2>/dev/null; then
+                    if [[ "${TEST_MODE:-false}" == "true" ]]; then
+                        echo "DEBUG: Found success indicator in: ${log_file}" >&2
+                    fi
                     api_download_status=1
                     break
                 fi
@@ -1144,6 +1165,9 @@ check_api_download_status() {
     # Check for API download script execution
     local api_script="${INGESTION_REPO_PATH}/bin/processAPINotes.sh"
     if [[ -f "${api_script}" ]]; then
+        if [[ "${TEST_MODE:-false}" == "true" ]]; then
+            echo "DEBUG: Found API script: ${api_script}" >&2
+        fi
         # Check if script ran recently (within last hour)
         if [[ -x "${api_script}" ]]; then
             local script_mtime
@@ -1152,10 +1176,21 @@ check_api_download_status() {
             current_time=$(date +%s)
             local age_seconds=$((current_time - script_mtime))
             
+            if [[ "${TEST_MODE:-false}" == "true" ]]; then
+                echo "DEBUG: Script age: ${age_seconds}s" >&2
+            fi
+            
             # If script was modified recently, assume it ran
             if [[ ${age_seconds} -lt 3600 ]]; then
+                if [[ "${TEST_MODE:-false}" == "true" ]]; then
+                    echo "DEBUG: Script is recent, setting api_download_status=1" >&2
+                fi
                 api_download_status=1
             fi
+        fi
+    else
+        if [[ "${TEST_MODE:-false}" == "true" ]]; then
+            echo "DEBUG: API script not found: ${api_script}" >&2
         fi
     fi
     
@@ -1223,7 +1258,15 @@ check_api_download_success_rate() {
             successes=$(echo "${successes}" | tr -d '[:space:]' | grep -E '^[0-9]+$' || echo "0")
             successes=$((successes + 0))
             successful_downloads=$((successful_downloads + successes))
+            
+            if [[ "${TEST_MODE:-false}" == "true" ]]; then
+                echo "DEBUG: ${log_file}: downloads=${downloads}, successes=${successes}" >&2
+            fi
         done
+        
+        if [[ "${TEST_MODE:-false}" == "true" ]]; then
+            echo "DEBUG: Total: downloads=${total_downloads}, successes=${successful_downloads}" >&2
+        fi
     fi
     
     # Calculate success rate

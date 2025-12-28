@@ -666,14 +666,17 @@ INFO: 200 OK"
     local log_file="${TEST_INGESTION_DIR}/logs/old_api.log"
     assert_file_exists "${log_file}"
     
-    local alert_sent=false
+    # Use a temp file to track alert status (since run executes in subshell)
+    local alert_file="${TEST_INGESTION_DIR}/.alert_sent"
+    rm -f "${alert_file}"
+    
     # Redefine send_alert function (must be done after monitorIngestion.sh is sourced)
     # shellcheck disable=SC2317
     send_alert() {
         echo "DEBUG: send_alert called with args: $*" >&2
         if [[ "${4}" == *"No recent API download activity"* ]]; then
-            alert_sent=true
-            echo "DEBUG: alert_sent set to true" >&2
+            touch "${alert_file}"
+            echo "DEBUG: alert_sent file created" >&2
         fi
         return 0
     }
@@ -687,14 +690,19 @@ INFO: 200 OK"
     echo "DEBUG: Logs in ${TEST_INGESTION_DIR}/logs:" >&2
     ls -la "${TEST_INGESTION_DIR}/logs/" >&2 || true
     
+    # Debug: Check TEST_MODE
+    echo "DEBUG: TEST_MODE=${TEST_MODE:-not set}" >&2
+    
     # Run check (may return 1 if no recent activity, which is expected)
     run check_api_download_status || true
     
-    echo "DEBUG: alert_sent=${alert_sent}" >&2
+    # Debug: Check output
+    echo "DEBUG: Function output: ${output:-empty}" >&2
+    echo "DEBUG: alert_file exists: $([ -f "${alert_file}" ] && echo "yes" || echo "no")" >&2
     echo "DEBUG: status=${status}" >&2
     
     # Alert should have been sent
-    assert_equal "true" "${alert_sent}"
+    assert_file_exists "${alert_file}"
 }
 
 @test "check_api_download_success_rate calculates success rate" {
@@ -729,29 +737,31 @@ INFO: 200 OK"
     # Create log files with mostly failures
     # The function looks for patterns: "download|fetch|GET|POST" for total downloads
     # and "success|completed|200 OK|downloaded" for successful downloads
+    # IMPORTANT: Each log file should have exactly ONE download attempt line
+    # to match the expected 30% success rate (3 successful out of 10 total)
     for i in {1..10}; do
         if [[ $((i % 3)) -eq 0 ]]; then
             # Successful download (3 out of 10 = 30% success rate)
-            create_test_log "download${i}.log" "INFO: GET /api/download
-INFO: Download success
-INFO: 200 OK
-INFO: downloaded successfully"
+            # Only ONE line with "download" pattern, and ONE with "success" pattern
+            create_test_log "download${i}.log" "INFO: GET /api/download success completed 200 OK downloaded"
         else
             # Failed download (7 out of 10)
-            create_test_log "download${i}.log" "INFO: GET /api/download
-ERROR: Download failed
-ERROR: 500 Error"
+            # Only ONE line with "download" pattern, NO success patterns
+            create_test_log "download${i}.log" "INFO: GET /api/download failed 500 Error"
         fi
     done
     
-    local alert_sent=false
+    # Use a temp file to track alert status (since run executes in subshell)
+    local alert_file="${TEST_INGESTION_DIR}/.alert_sent"
+    rm -f "${alert_file}"
+    
     # Redefine send_alert function (must be done after monitorIngestion.sh is sourced)
     # shellcheck disable=SC2317
     send_alert() {
         echo "DEBUG: send_alert called with args: $*" >&2
         if [[ "${4}" == *"Low API download success rate"* ]]; then
-            alert_sent=true
-            echo "DEBUG: alert_sent set to true" >&2
+            touch "${alert_file}"
+            echo "DEBUG: alert_sent file created" >&2
         fi
         return 0
     }
@@ -768,14 +778,20 @@ ERROR: 500 Error"
     echo "DEBUG: Logs in ${TEST_INGESTION_DIR}/logs:" >&2
     ls -la "${TEST_INGESTION_DIR}/logs/" >&2 || true
     
+    # Debug: Check TEST_MODE and threshold
+    echo "DEBUG: TEST_MODE=${TEST_MODE:-not set}" >&2
+    echo "DEBUG: INGESTION_API_DOWNLOAD_SUCCESS_RATE_THRESHOLD=${INGESTION_API_DOWNLOAD_SUCCESS_RATE_THRESHOLD:-not set}" >&2
+    
     # Run check (may return 1 if success rate is low, which is expected)
     run check_api_download_success_rate || true
     
-    echo "DEBUG: alert_sent=${alert_sent}" >&2
+    # Debug: Check output
+    echo "DEBUG: Function output: ${output:-empty}" >&2
+    echo "DEBUG: alert_file exists: $([ -f "${alert_file}" ] && echo "yes" || echo "no")" >&2
     echo "DEBUG: status=${status}" >&2
     
     # Alert should have been sent (success rate is 30%, threshold is 50%)
-    assert_equal "true" "${alert_sent}"
+    assert_file_exists "${alert_file}"
 }
 
 @test "check_ingestion_data_quality calculates quality score" {
@@ -831,14 +847,17 @@ ERROR: 500 Error"
         return 0
     }
     
-    local alert_sent=false
+    # Use a temp file to track alert status (since run executes in subshell)
+    local alert_file="${TEST_INGESTION_DIR}/.alert_sent"
+    rm -f "${alert_file}"
+    
     # Redefine send_alert function (must be done after monitorIngestion.sh is sourced)
     # shellcheck disable=SC2317
     send_alert() {
         echo "DEBUG: send_alert called with args: $*" >&2
         if [[ "${4}" == *"Data quality below threshold"* ]]; then
-            alert_sent=true
-            echo "DEBUG: alert_sent set to true" >&2
+            touch "${alert_file}"
+            echo "DEBUG: alert_sent file created" >&2
         fi
         return 0
     }
@@ -857,13 +876,19 @@ ERROR: 500 Error"
     echo "DEBUG: Verifier script: ${verifier_script}" >&2
     ls -la "${verifier_script}" >&2 || echo "DEBUG: Script not found!" >&2
     
+    # Debug: Check TEST_MODE and threshold
+    echo "DEBUG: TEST_MODE=${TEST_MODE:-not set}" >&2
+    echo "DEBUG: INGESTION_DATA_QUALITY_THRESHOLD=${INGESTION_DATA_QUALITY_THRESHOLD:-not set}" >&2
+    
     # Run check (may return 1 if quality score is low, which is expected)
     run check_ingestion_data_quality || true
     
-    echo "DEBUG: alert_sent=${alert_sent}" >&2
+    # Debug: Check output
+    echo "DEBUG: Function output: ${output:-empty}" >&2
+    echo "DEBUG: alert_file exists: $([ -f "${alert_file}" ] && echo "yes" || echo "no")" >&2
     echo "DEBUG: status=${status}" >&2
     
     # Alert should have been sent (quality_score should be 90% when script fails, threshold is 95%)
-    assert_equal "true" "${alert_sent}"
+    assert_file_exists "${alert_file}"
 }
 
