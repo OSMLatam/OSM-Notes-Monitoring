@@ -173,38 +173,38 @@
 
 ### Script Creation
 
-- [ ] Create `bin/monitor/monitorWMS.sh`
-- [ ] Implement WMS service availability checks
-- [ ] Implement HTTP health checks
-- [ ] Implement response time monitoring
-- [ ] Implement error rate tracking
-- [ ] Implement tile generation performance
-- [ ] Implement cache hit rate monitoring
+- [x] Create `bin/monitor/monitorWMS.sh` (created with all 6 monitoring functions)
+- [x] Implement WMS service availability checks (implemented in `check_wms_service_availability()`)
+- [x] Implement HTTP health checks (implemented in `check_http_health()`)
+- [x] Implement response time monitoring (implemented in `check_response_time()`)
+- [x] Implement error rate tracking (implemented in `check_error_rate()`)
+- [x] Implement tile generation performance (implemented in `check_tile_generation_performance()`)
+- [x] Implement cache hit rate monitoring (implemented in `check_cache_hit_rate()`)
 
 ### SQL Queries
 
-- [ ] Create `sql/wms/service_status.sql`
-- [ ] Create `sql/wms/performance.sql`
-- [ ] Create `sql/wms/error_analysis.sql`
+- [x] Create `sql/wms/service_status.sql` (created with 5 queries for service status monitoring)
+- [x] Create `sql/wms/performance.sql` (created with 8 queries for performance analysis)
+- [x] Create `sql/wms/error_analysis.sql` (created with 8 queries for error analysis)
 - [ ] Test all SQL queries
 
 ### Metrics & Alerts
 
-- [ ] Define WMS-specific metrics
-- [ ] Set alert thresholds
-- [ ] Implement alerting logic
+- [x] Define WMS-specific metrics (created `docs/WMS_METRICS.md` with 10 metrics across 5 categories)
+- [x] Set alert thresholds (created `docs/WMS_ALERT_THRESHOLDS.md` with 8 thresholds)
+- [x] Implement alerting logic (all 6 functions include alert calls with correct signature)
 - [ ] Test alert delivery
 
 ### Testing
 
-- [ ] Unit tests for WMS checks
-- [ ] Integration tests with mock WMS service
-- [ ] Load testing for monitoring overhead
+- [x] Unit tests for WMS checks (created `tests/unit/monitor/test_monitorWMS.sh` with 14 tests)
+- [x] Integration tests with mock WMS service (created `tests/integration/test_monitorWMS_integration.sh` with 15 tests)
+- [x] Load testing for monitoring overhead (created `tests/performance/test_wms_monitoring_overhead.sh` with 8 tests)
 
 ### Documentation
 
-- [ ] Create WMS monitoring guide
-- [ ] Create service availability runbook
+- [x] Create WMS monitoring guide (created `docs/WMS_MONITORING_GUIDE.md` with comprehensive monitoring guide)
+- [x] Create service availability runbook (created `docs/WMS_SERVICE_AVAILABILITY_RUNBOOK.md` with alert response procedures)
 
 ---
 
