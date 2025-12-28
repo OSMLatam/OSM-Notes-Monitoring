@@ -1,5 +1,5 @@
 # Alerting Configuration
-# Version: 2025-12-24
+# Version: 2025-12-27
 
 # Email
 ADMIN_EMAIL="admin@example.com"
@@ -18,4 +18,32 @@ INFO_ALERT_RECIPIENTS=""  # Optional, leave empty to disable
 # Alert Deduplication
 ALERT_DEDUPLICATION_ENABLED="true"
 ALERT_DEDUPLICATION_WINDOW_MINUTES=60
+
+# Alert Aggregation
+ALERT_AGGREGATION_ENABLED="true"
+ALERT_AGGREGATION_WINDOW_MINUTES=15
+
+# Alert Retention
+ALERT_RETENTION_DAYS=180
+
+# Escalation
+ESCALATION_ENABLED="true"
+ESCALATION_LEVEL1_MINUTES=15
+ESCALATION_LEVEL2_MINUTES=30
+ESCALATION_LEVEL3_MINUTES=60
+ESCALATION_LEVEL1_RECIPIENTS="${ADMIN_EMAIL}"
+ESCALATION_LEVEL2_RECIPIENTS="${ADMIN_EMAIL}"
+ESCALATION_LEVEL3_RECIPIENTS="${ADMIN_EMAIL}"
+
+# On-Call Rotation (optional)
+ONCALL_ROTATION_ENABLED="false"
+ONCALL_ROTATION_SCHEDULE="weekly"  # daily, weekly, monthly
+ONCALL_PRIMARY="${ADMIN_EMAIL}"
+ONCALL_SECONDARY="${ADMIN_EMAIL}"
+
+# Alert Rules File (optional)
+ALERT_RULES_FILE="${PROJECT_ROOT}/config/alert_rules.conf"
+
+# Alert Templates Directory (optional)
+ALERT_TEMPLATES_DIR="${PROJECT_ROOT}/config/alert_templates"
 
