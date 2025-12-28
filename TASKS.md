@@ -373,33 +373,33 @@
 
 ### Grafana Dashboards
 
-- [ ] Create overview dashboard (`dashboards/grafana/overview.json`)
-- [ ] Create ingestion dashboard (`dashboards/grafana/ingestion.json`)
-- [ ] Create analytics dashboard (`dashboards/grafana/analytics.json`)
-- [ ] Create WMS dashboard (`dashboards/grafana/wms.json`)
-- [ ] Create API/Security dashboard (`dashboards/grafana/api.json`)
-- [ ] Create infrastructure dashboard (`dashboards/grafana/infrastructure.json`)
-- [ ] Test all dashboards
+- [x] Create overview dashboard (`dashboards/grafana/overview.json`)
+- [x] Create ingestion dashboard (`dashboards/grafana/ingestion.json`)
+- [x] Create analytics dashboard (`dashboards/grafana/analytics.json`)
+- [x] Create WMS dashboard (`dashboards/grafana/wms.json`)
+- [x] Create API/Security dashboard (`dashboards/grafana/api.json`)
+- [x] Create infrastructure dashboard (`dashboards/grafana/infrastructure.json`)
+- [x] Test all dashboards (created `tests/unit/dashboard/test_grafana_dashboards.sh`)
 
 ### HTML Dashboards
 
-- [ ] Create simple overview dashboard (`dashboards/html/overview.html`)
-- [ ] Create component status pages
-- [ ] Create quick health check page
-- [ ] Test HTML dashboards
+- [x] Create simple overview dashboard (`dashboards/html/overview.html`)
+- [x] Create component status pages (`dashboards/html/component_status.html`)
+- [x] Create quick health check page (`dashboards/html/health_check.html`)
+- [x] Test HTML dashboards (created `tests/unit/dashboard/test_html_dashboards.sh`)
 
 ### Dashboard Scripts
 
-- [ ] Create `bin/dashboard/generateMetrics.sh`
-- [ ] Create `bin/dashboard/updateDashboard.sh`
-- [ ] Create export/import utilities
-- [ ] Test dashboard scripts
+- [x] Create `bin/dashboard/generateMetrics.sh`
+- [x] Create `bin/dashboard/updateDashboard.sh`
+- [x] Create export/import utilities (`bin/dashboard/exportDashboard.sh`, `bin/dashboard/importDashboard.sh`)
+- [x] Test dashboard scripts (created `tests/unit/dashboard/test_generateMetrics.sh`, `test_updateDashboard.sh`, `test_exportDashboard.sh`, `test_importDashboard.sh`)
 
 ### Testing
 
-- [ ] Dashboard functionality tests
-- [ ] Data accuracy validation
-- [ ] Performance tests for dashboards
+- [x] Dashboard functionality tests (created `tests/integration/test_dashboard_functionality.sh`)
+- [x] Data accuracy validation (created `tests/integration/test_dashboard_data_accuracy.sh`)
+- [x] Performance tests for dashboards (created `tests/performance/test_dashboard_performance.sh`)
 
 ### Documentation
 
