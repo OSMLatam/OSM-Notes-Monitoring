@@ -156,12 +156,12 @@ check_etl_job_execution_status() {
     local scripts_found_threshold="${ANALYTICS_ETL_SCRIPTS_FOUND_THRESHOLD:-2}"
     if [[ ${scripts_found} -lt ${scripts_found_threshold} ]]; then
         log_warning "${COMPONENT}: Low number of ETL scripts found: ${scripts_found} (threshold: ${scripts_found_threshold})"
-        send_alert "WARNING" "${COMPONENT}" "Low number of ETL scripts found: ${scripts_found} (threshold: ${scripts_found_threshold})"
+        send_alert "${COMPONENT}" "WARNING" "etl_scripts_found" "Low number of ETL scripts found: ${scripts_found} (threshold: ${scripts_found_threshold})"
     fi
     
     if [[ ${scripts_executable} -lt ${scripts_found} ]]; then
         log_warning "${COMPONENT}: Some ETL scripts are not executable: ${scripts_executable}/${scripts_found}"
-        send_alert "WARNING" "${COMPONENT}" "ETL scripts executable count (${scripts_executable}) is less than scripts found (${scripts_found})"
+        send_alert "${COMPONENT}" "WARNING" "etl_scripts_executable" "ETL scripts executable count (${scripts_executable}) is less than scripts found (${scripts_found})"
     fi
     
     # Check last execution timestamp from logs
@@ -195,7 +195,7 @@ check_etl_job_execution_status() {
                     local freshness_threshold="${ANALYTICS_DATA_FRESHNESS_THRESHOLD:-3600}"
                     if [[ ${last_execution_age_seconds} -gt ${freshness_threshold} ]]; then
                         log_warning "${COMPONENT}: Last ETL execution is ${last_execution_age_seconds}s old (threshold: ${freshness_threshold}s)"
-                        send_alert "WARNING" "${COMPONENT}" "Last ETL execution is ${last_execution_age_seconds}s old (threshold: ${freshness_threshold}s)"
+                        send_alert "${COMPONENT}" "WARNING" "etl_last_execution_age" "Last ETL execution is ${last_execution_age_seconds}s old (threshold: ${freshness_threshold}s)"
                     fi
                 fi
             fi
@@ -223,12 +223,14 @@ check_etl_job_execution_status() {
             # Record metrics
             if [[ ${error_count} -gt 0 ]]; then
                 record_metric "${COMPONENT}" "etl_error_count" "${error_count}" "component=analytics,period=24h"
+                # Alert on errors
+                send_alert "${COMPONENT}" "WARNING" "etl_error_count" "ETL job errors detected: ${error_count} errors in last 24 hours"
             fi
             if [[ ${failure_count} -gt 0 ]]; then
                 record_metric "${COMPONENT}" "etl_failure_count" "${failure_count}" "component=analytics,period=24h"
                 
                 # Alert on failures
-                send_alert "WARNING" "${COMPONENT}" "ETL job failures detected: ${failure_count} failures in last 24 hours"
+                send_alert "${COMPONENT}" "WARNING" "etl_failure_count" "ETL job failures detected: ${failure_count} failures in last 24 hours"
             fi
         fi
     fi
@@ -307,12 +309,17 @@ check_data_warehouse_freshness() {
             local freshness_threshold="${ANALYTICS_DATA_FRESHNESS_THRESHOLD:-3600}"
             if [[ ${freshness_int} -gt ${freshness_threshold} ]]; then
                 log_warning "${COMPONENT}: Data warehouse freshness (${freshness_int}s) exceeds threshold (${freshness_threshold}s)"
-                send_alert "WARNING" "${COMPONENT}" "Data warehouse freshness exceeded: ${freshness_int}s (threshold: ${freshness_threshold}s)"
+                send_alert "${COMPONENT}" "WARNING" "data_warehouse_freshness" "Data warehouse freshness exceeded: ${freshness_int}s (threshold: ${freshness_threshold}s)"
             fi
         fi
         
         if [[ -n "${recent_updates}" ]] && [[ "${recent_updates}" =~ ^[0-9]+$ ]]; then
             record_metric "${COMPONENT}" "data_warehouse_recent_updates_count" "${recent_updates}" "component=analytics,period=1hour"
+            # Alert if no recent updates
+            if [[ ${recent_updates} -eq 0 ]]; then
+                log_warning "${COMPONENT}: No recent updates in data warehouse in the last hour"
+                send_alert "${COMPONENT}" "WARNING" "data_warehouse_recent_updates" "No recent updates in data warehouse in the last hour"
+            fi
         fi
     else
         # Fallback: Check by table modification time or log file age
@@ -346,7 +353,7 @@ check_data_warehouse_freshness() {
                 local freshness_threshold="${ANALYTICS_DATA_FRESHNESS_THRESHOLD:-3600}"
                 if [[ ${table_freshness_int} -gt ${freshness_threshold} ]]; then
                     log_warning "${COMPONENT}: Data warehouse freshness (from table stats) (${table_freshness_int}s) exceeds threshold (${freshness_threshold}s)"
-                    send_alert "WARNING" "${COMPONENT}" "Data warehouse freshness exceeded: ${table_freshness_int}s (threshold: ${freshness_threshold}s)"
+                    send_alert "${COMPONENT}" "WARNING" "data_warehouse_freshness" "Data warehouse freshness exceeded: ${table_freshness_int}s (threshold: ${freshness_threshold}s)"
                 fi
             fi
         else
@@ -376,7 +383,7 @@ check_data_warehouse_freshness() {
                         local freshness_threshold="${ANALYTICS_DATA_FRESHNESS_THRESHOLD:-3600}"
                         if [[ ${freshness_seconds} -gt ${freshness_threshold} ]]; then
                             log_warning "${COMPONENT}: Data warehouse freshness (from log age) (${freshness_seconds}s) exceeds threshold (${freshness_threshold}s)"
-                            send_alert "WARNING" "${COMPONENT}" "Data warehouse freshness exceeded: ${freshness_seconds}s (threshold: ${freshness_threshold}s)"
+                            send_alert "${COMPONENT}" "WARNING" "data_warehouse_freshness" "Data warehouse freshness exceeded: ${freshness_seconds}s (threshold: ${freshness_threshold}s)"
                         fi
                     fi
                 fi
@@ -497,7 +504,7 @@ check_etl_processing_duration() {
                 if [[ ${job_duration} -gt ${duration_threshold} ]]; then
                     long_running_jobs=$((long_running_jobs + 1))
                     log_warning "${COMPONENT}: ETL job ${script_name} has been running for ${job_duration}s (threshold: ${duration_threshold}s)"
-                    send_alert "WARNING" "${COMPONENT}" "Long-running ETL job detected: ${script_name} has been running for ${job_duration}s (threshold: ${duration_threshold}s)"
+                    send_alert "${COMPONENT}" "WARNING" "etl_duration" "Long-running ETL job detected: ${script_name} has been running for ${job_duration}s (threshold: ${duration_threshold}s)"
                 fi
                 
                 # Track statistics
@@ -616,7 +623,7 @@ check_etl_processing_duration() {
     # shellcheck disable=SC1073
     if [[ "${avg_duration}" -gt "${avg_duration_threshold}" ]]; then
         log_warning "${COMPONENT}: Average ETL processing duration (${avg_duration}s) exceeds threshold (${avg_duration_threshold}s)"
-        send_alert "WARNING" "${COMPONENT}" "Average ETL processing duration exceeded: ${avg_duration}s (threshold: ${avg_duration_threshold}s)"
+        send_alert "${COMPONENT}" "WARNING" "etl_avg_duration" "Average ETL processing duration exceeded: ${avg_duration}s (threshold: ${avg_duration_threshold}s)"
     fi
     
     # Check max duration threshold
@@ -624,7 +631,7 @@ check_etl_processing_duration() {
     # shellcheck disable=SC1073
     if [[ "${max_duration}" -gt "${max_duration_threshold}" ]]; then
         log_warning "${COMPONENT}: Maximum ETL processing duration (${max_duration}s) exceeds threshold (${max_duration_threshold}s)"
-        send_alert "WARNING" "${COMPONENT}" "Maximum ETL processing duration exceeded: ${max_duration}s (threshold: ${max_duration_threshold}s)"
+        send_alert "${COMPONENT}" "WARNING" "etl_max_duration" "Maximum ETL processing duration exceeded: ${max_duration}s (threshold: ${max_duration_threshold}s)"
     fi
     
     log_info "${COMPONENT}: ETL processing duration check completed - Jobs: ${job_count}, Avg: ${avg_duration}s, Max: ${max_duration}s, Min: ${min_duration}s"
@@ -717,12 +724,13 @@ check_data_mart_update_status() {
             if [[ ${update_age_int} -gt ${update_age_threshold} ]]; then
                 marts_stale=$((marts_stale + 1))
                 log_warning "${COMPONENT}: Data mart update age (${update_age_int}s) exceeds threshold (${update_age_threshold}s)"
-                send_alert "WARNING" "${COMPONENT}" "Data mart update age exceeded: ${update_age_int}s (threshold: ${update_age_threshold}s)"
+                send_alert "${COMPONENT}" "WARNING" "data_mart_update_age" "Data mart update age exceeded: ${update_age_int}s (threshold: ${update_age_threshold}s)"
             fi
             
-            # Check if there are no recent updates
+            # Check if there are no recent updates (for frequently updated marts)
             if [[ -n "${recent_updates}" ]] && [[ "${recent_updates}" =~ ^[0-9]+$ ]] && [[ ${recent_updates} -eq 0 ]]; then
                 log_warning "${COMPONENT}: No recent updates in data mart (last ${update_age_int}s)"
+                send_alert "${COMPONENT}" "WARNING" "data_mart_recent_updates" "No recent updates in data mart in the last hour"
             fi
             
             # Record recent updates count
@@ -788,7 +796,7 @@ check_data_mart_update_status() {
                         if [[ ${update_age} -gt ${update_age_threshold} ]]; then
                             marts_stale=$((marts_stale + 1))
                             log_warning "${COMPONENT}: Data mart update age (from log) (${update_age}s) exceeds threshold (${update_age_threshold}s)"
-                            send_alert "WARNING" "${COMPONENT}" "Data mart update age exceeded: ${update_age}s (threshold: ${update_age_threshold}s)"
+                            send_alert "${COMPONENT}" "WARNING" "data_mart_update_age" "Data mart update age exceeded: ${update_age}s (threshold: ${update_age_threshold}s)"
                         fi
                     fi
                 done <<< "${mart_logs}"
@@ -811,18 +819,20 @@ check_data_mart_update_status() {
     
     if [[ ${marts_stale} -gt 0 ]]; then
         record_metric "${COMPONENT}" "data_mart_stale_count" "${marts_stale}" "component=analytics"
+        log_warning "${COMPONENT}: ${marts_stale} data mart(s) are stale (exceed freshness threshold)"
+        send_alert "${COMPONENT}" "WARNING" "data_mart_stale_count" "Data mart staleness detected: ${marts_stale} mart(s) exceed freshness threshold"
     fi
     
     if [[ ${marts_failed} -gt 0 ]]; then
         record_metric "${COMPONENT}" "data_mart_failed_count" "${marts_failed}" "component=analytics"
-        send_alert "ERROR" "${COMPONENT}" "Data mart update failures detected: ${marts_failed} mart(s) have update failures"
+        send_alert "${COMPONENT}" "ERROR" "data_mart_failure" "Data mart update failures detected: ${marts_failed} mart(s) have update failures"
     fi
     
     # Check average update age threshold
     local avg_update_age_threshold="${ANALYTICS_DATA_MART_AVG_UPDATE_AGE_THRESHOLD:-1800}"
     if [[ ${avg_update_age} -gt ${avg_update_age_threshold} ]]; then
         log_warning "${COMPONENT}: Average data mart update age (${avg_update_age}s) exceeds threshold (${avg_update_age_threshold}s)"
-        send_alert "WARNING" "${COMPONENT}" "Average data mart update age exceeded: ${avg_update_age}s (threshold: ${avg_update_age_threshold}s)"
+        send_alert "${COMPONENT}" "WARNING" "data_mart_avg_update_age" "Average data mart update age exceeded: ${avg_update_age}s (threshold: ${avg_update_age_threshold}s)"
     fi
     
     log_info "${COMPONENT}: Data mart update status check completed - Marts checked: ${marts_checked}, Stale: ${marts_stale}, Failed: ${marts_failed}, Avg age: ${avg_update_age}s"
@@ -923,7 +933,7 @@ check_query_performance() {
                 local slow_query_threshold="${ANALYTICS_SLOW_QUERY_THRESHOLD:-1000}"
                 if [[ ${slow_query_count} -gt 0 ]]; then
                     log_warning "${COMPONENT}: Found ${slow_query_count} slow queries (threshold: ${slow_query_threshold}ms)"
-                    send_alert "WARNING" "${COMPONENT}" "Slow queries detected: ${slow_query_count} queries exceed ${slow_query_threshold}ms (max: ${max_query_time}ms, avg: ${avg_query_time}ms)"
+                    send_alert "${COMPONENT}" "WARNING" "slow_queries" "Slow queries detected: ${slow_query_count} queries exceed ${slow_query_threshold}ms (max: ${max_query_time}ms, avg: ${avg_query_time}ms)"
                 fi
             fi
         fi
@@ -988,7 +998,7 @@ check_query_performance() {
                 if [[ ${duration_ms} -gt ${slow_query_threshold} ]]; then
                     slow_query_count=$((slow_query_count + 1))
                     log_warning "${COMPONENT}: Slow query detected: ${duration_ms}ms (threshold: ${slow_query_threshold}ms)"
-                    send_alert "WARNING" "${COMPONENT}" "Slow query detected: ${duration_ms}ms (query: ${test_query:0:50}...)"
+                    send_alert "${COMPONENT}" "WARNING" "slow_query" "Slow query detected: ${duration_ms}ms (query: ${test_query:0:50}...)"
                 fi
             fi
         done
@@ -1025,8 +1035,12 @@ check_query_performance() {
         unused_index_count=$(echo "${unused_indexes_result}" | wc -l | tr -d '[:space:]' || echo "0")
         
         if [[ ${unused_index_count} -gt 0 ]]; then
-            log_debug "${COMPONENT}: Found ${unused_index_count} potentially unused indexes"
+            log_info "${COMPONENT}: Found ${unused_index_count} potentially unused indexes"
             record_metric "${COMPONENT}" "unused_index_count" "${unused_index_count}" "component=analytics"
+            # Informational alert (not critical, but useful for optimization)
+            if [[ ${unused_index_count} -gt 5 ]]; then
+                send_alert "${COMPONENT}" "INFO" "unused_index_count" "Found ${unused_index_count} potentially unused indexes - consider reviewing for optimization"
+            fi
         fi
     fi
     
@@ -1043,14 +1057,14 @@ check_query_performance() {
     local avg_query_time_threshold="${ANALYTICS_AVG_QUERY_TIME_THRESHOLD:-500}"
     if [[ ${avg_query_time} -gt ${avg_query_time_threshold} ]]; then
         log_warning "${COMPONENT}: Average query time (${avg_query_time}ms) exceeds threshold (${avg_query_time_threshold}ms)"
-        send_alert "WARNING" "${COMPONENT}" "Average query time exceeded: ${avg_query_time}ms (threshold: ${avg_query_time_threshold}ms)"
+        send_alert "${COMPONENT}" "WARNING" "query_avg_time" "Average query time exceeded: ${avg_query_time}ms (threshold: ${avg_query_time_threshold}ms)"
     fi
     
     # Check max query time threshold
     local max_query_time_threshold="${ANALYTICS_MAX_QUERY_TIME_THRESHOLD:-5000}"
     if [[ ${max_query_time} -gt ${max_query_time_threshold} ]]; then
         log_warning "${COMPONENT}: Maximum query time (${max_query_time}ms) exceeds threshold (${max_query_time_threshold}ms)"
-        send_alert "WARNING" "${COMPONENT}" "Maximum query time exceeded: ${max_query_time}ms (threshold: ${max_query_time_threshold}ms)"
+        send_alert "${COMPONENT}" "WARNING" "query_max_time" "Maximum query time exceeded: ${max_query_time}ms (threshold: ${max_query_time_threshold}ms)"
     fi
     
     log_info "${COMPONENT}: Query performance check completed - Queries checked: ${queries_checked}, Slow: ${slow_query_count}, Avg: ${avg_query_time}ms, Max: ${max_query_time}ms"
@@ -1107,7 +1121,7 @@ check_storage_growth() {
             local db_size_threshold="${ANALYTICS_DB_SIZE_THRESHOLD:-107374182400}"
             if [[ ${db_size_bytes} -gt ${db_size_threshold} ]]; then
                 log_warning "${COMPONENT}: Database size (${db_size_bytes} bytes) exceeds threshold (${db_size_threshold} bytes)"
-                send_alert "WARNING" "${COMPONENT}" "Database size exceeded: ${db_size_pretty} (threshold: $(numfmt --to=iec-i --suffix=B "${db_size_threshold}" 2>/dev/null || echo "${db_size_threshold} bytes"))"
+                send_alert "${COMPONENT}" "WARNING" "database_size" "Database size exceeded: ${db_size_pretty} (threshold: $(numfmt --to=iec-i --suffix=B "${db_size_threshold}" 2>/dev/null || echo "${db_size_threshold} bytes"))"
             fi
         fi
     fi
@@ -1175,7 +1189,7 @@ check_storage_growth() {
             local largest_table_threshold="${ANALYTICS_LARGEST_TABLE_SIZE_THRESHOLD:-10737418240}"
             if [[ ${largest_table_size} -gt ${largest_table_threshold} ]]; then
                 log_warning "${COMPONENT}: Largest table size (${largest_table_size} bytes) exceeds threshold (${largest_table_threshold} bytes)"
-                send_alert "WARNING" "${COMPONENT}" "Largest table size exceeded: ${largest_table_name} - $(numfmt --to=iec-i --suffix=B "${largest_table_size}" 2>/dev/null || echo "${largest_table_size} bytes") (threshold: $(numfmt --to=iec-i --suffix=B "${largest_table_threshold}" 2>/dev/null || echo "${largest_table_threshold} bytes"))"
+                send_alert "${COMPONENT}" "WARNING" "table_size" "Largest table size exceeded: ${largest_table_name} - $(numfmt --to=iec-i --suffix=B "${largest_table_size}" 2>/dev/null || echo "${largest_table_size} bytes") (threshold: $(numfmt --to=iec-i --suffix=B "${largest_table_threshold}" 2>/dev/null || echo "${largest_table_threshold} bytes"))"
             fi
         fi
     fi
@@ -1199,9 +1213,13 @@ check_storage_growth() {
             
             # Check against disk usage threshold
             local disk_threshold="${ANALYTICS_DISK_USAGE_THRESHOLD:-85}"
-            if [[ ${disk_usage_percent} -ge ${disk_threshold} ]]; then
+            local disk_critical_threshold=90
+            if [[ ${disk_usage_percent} -ge ${disk_critical_threshold} ]]; then
+                log_error "${COMPONENT}: Critical disk usage (${disk_usage_percent}%) exceeds critical threshold (${disk_critical_threshold}%)"
+                send_alert "${COMPONENT}" "CRITICAL" "disk_usage" "Critical disk usage: ${disk_usage_percent}% (available: ${disk_available})"
+            elif [[ ${disk_usage_percent} -ge ${disk_threshold} ]]; then
                 log_warning "${COMPONENT}: Disk usage (${disk_usage_percent}%) exceeds threshold (${disk_threshold}%)"
-                send_alert "WARNING" "${COMPONENT}" "High disk usage: ${disk_usage_percent}% (available: ${disk_available})"
+                send_alert "${COMPONENT}" "WARNING" "disk_usage" "High disk usage: ${disk_usage_percent}% (available: ${disk_available})"
             fi
         fi
     fi
@@ -1242,7 +1260,7 @@ check_health_status() {
     # Check database connection
     if ! check_database_connection; then
         log_error "${COMPONENT}: Database connection failed"
-        send_alert "CRITICAL" "${COMPONENT}" "Database connection failed"
+        send_alert "${COMPONENT}" "CRITICAL" "database_connection" "Database connection failed"
         return 1
     fi
     
