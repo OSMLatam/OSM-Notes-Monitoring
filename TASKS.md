@@ -157,7 +157,7 @@
 
 ### Testing
 
-- [ ] Unit tests for analytics checks
+- [x] Unit tests for analytics checks (created `tests/unit/monitor/test_monitorAnalytics.sh` with 23 tests covering all monitoring functions)
 - [ ] Integration tests with test DWH
 - [ ] Performance tests for queries
 
