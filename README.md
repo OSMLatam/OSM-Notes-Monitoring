@@ -80,6 +80,8 @@ For detailed architecture documentation, see:
 - [Existing Monitoring Components](./docs/Existing_Monitoring_Components.md): Integration with OSM-Notes-Ingestion monitoring scripts
 - [Grafana Architecture](./docs/GRAFANA_ARCHITECTURE.md): Dual Grafana deployment (API + Monitoring)
 - [Query Performance Optimization](./docs/QUERY_PERFORMANCE_OPTIMIZATION.md): SQL query optimization guide
+- [Security Audit Guide](./docs/SECURITY_AUDIT_GUIDE.md): Code-level security checks
+- [Vulnerability Scanning Guide](./docs/VULNERABILITY_SCANNING_GUIDE.md): Automated vulnerability detection
 
 ## Features
 
