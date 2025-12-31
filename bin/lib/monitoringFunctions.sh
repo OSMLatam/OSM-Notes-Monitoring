@@ -66,15 +66,30 @@ execute_sql_query() {
     local dbname="${2:-${DBNAME}}"
     local result
     
-    if ! result=$(PGPASSWORD="${PGPASSWORD:-}" psql \
-        -h "${DBHOST}" \
-        -p "${DBPORT}" \
-        -U "${DBUSER}" \
-        -d "${dbname}" \
-        -t -A \
-        -c "${query}" 2>&1); then
-        echo "Error executing query: ${result}" >&2
-        return 1
+    # Use PGPASSWORD if set, otherwise let psql use default authentication (peer, md5, etc.)
+    # Only set PGPASSWORD if it's actually configured to avoid forcing password auth
+    if [[ -n "${PGPASSWORD:-}" ]]; then
+        if ! result=$(PGPASSWORD="${PGPASSWORD}" psql \
+            -h "${DBHOST}" \
+            -p "${DBPORT}" \
+            -U "${DBUSER}" \
+            -d "${dbname}" \
+            -t -A \
+            -c "${query}" 2>&1); then
+            echo "Error executing query: ${result}" >&2
+            return 1
+        fi
+    else
+        if ! result=$(psql \
+            -h "${DBHOST}" \
+            -p "${DBPORT}" \
+            -U "${DBUSER}" \
+            -d "${dbname}" \
+            -t -A \
+            -c "${query}" 2>&1); then
+            echo "Error executing query: ${result}" >&2
+            return 1
+        fi
     fi
     
     echo "${result}"
@@ -100,14 +115,27 @@ execute_sql_file() {
         return 1
     fi
     
-    if ! PGPASSWORD="${PGPASSWORD:-}" psql \
-        -h "${DBHOST}" \
-        -p "${DBPORT}" \
-        -U "${DBUSER}" \
-        -d "${dbname}" \
-        -f "${sql_file}" > /dev/null 2>&1; then
-        echo "Error executing SQL file: ${sql_file}" >&2
-        return 1
+    # Use PGPASSWORD if set, otherwise let psql use default authentication
+    if [[ -n "${PGPASSWORD:-}" ]]; then
+        if ! PGPASSWORD="${PGPASSWORD}" psql \
+            -h "${DBHOST}" \
+            -p "${DBPORT}" \
+            -U "${DBUSER}" \
+            -d "${dbname}" \
+            -f "${sql_file}" > /dev/null 2>&1; then
+            echo "Error executing SQL file: ${sql_file}" >&2
+            return 1
+        fi
+    else
+        if ! psql \
+            -h "${DBHOST}" \
+            -p "${DBPORT}" \
+            -U "${DBUSER}" \
+            -d "${dbname}" \
+            -f "${sql_file}" > /dev/null 2>&1; then
+            echo "Error executing SQL file: ${sql_file}" >&2
+            return 1
+        fi
     fi
     
     return 0
@@ -125,15 +153,30 @@ execute_sql_file() {
 check_database_connection() {
     local dbname="${1:-${DBNAME}}"
     
-    if PGPASSWORD="${PGPASSWORD:-}" psql \
-        -h "${DBHOST}" \
-        -p "${DBPORT}" \
-        -U "${DBUSER}" \
-        -d "${dbname}" \
-        -c "SELECT 1" > /dev/null 2>&1; then
-        return 0
+    # Use PGPASSWORD if set, otherwise let psql use default authentication (peer, md5, etc.)
+    # Only set PGPASSWORD if it's actually configured to avoid forcing password auth
+    if [[ -n "${PGPASSWORD:-}" ]]; then
+        if PGPASSWORD="${PGPASSWORD}" psql \
+            -h "${DBHOST}" \
+            -p "${DBPORT}" \
+            -U "${DBUSER}" \
+            -d "${dbname}" \
+            -c "SELECT 1" > /dev/null 2>&1; then
+            return 0
+        else
+            return 1
+        fi
     else
-        return 1
+        if psql \
+            -h "${DBHOST}" \
+            -p "${DBPORT}" \
+            -U "${DBUSER}" \
+            -d "${dbname}" \
+            -c "SELECT 1" > /dev/null 2>&1; then
+            return 0
+        else
+            return 1
+        fi
     fi
 }
 

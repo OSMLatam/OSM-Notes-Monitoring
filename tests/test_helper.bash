@@ -233,9 +233,21 @@ skip_if_database_not_available() {
         skip "PostgreSQL client not found"
     fi
     
-    if ! PGPASSWORD="${PGPASSWORD:-postgres}" psql -h "${PGHOST:-localhost}" \
-         -U "${PGUSER:-postgres}" -d "${TEST_DB_NAME}" -c "SELECT 1" > /dev/null 2>&1; then
-        skip "Test database not available"
+    # Use DB* variables if set (from test setup), otherwise fall back to PG* variables, then system user
+    local dbhost="${DBHOST:-${PGHOST:-localhost}}"
+    local dbport="${DBPORT:-${PGPORT:-5432}}"
+    local dbuser="${DBUSER:-${PGUSER:-${USER:-postgres}}}"
+    local dbname="${DBNAME:-${TEST_DB_NAME}}"
+    
+    # Only use PGPASSWORD if configured, otherwise let psql use .pgpass or other auth methods
+    local psql_cmd="psql"
+    if [[ -n "${PGPASSWORD:-}" ]]; then
+        psql_cmd="PGPASSWORD=\"${PGPASSWORD}\" psql"
+    fi
+    
+    if ! eval "${psql_cmd}" -h "${dbhost}" -p "${dbport}" \
+         -U "${dbuser}" -d "${dbname}" -c "SELECT 1" > /dev/null 2>&1; then
+        skip "Test database not available (host: ${dbhost}, port: ${dbport}, user: ${dbuser}, db: ${dbname})"
     fi
 }
 
@@ -244,7 +256,14 @@ skip_if_database_not_available() {
 # Usage: get_test_db_connection
 ##
 get_test_db_connection() {
-    echo "postgresql://${PGUSER:-postgres}:${PGPASSWORD:-postgres}@${PGHOST:-localhost}:${PGPORT:-5432}/${TEST_DB_NAME}"
+    # Use DB* variables if set (from test setup), otherwise fall back to PG* variables
+    local dbhost="${DBHOST:-${PGHOST:-localhost}}"
+    local dbport="${DBPORT:-${PGPORT:-5432}}"
+    local dbuser="${DBUSER:-${PGUSER:-postgres}}"
+    local dbname="${DBNAME:-${TEST_DB_NAME}}"
+    local dbpassword="${PGPASSWORD:-postgres}"
+    
+    echo "postgresql://${dbuser}:${dbpassword}@${dbhost}:${dbport}/${dbname}"
 }
 
 ##
@@ -254,12 +273,31 @@ get_test_db_connection() {
 run_sql_query() {
     local query="${1}"
     
-    PGPASSWORD="${PGPASSWORD:-postgres}" psql \
-        -h "${PGHOST:-localhost}" \
-        -U "${PGUSER:-postgres}" \
-        -d "${TEST_DB_NAME}" \
-        -t -A \
-        -c "${query}"
+    # Use DB* variables if set (from test setup), otherwise fall back to PG* variables
+    local dbhost="${DBHOST:-${PGHOST:-localhost}}"
+    local dbport="${DBPORT:-${PGPORT:-5432}}"
+    local dbuser="${DBUSER:-${PGUSER:-${USER:-postgres}}}"
+    local dbname="${DBNAME:-${TEST_DB_NAME}}"
+    local dbpassword="${PGPASSWORD:-}"
+    
+    # Use PGPASSWORD if set, otherwise let psql use default authentication
+    if [[ -n "${dbpassword}" ]]; then
+        PGPASSWORD="${dbpassword}" psql \
+            -h "${dbhost}" \
+            -p "${dbport}" \
+            -U "${dbuser}" \
+            -d "${dbname}" \
+            -t -A \
+            -c "${query}"
+    else
+        psql \
+            -h "${dbhost}" \
+            -p "${dbport}" \
+            -U "${dbuser}" \
+            -d "${dbname}" \
+            -t -A \
+            -c "${query}"
+    fi
 }
 
 ##
@@ -274,11 +312,87 @@ load_test_data() {
         return 1
     fi
     
-    PGPASSWORD="${PGPASSWORD:-postgres}" psql \
-        -h "${PGHOST:-localhost}" \
-        -U "${PGUSER:-postgres}" \
-        -d "${TEST_DB_NAME}" \
-        -f "${sql_file}"
+    # Use DB* variables if set (from test setup), otherwise fall back to PG* variables
+    local dbhost="${DBHOST:-${PGHOST:-localhost}}"
+    local dbport="${DBPORT:-${PGPORT:-5432}}"
+    local dbuser="${DBUSER:-${PGUSER:-${USER:-postgres}}}"
+    local dbname="${DBNAME:-${TEST_DB_NAME}}"
+    local dbpassword="${PGPASSWORD:-}"
+    
+    # Use PGPASSWORD if set, otherwise let psql use default authentication
+    if [[ -n "${dbpassword}" ]]; then
+        PGPASSWORD="${dbpassword}" psql \
+            -h "${dbhost}" \
+            -p "${dbport}" \
+            -U "${dbuser}" \
+            -d "${dbname}" \
+            -f "${sql_file}"
+    else
+        psql \
+            -h "${dbhost}" \
+            -p "${dbport}" \
+            -U "${dbuser}" \
+            -d "${dbname}" \
+            -f "${sql_file}"
+    fi
+}
+
+##
+# Initialize test database schema if needed
+# Usage: initialize_test_database_schema
+##
+initialize_test_database_schema() {
+    # Use DB* variables if set (from test setup), otherwise fall back to PG* variables
+    local dbhost="${DBHOST:-${PGHOST:-localhost}}"
+    local dbport="${DBPORT:-${PGPORT:-5432}}"
+    local dbuser="${DBUSER:-${PGUSER:-${USER:-postgres}}}"
+    local dbname="${DBNAME:-${TEST_DB_NAME}}"
+    local dbpassword="${PGPASSWORD:-}"
+    
+    # Check if metrics table exists
+    local table_exists
+    if [[ -n "${dbpassword}" ]]; then
+        table_exists=$(PGPASSWORD="${dbpassword}" psql \
+            -h "${dbhost}" \
+            -p "${dbport}" \
+            -U "${dbuser}" \
+            -d "${dbname}" \
+            -t -A \
+            -c "SELECT 1 FROM information_schema.tables WHERE table_name = 'metrics';" 2>/dev/null || echo "")
+    else
+        table_exists=$(psql \
+            -h "${dbhost}" \
+            -p "${dbport}" \
+            -U "${dbuser}" \
+            -d "${dbname}" \
+            -t -A \
+            -c "SELECT 1 FROM information_schema.tables WHERE table_name = 'metrics';" 2>/dev/null || echo "")
+    fi
+    
+    # If table doesn't exist, initialize schema
+    if [[ -z "${table_exists}" ]] || [[ "${table_exists}" != "1" ]]; then
+        local init_sql="${TEST_ROOT}/../sql/init.sql"
+        if [[ ! -f "${init_sql}" ]]; then
+            echo -e "${YELLOW}Warning: Schema initialization file not found: ${init_sql}${NC}" >&2
+            return 1
+        fi
+        
+        if [[ -n "${dbpassword}" ]]; then
+            PGPASSWORD="${dbpassword}" psql \
+                -h "${dbhost}" \
+                -p "${dbport}" \
+                -U "${dbuser}" \
+                -d "${dbname}" \
+                -f "${init_sql}" > /dev/null 2>&1
+        else
+            psql \
+                -h "${dbhost}" \
+                -p "${dbport}" \
+                -U "${dbuser}" \
+                -d "${dbname}" \
+                -f "${init_sql}" > /dev/null 2>&1
+        fi
+    fi
 }
 
 ##
@@ -286,12 +400,31 @@ load_test_data() {
 # Usage: clean_test_database
 ##
 clean_test_database() {
-    PGPASSWORD="${PGPASSWORD:-postgres}" psql \
-        -h "${PGHOST:-localhost}" \
-        -U "${PGUSER:-postgres}" \
-        -d "${TEST_DB_NAME}" \
-        -c "TRUNCATE TABLE metrics, alerts, security_events, ip_management CASCADE;" \
-        > /dev/null 2>&1 || true
+    # Use DB* variables if set (from test setup), otherwise fall back to PG* variables
+    local dbhost="${DBHOST:-${PGHOST:-localhost}}"
+    local dbport="${DBPORT:-${PGPORT:-5432}}"
+    local dbuser="${DBUSER:-${PGUSER:-${USER:-postgres}}}"
+    local dbname="${DBNAME:-${TEST_DB_NAME}}"
+    local dbpassword="${PGPASSWORD:-}"
+    
+    # Use PGPASSWORD if set, otherwise let psql use default authentication
+    if [[ -n "${dbpassword}" ]]; then
+        PGPASSWORD="${dbpassword}" psql \
+            -h "${dbhost}" \
+            -p "${dbport}" \
+            -U "${dbuser}" \
+            -d "${dbname}" \
+            -c "TRUNCATE TABLE metrics, alerts, security_events, ip_management CASCADE;" \
+            > /dev/null 2>&1 || true
+    else
+        psql \
+            -h "${dbhost}" \
+            -p "${dbport}" \
+            -U "${dbuser}" \
+            -d "${dbname}" \
+            -c "TRUNCATE TABLE metrics, alerts, security_events, ip_management CASCADE;" \
+            > /dev/null 2>&1 || true
+    fi
 }
 
 ##
