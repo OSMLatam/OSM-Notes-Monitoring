@@ -37,8 +37,6 @@ readonly NC='\033[0m'
 TEST_DBNAME="${TEST_DBNAME:-osm_notes_monitoring_test}"
 TESTS_PASSED=0
 TESTS_FAILED=0
-EMAIL_SENT=false
-SLACK_SENT=false
 
 # Mock directories
 MOCK_BIN_DIR="${SCRIPT_DIR}/../tmp/mock_bin"
