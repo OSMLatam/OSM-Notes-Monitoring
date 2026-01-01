@@ -194,6 +194,7 @@ teardown() {
 # Test: send_email_alert - handles mutt not available
 ##
 @test "send_email_alert handles mutt not available" {
+    # shellcheck disable=SC2030,SC2031
     export SEND_ALERT_EMAIL="true"
     
     # Mock command -v to return false
@@ -214,7 +215,9 @@ teardown() {
 # Test: send_slack_alert - handles curl not available
 ##
 @test "send_slack_alert handles curl not available" {
+    # shellcheck disable=SC2030,SC2031
     export SLACK_ENABLED="true"
+    # shellcheck disable=SC2030,SC2031
     export SLACK_WEBHOOK_URL="https://hooks.slack.com/test"
     
     # Mock command -v to return false
@@ -235,7 +238,9 @@ teardown() {
 # Test: send_alert - handles info level with no recipients
 ##
 @test "send_alert handles info level with no recipients" {
+    # shellcheck disable=SC2030,SC2031
     export INFO_ALERT_RECIPIENTS=""
+    # shellcheck disable=SC2030,SC2031
     export ADMIN_EMAIL=""
     
     # Mock psql
@@ -255,7 +260,9 @@ teardown() {
 # Test: send_slack_alert - handles different alert level colors
 ##
 @test "send_slack_alert uses correct color for critical level" {
+    # shellcheck disable=SC2030,SC2031
     export SLACK_ENABLED="true"
+    # shellcheck disable=SC2030,SC2031
     export SLACK_WEBHOOK_URL="https://hooks.slack.com/test"
     
     # Mock curl
@@ -279,19 +286,25 @@ teardown() {
     # Clear any existing config
     unset ADMIN_EMAIL SEND_ALERT_EMAIL SLACK_ENABLED
     
-    run init_alerting
-    assert_success
+    # Run init_alerting directly (not via run) to set variables in current shell
+    init_alerting
+    
     # Verify defaults are set
-    [ -n "${ADMIN_EMAIL:-}" ]
-    [ "${SEND_ALERT_EMAIL:-false}" = "false" ]
-    [ "${SLACK_ENABLED:-false}" = "false" ]
+    # shellcheck disable=SC2031
+    assert [ -n "${ADMIN_EMAIL:-}" ]
+    # shellcheck disable=SC2031
+    assert [ "${SEND_ALERT_EMAIL:-false}" = "false" ]
+    # shellcheck disable=SC2031
+    assert [ "${SLACK_ENABLED:-false}" = "false" ]
 }
 
 ##
 # Test: send_email_alert - sends email alert
 ##
 @test "send_email_alert sends email when enabled" {
+    # shellcheck disable=SC2030,SC2031
     export SEND_ALERT_EMAIL="true"
+    # shellcheck disable=SC2030,SC2031
     export ADMIN_EMAIL="test@example.com"
     
     # Mock mutt
@@ -310,6 +323,7 @@ teardown() {
 # Test: send_email_alert - skips when disabled
 ##
 @test "send_email_alert skips when email disabled" {
+    # shellcheck disable=SC2030,SC2031
     export SEND_ALERT_EMAIL="false"
     
     run send_email_alert "test@example.com" "Test Subject" "Test message"
@@ -320,7 +334,9 @@ teardown() {
 # Test: send_slack_alert - sends Slack alert
 ##
 @test "send_slack_alert sends Slack message when enabled" {
+    # shellcheck disable=SC2030,SC2031
     export SLACK_ENABLED="true"
+    # shellcheck disable=SC2030,SC2031
     export SLACK_WEBHOOK_URL="https://hooks.slack.com/test"
     
     # Mock curl
@@ -341,6 +357,7 @@ teardown() {
 # Test: send_slack_alert - skips when disabled
 ##
 @test "send_slack_alert skips when Slack disabled" {
+    # shellcheck disable=SC2030,SC2031
     export SLACK_ENABLED="false"
     
     run send_slack_alert "TEST_COMPONENT" "warning" "test_alert" "Test message"
@@ -351,9 +368,13 @@ teardown() {
 # Test: send_alert - sends via multiple channels
 ##
 @test "send_alert sends via email and Slack when both enabled" {
+    # shellcheck disable=SC2030,SC2031
     export SEND_ALERT_EMAIL="true"
+    # shellcheck disable=SC2030,SC2031
     export SLACK_ENABLED="true"
+    # shellcheck disable=SC2030,SC2031
     export ADMIN_EMAIL="test@example.com"
+    # shellcheck disable=SC2030,SC2031
     export SLACK_WEBHOOK_URL="https://hooks.slack.com/test"
     
     # Mock mutt
@@ -390,6 +411,7 @@ teardown() {
 # Test: store_alert - handles deduplication enabled
 ##
 @test "store_alert respects deduplication when enabled" {
+    # shellcheck disable=SC2030,SC2031
     export ALERT_DEDUPLICATION_ENABLED="true"
     
     # Mock is_alert_duplicate to return true (duplicate)
@@ -431,6 +453,7 @@ teardown() {
 # Test: store_alert - handles deduplication disabled
 ##
 @test "store_alert stores alert when deduplication disabled" {
+    # shellcheck disable=SC2030,SC2031
     export ALERT_DEDUPLICATION_ENABLED="false"
     
     # Mock psql
