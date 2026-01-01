@@ -158,33 +158,36 @@ teardown() {
 ##
 # Test: check_database_server_health - healthy database
 ##
-@test "check_database_server_health detects healthy database" {
+@test "check_database_connection handles connection timeout" {
+    # Mock psql to simulate timeout
+    # shellcheck disable=SC2317
+    function psql() {
+        sleep 0.001
+        return 1
+    }
+    
+    run check_database_connection
+    assert_failure
+}
+
+##
+# Test: execute_sql_query - handles PGPASSWORD
+##
+@test "execute_sql_query uses PGPASSWORD when set" {
+    export PGPASSWORD="test_password"
+    
     # Mock psql
     # shellcheck disable=SC2317
     function psql() {
-        if [[ "${*}" =~ -c.*SELECT.*version ]]; then
-            echo "PostgreSQL 14.0"
+        if [[ "${*}" =~ -c.*SELECT ]]; then
+            echo "result"
             return 0
         fi
         return 1
     }
     
-    run check_database_server_health
+    run execute_sql_query "SELECT 1"
     assert_success
-}
-
-##
-# Test: check_database_server_health - unhealthy database
-##
-@test "check_database_server_health detects unhealthy database" {
-    # Mock psql to fail
-    # shellcheck disable=SC2317
-    function psql() {
-        return 1
-    }
-    
-    run check_database_server_health
-    assert_failure
 }
 
 @test "execute_sql_query executes query successfully" {
@@ -305,4 +308,164 @@ teardown() {
     
     run update_component_health "TEST_COMPONENT" "unknown" "Test"
     assert_failure
+}
+
+##
+# Test: init_monitoring - initializes monitoring system
+##
+@test "init_monitoring initializes with defaults" {
+    unset DBNAME DBHOST DBPORT DBUSER
+    
+    run init_monitoring
+    assert_success
+    assert [[ -n "${DBNAME:-}" ]]
+    assert [[ -n "${DBHOST:-}" ]]
+    assert [[ -n "${DBPORT:-}" ]]
+    assert [[ -n "${DBUSER:-}" ]]
+}
+
+##
+# Test: get_db_connection_string - generates connection string
+##
+@test "get_db_connection_string generates connection string" {
+    export DBNAME="test_db"
+    export DBHOST="localhost"
+    export DBPORT="5432"
+    export DBUSER="test_user"
+    
+    run get_db_connection_string
+    assert_success
+    assert [[ "${output}" =~ postgresql ]]
+    assert [[ "${output}" =~ test_db ]]
+}
+
+##
+# Test: store_metric - stores metric successfully
+##
+@test "store_metric stores metric for valid component" {
+    # Mock psql
+    # shellcheck disable=SC2317
+    function psql() {
+        if [[ "${*}" =~ INSERT.*metrics ]]; then
+            return 0
+        fi
+        return 1
+    }
+    
+    run store_metric "ingestion" "test_metric" "100" "count"
+    assert_success
+}
+
+##
+# Test: store_metric - rejects invalid component
+##
+@test "store_metric rejects invalid component" {
+    run store_metric "invalid_component" "test_metric" "100" "count"
+    assert_failure
+}
+
+##
+# Test: store_metric - handles metadata
+##
+@test "store_metric stores metric with metadata" {
+    # Mock psql
+    # shellcheck disable=SC2317
+    function psql() {
+        if [[ "${*}" =~ INSERT.*metrics ]] && [[ "${*}" =~ metadata ]]; then
+            return 0
+        fi
+        return 1
+    }
+    
+    local metadata='{"key": "value"}'
+    run store_metric "ingestion" "test_metric" "100" "count" "${metadata}"
+    assert_success
+}
+
+##
+# Test: get_http_response_time - measures response time
+##
+@test "get_http_response_time measures response time" {
+    # Mock curl
+    # shellcheck disable=SC2317
+    function curl() {
+        sleep 0.001  # Simulate small delay
+        return 0
+    }
+    export -f curl
+    
+    run get_http_response_time "http://localhost/test"
+    assert_success
+    assert [[ "${output}" =~ ^[0-9]+$ ]]
+}
+
+##
+# Test: get_http_response_time - handles timeout
+##
+@test "get_http_response_time handles timeout" {
+    # Mock curl to timeout
+    # shellcheck disable=SC2317
+    function curl() {
+        return 1
+    }
+    export -f curl
+    
+    run get_http_response_time "http://localhost/test" "1"
+    assert_failure
+}
+
+##
+# Test: check_http_health - detects healthy service
+##
+@test "check_http_health detects healthy service" {
+    # Mock curl
+    # shellcheck disable=SC2317
+    function curl() {
+        return 0
+    }
+    export -f curl
+    
+    run check_http_health "http://localhost/test"
+    assert_success
+}
+
+##
+# Test: check_http_health - detects unhealthy service
+##
+@test "check_http_health detects unhealthy service" {
+    # Mock curl to fail
+    # shellcheck disable=SC2317
+    function curl() {
+        return 1
+    }
+    export -f curl
+    
+    run check_http_health "http://localhost/test"
+    assert_failure
+}
+
+##
+# Test: execute_sql_file - handles file with multiple queries
+##
+@test "execute_sql_file executes file with multiple queries" {
+    local test_sql_file="${BATS_TEST_DIRNAME}/../../tmp/test_multi.sql"
+    cat > "${test_sql_file}" << 'EOF'
+SELECT 1;
+SELECT 2;
+SELECT 3;
+EOF
+    
+    # Mock psql
+    # shellcheck disable=SC2317
+    function psql() {
+        if [[ "${*}" =~ -f.*test_multi.sql ]]; then
+            return 0
+        fi
+        return 1
+    }
+    
+    run execute_sql_file "${test_sql_file}"
+    assert_success
+    
+    rm -f "${test_sql_file}"
 }

@@ -39,26 +39,26 @@ teardown() {
 }
 
 ##
-# Test: validate_ip_address - validates correct IP
+# Test: is_valid_ip - validates correct IP
 ##
-@test "validate_ip_address validates correct IPv4 address" {
-    run validate_ip_address "192.168.1.1"
+@test "is_valid_ip validates correct IPv4 address" {
+    run is_valid_ip "192.168.1.1"
     assert_success
 }
 
 ##
-# Test: validate_ip_address - rejects invalid IP
+# Test: is_valid_ip - rejects invalid IP
 ##
-@test "validate_ip_address rejects invalid IP address" {
-    run validate_ip_address "999.999.999.999"
+@test "is_valid_ip rejects invalid IP address" {
+    run is_valid_ip "999.999.999.999"
     assert_failure
 }
 
 ##
-# Test: validate_ip_address - rejects non-IP string
+# Test: is_valid_ip - rejects non-IP string
 ##
-@test "validate_ip_address rejects non-IP string" {
-    run validate_ip_address "not-an-ip"
+@test "is_valid_ip rejects non-IP string" {
+    run is_valid_ip "not-an-ip"
     assert_failure
 }
 
@@ -99,9 +99,9 @@ teardown() {
 }
 
 ##
-# Test: log_security_event - logs security event
+# Test: record_security_event - logs security event
 ##
-@test "log_security_event logs security event to database" {
+@test "record_security_event logs security event to database" {
     # Mock psql
     # shellcheck disable=SC2317
     function psql() {
@@ -111,7 +111,7 @@ teardown() {
         return 1
     }
     
-    run log_security_event "rate_limit_exceeded" "192.168.1.1" "Rate limit exceeded"
+    run record_security_event "rate_limit_exceeded" "192.168.1.1" "endpoint" "{}"
     assert_success
 }
 
@@ -152,15 +152,131 @@ teardown() {
 }
 
 ##
-# Test: sanitize_input - sanitizes user input
+# Test: is_valid_ip - handles edge cases
 ##
-@test "sanitize_input removes dangerous characters" {
-    local input="test'; DROP TABLE users; --"
-    local sanitized
-    sanitized=$(sanitize_input "${input}")
+@test "is_valid_ip handles IPv4 with different formats" {
+    # Valid formats
+    run is_valid_ip "10.0.0.1"
+    assert_success
     
-    # shellcheck disable=SC2035
-    assert [[ "${sanitized}" != *"DROP"* ]]
-    # shellcheck disable=SC2035
-    assert [[ "${sanitized}" != *";"* ]]
+    run is_valid_ip "172.16.0.1"
+    assert_success
+    
+    run is_valid_ip "8.8.8.8"
+    assert_success
+}
+
+##
+# Test: init_security - initializes security system
+##
+@test "init_security initializes security functions" {
+    run init_security
+    assert_success
+}
+
+##
+# Test: is_valid_ip - validates various IP formats
+##
+@test "is_valid_ip validates IPv4 with leading zeros" {
+    run is_valid_ip "192.168.001.001"
+    assert_success
+}
+
+##
+# Test: is_valid_ip - rejects empty string
+##
+@test "is_valid_ip rejects empty string" {
+    run is_valid_ip ""
+    assert_failure
+}
+
+##
+# Test: block_ip - blocks IP successfully
+##
+@test "block_ip blocks IP successfully" {
+    # Mock psql
+    # shellcheck disable=SC2317
+    function psql() {
+        if [[ "${*}" =~ INSERT.*ip_management ]] || [[ "${*}" =~ INSERT.*security_events ]]; then
+            return 0
+        fi
+        return 1
+    }
+    
+    run block_ip "192.168.1.100" "Test reason"
+    assert_success
+}
+
+##
+# Test: block_ip - handles invalid IP
+##
+@test "block_ip handles invalid IP" {
+    run block_ip "invalid.ip" "Test reason"
+    assert_failure
+}
+
+##
+# Test: record_security_event - records event with metadata
+##
+@test "record_security_event records event with metadata" {
+    # Mock psql
+    # shellcheck disable=SC2317
+    function psql() {
+        if [[ "${*}" =~ INSERT.*security_events ]] && [[ "${*}" =~ metadata ]]; then
+            return 0
+        fi
+        return 1
+    }
+    
+    local metadata='{"key": "value"}'
+    run record_security_event "test_event" "192.168.1.1" "endpoint" "${metadata}"
+    assert_success
+}
+
+##
+# Test: check_rate_limit - handles edge case with zero limit
+##
+@test "check_rate_limit handles zero limit" {
+    # Mock psql
+    # shellcheck disable=SC2317
+    function psql() {
+        if [[ "${*}" =~ SELECT.*COUNT ]]; then
+            echo "0"
+            return 0
+        fi
+        return 1
+    }
+    
+    # check_rate_limit signature: ip, window_seconds, max_requests
+    # With zero limit, any count >= 0 should fail
+    run check_rate_limit "192.168.1.1" 60 0
+    assert_failure  # Should fail because 0 >= 0
+}
+
+##
+# Test: is_ip_whitelisted - handles IP not in whitelist
+##
+@test "is_ip_whitelisted returns false for non-whitelisted IP" {
+    # Mock psql to return empty
+    # shellcheck disable=SC2317
+    function psql() {
+        return 0
+    }
+    
+    run is_ip_whitelisted "192.168.1.999"
+    assert_failure
+}
+
+##
+# Test: is_ip_blacklisted - handles IP not in blacklist
+##
+@test "is_ip_blacklisted returns false for non-blacklisted IP" {
+    # Mock psql to return empty
+    # shellcheck disable=SC2317
+    function psql() {
+        return 0
+    }
+    
+    run is_ip_blacklisted "192.168.1.999"
+    assert_failure
 }

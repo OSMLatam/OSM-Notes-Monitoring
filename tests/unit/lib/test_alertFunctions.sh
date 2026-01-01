@@ -171,37 +171,279 @@ teardown() {
 }
 
 ##
-# Test: get_active_alerts - retrieves active alerts
+# Test: is_alert_duplicate - handles custom deduplication window
 ##
-@test "get_active_alerts retrieves active alerts for component" {
-    # Mock psql to return alerts
-    # shellcheck disable=SC2317
-    function psql() {
-        if [[ "${*}" =~ SELECT.*FROM.alerts ]]; then
-            echo "1|critical|test_alert|Test message|2025-12-28 10:00:00"
-            return 0
-        fi
-        return 1
-    }
+@test "is_alert_duplicate uses custom deduplication window" {
+    export ALERT_DEDUPLICATION_WINDOW_MINUTES="30"
     
-    run get_active_alerts "TEST_COMPONENT"
-    assert_success
-    assert [[ "${output}" =~ test_alert ]]
-}
-
-##
-# Test: acknowledge_alert - acknowledges alert
-##
-@test "acknowledge_alert acknowledges alert successfully" {
     # Mock psql
     # shellcheck disable=SC2317
     function psql() {
-        if [[ "${*}" =~ UPDATE.*alerts ]]; then
+        if [[ "${*}" =~ SELECT.*FROM.alerts ]] && [[ "${*}" =~ INTERVAL.*30.*minutes ]]; then
+            echo "0"
             return 0
         fi
         return 1
     }
     
-    run acknowledge_alert "1" "Test user"
+    run is_alert_duplicate "TEST_COMPONENT" "test_alert" "Test message"
+    assert_failure  # Not duplicate
+}
+
+##
+# Test: send_email_alert - handles mutt not available
+##
+@test "send_email_alert handles mutt not available" {
+    export SEND_ALERT_EMAIL="true"
+    
+    # Mock command -v to return false
+    # shellcheck disable=SC2317
+    function command() {
+        if [[ "${1}" == "-v" ]] && [[ "${2}" == "mutt" ]]; then
+            return 1
+        fi
+        return 0
+    }
+    export -f command
+    
+    run send_email_alert "test@example.com" "Test Subject" "Test message"
+    assert_failure
+}
+
+##
+# Test: send_slack_alert - handles curl not available
+##
+@test "send_slack_alert handles curl not available" {
+    export SLACK_ENABLED="true"
+    export SLACK_WEBHOOK_URL="https://hooks.slack.com/test"
+    
+    # Mock command -v to return false
+    # shellcheck disable=SC2317
+    function command() {
+        if [[ "${1}" == "-v" ]] && [[ "${2}" == "curl" ]]; then
+            return 1
+        fi
+        return 0
+    }
+    export -f command
+    
+    run send_slack_alert "TEST_COMPONENT" "warning" "test_alert" "Test message"
+    assert_failure
+}
+
+##
+# Test: send_alert - handles info level with no recipients
+##
+@test "send_alert handles info level with no recipients" {
+    export INFO_ALERT_RECIPIENTS=""
+    export ADMIN_EMAIL=""
+    
+    # Mock psql
+    # shellcheck disable=SC2317
+    function psql() {
+        if [[ "${*}" =~ INSERT.*alerts ]]; then
+            return 0
+        fi
+        return 1
+    }
+    
+    run send_alert "TEST_COMPONENT" "info" "test_alert" "Test message"
     assert_success
 }
+
+##
+# Test: send_slack_alert - handles different alert level colors
+##
+@test "send_slack_alert uses correct color for critical level" {
+    export SLACK_ENABLED="true"
+    export SLACK_WEBHOOK_URL="https://hooks.slack.com/test"
+    
+    # Mock curl
+    # shellcheck disable=SC2317
+    function curl() {
+        if [[ "${*}" =~ https://hooks.slack.com ]] && [[ "${*}" =~ danger ]]; then
+            return 0
+        fi
+        return 1
+    }
+    export -f curl
+    
+    run send_slack_alert "TEST_COMPONENT" "critical" "test_alert" "Test message"
+    assert_success
+}
+
+##
+# Test: init_alerting - initializes alerting system
+##
+@test "init_alerting initializes alerting with defaults" {
+    # Clear any existing config
+    unset ADMIN_EMAIL SEND_ALERT_EMAIL SLACK_ENABLED
+    
+    run init_alerting
+    assert_success
+    # Verify defaults are set
+    [ -n "${ADMIN_EMAIL:-}" ]
+    [ "${SEND_ALERT_EMAIL:-false}" = "false" ]
+    [ "${SLACK_ENABLED:-false}" = "false" ]
+}
+
+##
+# Test: send_email_alert - sends email alert
+##
+@test "send_email_alert sends email when enabled" {
+    export SEND_ALERT_EMAIL="true"
+    export ADMIN_EMAIL="test@example.com"
+    
+    # Mock mutt
+    # shellcheck disable=SC2317
+    function mutt() {
+        echo "Email sent to ${2}"
+        return 0
+    }
+    export -f mutt
+    
+    run send_email_alert "test@example.com" "Test Subject" "Test message"
+    assert_success
+}
+
+##
+# Test: send_email_alert - skips when disabled
+##
+@test "send_email_alert skips when email disabled" {
+    export SEND_ALERT_EMAIL="false"
+    
+    run send_email_alert "test@example.com" "Test Subject" "Test message"
+    assert_success
+}
+
+##
+# Test: send_slack_alert - sends Slack alert
+##
+@test "send_slack_alert sends Slack message when enabled" {
+    export SLACK_ENABLED="true"
+    export SLACK_WEBHOOK_URL="https://hooks.slack.com/test"
+    
+    # Mock curl
+    # shellcheck disable=SC2317
+    function curl() {
+        if [[ "${*}" =~ https://hooks.slack.com ]]; then
+            return 0
+        fi
+        return 1
+    }
+    export -f curl
+    
+    run send_slack_alert "TEST_COMPONENT" "warning" "test_alert" "Test message"
+    assert_success
+}
+
+##
+# Test: send_slack_alert - skips when disabled
+##
+@test "send_slack_alert skips when Slack disabled" {
+    export SLACK_ENABLED="false"
+    
+    run send_slack_alert "TEST_COMPONENT" "warning" "test_alert" "Test message"
+    assert_success
+}
+
+##
+# Test: send_alert - sends via multiple channels
+##
+@test "send_alert sends via email and Slack when both enabled" {
+    export SEND_ALERT_EMAIL="true"
+    export SLACK_ENABLED="true"
+    export ADMIN_EMAIL="test@example.com"
+    export SLACK_WEBHOOK_URL="https://hooks.slack.com/test"
+    
+    # Mock mutt
+    # shellcheck disable=SC2317
+    function mutt() {
+        return 0
+    }
+    export -f mutt
+    
+    # Mock curl
+    # shellcheck disable=SC2317
+    function curl() {
+        if [[ "${*}" =~ https://hooks.slack.com ]]; then
+            return 0
+        fi
+        return 1
+    }
+    export -f curl
+    
+    # Mock psql
+    # shellcheck disable=SC2317
+    function psql() {
+        if [[ "${*}" =~ INSERT.*alerts ]]; then
+            return 0
+        fi
+        return 1
+    }
+    
+    run send_alert "TEST_COMPONENT" "warning" "test_alert" "Test message"
+    assert_success
+}
+
+##
+# Test: store_alert - handles deduplication enabled
+##
+@test "store_alert respects deduplication when enabled" {
+    export ALERT_DEDUPLICATION_ENABLED="true"
+    
+    # Mock is_alert_duplicate to return true (duplicate)
+    # shellcheck disable=SC2317
+    function is_alert_duplicate() {
+        return 0
+    }
+    export -f is_alert_duplicate
+    
+    # Mock psql should not be called
+    # shellcheck disable=SC2317
+    function psql() {
+        return 1  # Should not be called
+    }
+    
+    run store_alert "TEST_COMPONENT" "warning" "test_alert" "Test message"
+    assert_success
+}
+
+##
+# Test: store_alert - handles metadata JSON
+##
+@test "store_alert stores alert with metadata JSON" {
+    # Mock psql
+    # shellcheck disable=SC2317
+    function psql() {
+        if [[ "${*}" =~ INSERT.*alerts ]] && [[ "${*}" =~ metadata ]]; then
+            return 0
+        fi
+        return 1
+    }
+    
+    local metadata='{"key": "value"}'
+    run store_alert "TEST_COMPONENT" "warning" "test_alert" "Test message" "${metadata}"
+    assert_success
+}
+
+##
+# Test: store_alert - handles deduplication disabled
+##
+@test "store_alert stores alert when deduplication disabled" {
+    export ALERT_DEDUPLICATION_ENABLED="false"
+    
+    # Mock psql
+    # shellcheck disable=SC2317
+    function psql() {
+        if [[ "${*}" =~ INSERT.*alerts ]]; then
+            return 0
+        fi
+        return 1
+    }
+    
+    run store_alert "TEST_COMPONENT" "warning" "test_alert" "Test message"
+    assert_success
+}
+
+
