@@ -227,7 +227,7 @@ generate_report() {
         
         echo ""
         echo "Note: This is an estimated coverage based on test file presence."
-        echo "For accurate coverage, use code instrumentation tools like kcov or bashcov."
+        echo "For accurate coverage, use code instrumentation tool bashcov."
     } > "${COVERAGE_REPORT}"
     
     print_message "${GREEN}" "✓ Coverage report generated: ${COVERAGE_REPORT}"

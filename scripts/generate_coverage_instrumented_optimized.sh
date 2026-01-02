@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 #
 # Generate Instrumented Test Coverage Report (Optimized)
-# Uses kcov or bashcov to measure actual code coverage
+# Uses bashcov to measure actual code coverage
 # Optimized version: runs coverage tool once on all tests
 #
-# Version: 2.0.0
-# Date: 2025-12-31
+# Version: 2.1.0
+# Date: 2026-01-02
 #
 
 set -euo pipefail
@@ -25,11 +25,10 @@ readonly BLUE='\033[0;34m'
 readonly NC='\033[0m'
 
 # Coverage tool selection
-COVERAGE_TOOL="${COVERAGE_TOOL:-auto}"  # auto, kcov, bashcov
+COVERAGE_TOOL="${COVERAGE_TOOL:-bashcov}"  # bashcov only
 
 # Output directories
 readonly COVERAGE_DIR="${PROJECT_ROOT}/coverage"
-readonly KCOV_OUTPUT="${COVERAGE_DIR}/kcov"
 readonly BASHCOV_OUTPUT="${COVERAGE_DIR}/bashcov"
 readonly COVERAGE_REPORT="${COVERAGE_DIR}/coverage_report_instrumented.txt"
 
@@ -53,17 +52,6 @@ print_message() {
 }
 
 ##
-# Check if kcov is available
-##
-check_kcov() {
-    if command -v kcov >/dev/null 2>&1; then
-        return 0
-    else
-        return 1
-    fi
-}
-
-##
 # Check if bashcov is available
 ##
 check_bashcov() {
@@ -75,108 +63,15 @@ check_bashcov() {
 }
 
 ##
-# Detect available coverage tool
+# Detect available coverage tool (bashcov only)
 ##
 detect_coverage_tool() {
-    if [[ "${COVERAGE_TOOL}" == "kcov" ]]; then
-        if check_kcov; then
-            echo "kcov"
-            return 0
-        else
-            print_message "${RED}" "Error: kcov not found. Install with: sudo apt-get install kcov"
-            return 1
-        fi
-    elif [[ "${COVERAGE_TOOL}" == "bashcov" ]]; then
-        if check_bashcov; then
-            echo "bashcov"
-            return 0
-        else
-            print_message "${RED}" "Error: bashcov not found. Install with: gem install bashcov"
-            return 1
-        fi
+    if check_bashcov; then
+        echo "bashcov"
+        return 0
     else
-        # Auto-detect
-        if check_kcov; then
-            echo "kcov"
-            return 0
-        elif check_bashcov; then
-            echo "bashcov"
-            return 0
-        else
-            print_message "${RED}" "Error: No coverage tool found."
-            print_message "${YELLOW}" "Install kcov: sudo apt-get install kcov"
-            print_message "${YELLOW}" "Or install bashcov: gem install bashcov"
-            return 1
-        fi
-    fi
-}
-
-##
-# Run all tests with kcov (single execution)
-##
-run_all_tests_with_kcov() {
-    local output_dir="${KCOV_OUTPUT}/all"
-    mkdir -p "${output_dir}"
-    
-    print_message "${BLUE}" "Running all tests with kcov (this may take a while)..."
-    
-    # Run kcov on all tests at once
-    kcov \
-        --include-path="${PROJECT_ROOT}/bin" \
-        --exclude-path="${PROJECT_ROOT}/tests" \
-        --exclude-path="${PROJECT_ROOT}/tmp" \
-        --exclude-path="${PROJECT_ROOT}/coverage" \
-        --exclude-path="${PROJECT_ROOT}/scripts" \
-        "${output_dir}" \
-        bats "${PROJECT_ROOT}/tests" >/dev/null 2>&1 || true
-    
-    print_message "${GREEN}" "✓ Tests executed with kcov"
-}
-
-##
-# Extract coverage for a specific script from kcov report
-##
-get_script_coverage_from_kcov() {
-    local script_path="${1}"
-    local output_dir="${KCOV_OUTPUT}/all"
-    
-    # Get relative path from PROJECT_ROOT
-    local rel_path="${script_path#"${PROJECT_ROOT}"/}"
-    
-    # kcov stores file coverage in index.json
-    if [[ -f "${output_dir}/index.json" ]]; then
-        local coverage
-        coverage=$(python3 -c "
-import json
-import sys
-import os
-
-try:
-    script_path = '${rel_path}'
-    with open('${output_dir}/index.json', 'r') as f:
-        data = json.load(f)
-        
-    # kcov stores files by their absolute path in the 'files' dict
-    # We need to find the file that matches our script
-    if 'files' in data:
-        for file_path, file_data in data['files'].items():
-            # Check if this file matches our script
-            if script_path in file_path or os.path.basename(script_path) in file_path:
-                if 'percent_covered' in file_data:
-                    print(int(file_data['percent_covered']))
-                    sys.exit(0)
-    
-    # If not found in files, try merged data
-    if 'merged' in data and 'percent_covered' in data['merged']:
-        print(int(data['merged']['percent_covered']))
-    else:
-        print(0)
-except Exception as e:
-    print(0)
-" 2>/dev/null || echo "0")
-        echo "${coverage}"
-    else
-        echo "0"
+        print_message "${RED}" "Error: bashcov not found. Install with: gem install bashcov"
+        return 1
     fi
 }
 
@@ -309,15 +204,10 @@ generate_instrumented_report() {
     
     # Create coverage directories
     mkdir -p "${COVERAGE_DIR}"
-    mkdir -p "${KCOV_OUTPUT}"
     mkdir -p "${BASHCOV_OUTPUT}"
     
-    # Run all tests with coverage tool (single execution)
-    if [[ "${tool}" == "kcov" ]]; then
-        run_all_tests_with_kcov
-    elif [[ "${tool}" == "bashcov" ]]; then
-        run_all_tests_with_bashcov
-    fi
+    # Run all tests with bashcov
+    run_all_tests_with_bashcov
     
     # Find all scripts
     local scripts=()
@@ -354,11 +244,7 @@ generate_instrumented_report() {
             
             local coverage=0
             if [[ ${test_count} -gt 0 ]]; then
-                if [[ "${tool}" == "kcov" ]]; then
-                    coverage=$(get_script_coverage_from_kcov "${script}")
-                elif [[ "${tool}" == "bashcov" ]]; then
-                    coverage=$(get_script_coverage_from_bashcov "${script}")
-                fi
+                coverage=$(get_script_coverage_from_bashcov "${script}")
                 
                 scripts_with_tests=$((scripts_with_tests + 1))
                 
@@ -412,12 +298,8 @@ generate_instrumented_report() {
         fi
         
         echo ""
-        echo "Detailed HTML reports available in:"
-        if [[ "${tool}" == "kcov" ]]; then
-            echo "  ${KCOV_OUTPUT}/all/index.html"
-        else
-            echo "  ${BASHCOV_OUTPUT}/all/"
-        fi
+        echo "Detailed reports available in:"
+        echo "  ${BASHCOV_OUTPUT}/all/"
     } > "${COVERAGE_REPORT}"
     
     print_message "${GREEN}" "✓ Instrumented coverage report generated: ${COVERAGE_REPORT}"
@@ -454,11 +336,7 @@ main() {
     print_message "${GREEN}" "Coverage report generated successfully!"
     print_message "${YELLOW}" "View reports:"
     echo "  Text: ${COVERAGE_REPORT}"
-    if [[ "${tool}" == "kcov" ]]; then
-        echo "  HTML: ${KCOV_OUTPUT}/all/index.html"
-    else
-        echo "  HTML: ${BASHCOV_OUTPUT}/all/"
-    fi
+    echo "  JSON: ${BASHCOV_OUTPUT}/all/coverage.json"
 }
 
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then

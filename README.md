@@ -90,7 +90,7 @@ For detailed architecture documentation, see:
 - [Security Audit Guide](./docs/SECURITY_AUDIT_GUIDE.md): Code-level security checks
 - [Vulnerability Scanning Guide](./docs/VULNERABILITY_SCANNING_GUIDE.md): Automated vulnerability detection
 - [Penetration Testing Guide](./docs/PENETRATION_TESTING_GUIDE.md): Security penetration testing procedures
-- [Code Coverage Instrumentation](./docs/CODE_COVERAGE_INSTRUMENTATION.md): Using kcov/bashcov for real coverage measurement
+- [Code Coverage Instrumentation](./docs/CODE_COVERAGE_INSTRUMENTATION.md): Using bashcov for real coverage measurement
 
 ## Features
 
