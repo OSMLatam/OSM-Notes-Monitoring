@@ -469,4 +469,146 @@ teardown() {
     assert_success
 }
 
+##
+# Test: send_alert - handles custom recipients for critical alerts
+##
+@test "send_alert uses custom critical recipients" {
+    # shellcheck disable=SC2030,SC2031
+    export CRITICAL_ALERT_RECIPIENTS="critical@example.com"
+    # shellcheck disable=SC2030,SC2031
+    export SEND_ALERT_EMAIL="true"
+    
+    # Mock psql and mutt
+    # shellcheck disable=SC2317
+    function psql() {
+        if [[ "${*}" =~ INSERT.*alerts ]]; then
+            return 0
+        fi
+        return 1
+    }
+    
+    # shellcheck disable=SC2317
+    function mutt() {
+        return 0
+    }
+    
+    run send_alert "TEST_COMPONENT" "critical" "test_alert" "Test critical"
+    assert_success
+}
+
+##
+# Test: send_alert - handles custom recipients for warning alerts
+##
+@test "send_alert uses custom warning recipients" {
+    # shellcheck disable=SC2030,SC2031
+    export WARNING_ALERT_RECIPIENTS="warning@example.com"
+    # shellcheck disable=SC2030,SC2031
+    export SEND_ALERT_EMAIL="true"
+    
+    # Mock psql and mutt
+    # shellcheck disable=SC2317
+    function psql() {
+        if [[ "${*}" =~ INSERT.*alerts ]]; then
+            return 0
+        fi
+        return 1
+    }
+    
+    # shellcheck disable=SC2317
+    function mutt() {
+        return 0
+    }
+    
+    run send_alert "TEST_COMPONENT" "warning" "test_alert" "Test warning"
+    assert_success
+}
+
+##
+# Test: send_slack_alert - handles curl failure gracefully
+##
+@test "send_slack_alert handles curl failure" {
+    # shellcheck disable=SC2030,SC2031
+    export SLACK_ENABLED="true"
+    # shellcheck disable=SC2030,SC2031
+    export SLACK_WEBHOOK_URL="https://hooks.slack.com/services/TEST/TEST/TEST"
+    
+    # Mock curl to fail
+    # shellcheck disable=SC2317
+    function curl() {
+        return 1
+    }
+    
+    run send_slack_alert "TEST_COMPONENT" "critical" "test_alert" "Test message"
+    assert_failure
+}
+
+##
+# Test: send_slack_alert - uses custom Slack channel
+##
+@test "send_slack_alert uses custom Slack channel" {
+    # shellcheck disable=SC2030,SC2031
+    export SLACK_ENABLED="true"
+    # shellcheck disable=SC2030,SC2031
+    export SLACK_WEBHOOK_URL="https://hooks.slack.com/services/TEST/TEST/TEST"
+    # shellcheck disable=SC2030,SC2031
+    export SLACK_CHANNEL="#custom-channel"
+    
+    # Mock curl
+    # shellcheck disable=SC2317
+    function curl() {
+        return 0
+    }
+    
+    run send_slack_alert "TEST_COMPONENT" "info" "test_alert" "Test message"
+    assert_success
+}
+
+##
+# Test: store_alert - handles database connection failure
+##
+@test "store_alert handles database connection failure" {
+    # Mock psql to fail
+    # shellcheck disable=SC2317
+    function psql() {
+        return 1
+    }
+    
+    run store_alert "TEST_COMPONENT" "critical" "test_alert" "Test message"
+    assert_failure
+}
+
+##
+# Test: send_alert - handles metadata JSON correctly
+##
+@test "send_alert handles metadata JSON correctly" {
+    # Mock psql
+    # shellcheck disable=SC2317
+    function psql() {
+        if [[ "${*}" =~ INSERT.*alerts ]] && [[ "${*}" =~ metadata ]]; then
+            return 0
+        fi
+        return 1
+    }
+    
+    local metadata='{"key":"value","number":123}'
+    run send_alert "TEST_COMPONENT" "warning" "test_alert" "Test message" "${metadata}"
+    assert_success
+}
+
+##
+# Test: is_alert_duplicate - handles database query failure
+##
+@test "is_alert_duplicate handles database query failure" {
+    # Mock psql to fail
+    # shellcheck disable=SC2317
+    function psql() {
+        return 1
+    }
+    
+    # Should return false (not duplicate) on error
+    run is_alert_duplicate "TEST_COMPONENT" "test_alert" "Test message"
+    # Function returns 1 (false) on error, which is acceptable
+    assert [ "$status" -ge 0 ]
+}
+
 

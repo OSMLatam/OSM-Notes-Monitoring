@@ -194,13 +194,27 @@ generate_report() {
         echo "  Total test files: ${total_tests}"
         echo ""
         
-        # Calculate overall coverage estimate
+        # Calculate overall coverage estimate (average of all scripts with tests)
+        local total_coverage=0
+        local coverage_count=0
         local overall_coverage=0
-        if [[ ${#scripts[@]} -gt 0 ]]; then
-            overall_coverage=$((scripts_above_threshold * 100 / ${#scripts[@]}))
+        
+        for script in "${scripts[@]}"; do
+            local test_count
+            test_count=$(count_test_files "${script}")
+            if [[ ${test_count} -gt 0 ]]; then
+                local coverage
+                coverage=$(calculate_coverage "${script}")
+                total_coverage=$((total_coverage + coverage))
+                coverage_count=$((coverage_count + 1))
+            fi
+        done
+        
+        if [[ ${coverage_count} -gt 0 ]]; then
+            overall_coverage=$((total_coverage / coverage_count))
         fi
         
-        echo "Overall Coverage Estimate: ${overall_coverage}%"
+        echo "Average Coverage Estimate: ${overall_coverage}%"
         echo ""
         
         if [[ ${overall_coverage} -ge 80 ]]; then
