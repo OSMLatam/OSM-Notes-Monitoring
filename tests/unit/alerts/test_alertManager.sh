@@ -10,10 +10,19 @@
 export TEST_COMPONENT="ALERTS"
 export TEST_DB_NAME="${TEST_DB_NAME:-osm_notes_monitoring_test}"
 
-# Set LOG_DIR before loading anything to avoid permission issues
+# Set TEST_MODE and LOG_DIR before loading anything to avoid permission issues
+export TEST_MODE=true
 TEST_LOG_DIR="${BATS_TEST_DIRNAME}/../../tmp/logs"
 mkdir -p "${TEST_LOG_DIR}"
+# Export TEST_LOG_DIR and LOG_DIR with absolute path to ensure it's used
+# shellcheck disable=SC2155
+TEST_LOG_DIR="$(cd "${BATS_TEST_DIRNAME}/../../tmp/logs" && pwd)"
+export TEST_LOG_DIR
 export LOG_DIR="${TEST_LOG_DIR}"
+export LOG_FILE="${LOG_DIR}/test_alertManager.log"
+
+# Set PROJECT_ROOT to avoid issues when alertManager.sh calculates it
+export PROJECT_ROOT="${BATS_TEST_DIRNAME}/../../.."
 
 load "${BATS_TEST_DIRNAME}/../../test_helper.bash"
 
@@ -48,6 +57,104 @@ setup() {
     # Ensure LOG_DIR is set
     export LOG_DIR="${TEST_LOG_DIR}"
     export LOG_FILE="${TEST_LOG_DIR}/test_alertManager.log"
+    
+    # Mock psql for database operations
+    # Track alert states for more realistic behavior
+    # shellcheck disable=SC2030,SC2031
+    export MOCK_ALERT_STATUS="active"
+    
+    # shellcheck disable=SC2317
+    function psql() {
+        local query="${*}"
+        
+        # Handle INSERT operations (for store_alert)
+        if [[ "${query}" =~ INSERT.*alerts ]]; then
+            echo "INSERT 0 1"
+            return 0
+        fi
+        
+        # Handle SELECT operations
+        if [[ "${query}" =~ SELECT.*FROM.alerts ]]; then
+            # SELECT status queries (for checking alert status)
+            if [[ "${query}" =~ SELECT.*status.*WHERE.*id ]]; then
+                # Return current mock status
+                echo "${MOCK_ALERT_STATUS:-active}"
+                return 0
+            fi
+            # SELECT id queries (for get_alert_id helper)
+            if [[ "${query}" =~ SELECT.*id.*WHERE.*component ]]; then
+                echo "00000000-0000-0000-0000-000000000001"
+                return 0
+            fi
+            # SELECT * queries (for show_alert, list_alerts)
+            # Format: id|component|alert_level|alert_type|message|status|created_at|resolved_at
+            # Check if it's a list query (no WHERE id=)
+            if [[ "${query}" =~ WHERE.*component.*=.*INGESTION ]]; then
+                # Return formatted table for list_alerts
+                echo " id | component | alert_level | alert_type | message | status | created_at | resolved_at"
+                echo "----+-----------+-------------+------------+---------+--------+------------+-------------"
+                echo " 00000000-0000-0000-0000-000000000001 | INGESTION | warning | test_type | Test message | ${MOCK_ALERT_STATUS:-active} | 2025-12-28 10:00:00 |"
+            elif [[ "${query}" =~ WHERE.*id.*=.*00000000-0000-0000-0000-000000000000 ]]; then
+                # Non-existent alert ID
+                return 0  # Return empty
+            elif [[ "${query}" =~ WHERE.*id.*= ]]; then
+                # Single alert query (show_alert)
+                echo " id | component | alert_level | alert_type | message | status | created_at | resolved_at"
+                echo "----+-----------+-------------+------------+---------+--------+------------+-------------"
+                echo " 00000000-0000-0000-0000-000000000001 | INGESTION | warning | test_type | Test message | ${MOCK_ALERT_STATUS:-active} | 2025-12-28 10:00:00 |"
+            else
+                # Default list query - return formatted table
+                echo " id | component | alert_level | alert_type | message | status | created_at | resolved_at"
+                echo "----+-----------+-------------+------------+---------+--------+------------+-------------"
+                echo " 00000000-0000-0000-0000-000000000001 | INGESTION | warning | test_type | Test message | ${MOCK_ALERT_STATUS:-active} | 2025-12-28 10:00:00 |"
+                echo " 00000000-0000-0000-0000-000000000002 | ANALYTICS | critical | test_type | Test message 2 | active | 2025-12-28 10:00:00 |"
+            fi
+            return 0
+        fi
+        
+        # Handle UPDATE operations (for acknowledge/resolve)
+        if [[ "${query}" =~ UPDATE.*alerts ]]; then
+            # Check if it's a valid UUID
+            if [[ "${query}" =~ 00000000-0000-0000-0000-000000000000 ]] || [[ "${query}" =~ invalid-uuid ]]; then
+                # Invalid UUID - return empty (no rows updated)
+                return 0
+            fi
+            # Update mock status based on UPDATE query
+            if [[ "${query}" =~ status.*=.*acknowledged ]]; then
+                # shellcheck disable=SC2030,SC2031
+                export MOCK_ALERT_STATUS="acknowledged"
+            elif [[ "${query}" =~ status.*=.*resolved ]]; then
+                # shellcheck disable=SC2030,SC2031
+                export MOCK_ALERT_STATUS="resolved"
+            fi
+            # Valid UUID - return alert ID
+            echo "00000000-0000-0000-0000-000000000001"
+            return 0
+        fi
+        
+        # Handle DELETE operations (for cleanup)
+        if [[ "${query}" =~ DELETE.*alerts ]]; then
+            echo "DELETE 1"
+            return 0
+        fi
+        
+        # Handle TRUNCATE (for clean_test_database)
+        if [[ "${query}" =~ TRUNCATE ]]; then
+            # shellcheck disable=SC2030,SC2031
+            export MOCK_ALERT_STATUS="active"
+            return 0
+        fi
+        
+        # Handle COUNT queries (for stats, aggregation)
+        if [[ "${query}" =~ SELECT.*COUNT ]]; then
+            echo "2"
+            return 0
+        fi
+        
+        # Default: return success
+        return 0
+    }
+    export -f psql
     
     # Initialize alerting
     init_alerting
@@ -478,6 +585,312 @@ get_alert_id() {
     run main "history"
     assert_failure
     assert_output --partial "Component required"
+}
+
+##
+# Test: load_config loads custom config file
+##
+@test "load_config loads custom config file" {
+    local test_config="${BATS_TEST_DIRNAME}/../../tmp/test_config.conf"
+    mkdir -p "$(dirname "${test_config}")"
+    cat > "${test_config}" << 'EOF'
+ALERT_DEDUPLICATION_ENABLED="false"
+ALERT_RETENTION_DAYS="90"
+EOF
+    
+    run load_config "${test_config}"
+    assert_success
+    
+    rm -f "${test_config}"
+}
+
+##
+# Test: load_config handles missing config file gracefully
+##
+@test "load_config handles missing config file gracefully" {
+    run load_config "/nonexistent/config.conf"
+    assert_success  # Should not fail, just use defaults
+}
+
+##
+# Test: usage displays help message
+##
+@test "usage displays help message" {
+    run usage
+    assert_success
+    assert_output --partial "Alert Manager Script"
+    assert_output --partial "Usage:"
+    assert_output --partial "list"
+    assert_output --partial "show"
+}
+
+##
+# Test: Main function handles help option
+##
+@test "Main function handles help option" {
+    run main "--help"
+    assert_success
+    assert_output --partial "Alert Manager Script"
+}
+
+##
+# Test: Main function handles -h option
+##
+@test "Main function handles -h option" {
+    run main "-h"
+    assert_success
+    assert_output --partial "Alert Manager Script"
+}
+
+##
+# Test: list_alerts handles different status values
+##
+@test "list_alerts handles resolved status" {
+    # Create and resolve test alert
+    send_alert "INGESTION" "warning" "test_type" "Test message"
+    
+    local alert_id
+    alert_id=$(get_alert_id "INGESTION" "test_type" "Test message")
+    
+    if [[ -n "${alert_id}" ]]; then
+        resolve_alert "${alert_id}" "test_user"
+        
+        # List resolved alerts
+        run list_alerts "" "resolved"
+        assert_success
+        assert_output --partial "INGESTION"
+    else
+        skip "Could not retrieve alert ID"
+    fi
+}
+
+##
+# Test: list_alerts handles acknowledged status
+##
+@test "list_alerts handles acknowledged status" {
+    # Create and acknowledge test alert
+    send_alert "INGESTION" "warning" "test_type" "Test message"
+    
+    local alert_id
+    alert_id=$(get_alert_id "INGESTION" "test_type" "Test message")
+    
+    if [[ -n "${alert_id}" ]]; then
+        acknowledge_alert "${alert_id}" "test_user"
+        
+        # List acknowledged alerts
+        run list_alerts "" "acknowledged"
+        assert_success
+        assert_output --partial "INGESTION"
+    else
+        skip "Could not retrieve alert ID"
+    fi
+}
+
+##
+# Test: aggregate_alerts uses default window when not specified
+##
+@test "aggregate_alerts uses default window when not specified" {
+    # Create test alerts
+    send_alert "INGESTION" "warning" "test_type" "Test message"
+    
+    # Aggregate without specifying window
+    run aggregate_alerts "INGESTION"
+    assert_success
+}
+
+##
+# Test: show_history uses default days when not specified
+##
+@test "show_history uses default days when not specified" {
+    # Create test alert
+    send_alert "INGESTION" "warning" "test_type" "Test message"
+    
+    # Show history without specifying days
+    run show_history "INGESTION"
+    assert_success
+    assert_output --partial "INGESTION"
+}
+
+##
+# Test: cleanup_alerts uses default retention when not specified
+##
+@test "cleanup_alerts uses default retention when not specified" {
+    # Create and resolve test alert
+    send_alert "INGESTION" "warning" "test_type" "Test message"
+    
+    local alert_id
+    alert_id=$(get_alert_id "INGESTION" "test_type" "Test message")
+    
+    if [[ -n "${alert_id}" ]]; then
+        resolve_alert "${alert_id}" "test_user"
+        
+        # Cleanup without specifying days (should use default)
+        run cleanup_alerts
+        assert_success
+    else
+        skip "Could not retrieve alert ID"
+    fi
+}
+
+##
+# Test: Main function handles list action
+##
+@test "Main function handles list action" {
+    # Create test alert
+    send_alert "INGESTION" "warning" "test_type" "Test message"
+    
+    run main "list"
+    assert_success
+    assert_output --partial "INGESTION"
+}
+
+##
+# Test: Main function handles list action with component
+##
+@test "Main function handles list action with component" {
+    # Create test alert
+    send_alert "INGESTION" "warning" "test_type" "Test message"
+    
+    # Mock psql to return formatted table for main function
+    # shellcheck disable=SC2317
+    function psql() {
+        if [[ "${*}" =~ SELECT.*FROM.alerts ]] && [[ "${*}" =~ WHERE.*component.*=.*INGESTION ]]; then
+            echo " id | component | alert_level | alert_type | message | status | created_at | resolved_at"
+            echo "----+-----------+-------------+------------+---------+--------+------------+-------------"
+            echo " 00000000-0000-0000-0000-000000000001 | INGESTION | warning | test_type | Test message | active | 2025-12-28 10:00:00 |"
+            return 0
+        fi
+        # Call original mock for other queries
+        psql "$@"
+    }
+    export -f psql
+    
+    run main "list" "INGESTION" "active"
+    assert_success
+    assert_output --partial "INGESTION"
+}
+
+##
+# Test: Main function handles stats action
+##
+@test "Main function handles stats action" {
+    # Create test alerts
+    send_alert "INGESTION" "warning" "test_type" "Test message"
+    
+    run main "stats"
+    assert_success
+}
+
+##
+# Test: Main function handles aggregate action
+##
+@test "Main function handles aggregate action" {
+    # Create test alert
+    send_alert "INGESTION" "warning" "test_type" "Test message"
+    
+    run main "aggregate" "INGESTION" "60"
+    assert_success
+}
+
+##
+# Test: Main function handles cleanup action
+##
+@test "Main function handles cleanup action" {
+    run main "cleanup" "0"
+    assert_success
+}
+
+##
+# Test: resolve_alert handles already resolved alert from acknowledged state
+##
+@test "resolve_alert resolves acknowledged alert" {
+    # Create, acknowledge, then resolve test alert
+    send_alert "INGESTION" "warning" "test_type" "Test message"
+    
+    local alert_id
+    alert_id=$(get_alert_id "INGESTION" "test_type" "Test message")
+    
+    if [[ -n "${alert_id}" ]]; then
+        # Reset mock status
+        # shellcheck disable=SC2030,SC2031
+        export MOCK_ALERT_STATUS="active"
+        
+        # Acknowledge alert
+        run acknowledge_alert "${alert_id}" "test_user"
+        assert_success
+        
+        # Verify status is acknowledged
+        # shellcheck disable=SC2030,SC2031
+        assert [ "${MOCK_ALERT_STATUS}" = "acknowledged" ]
+        
+        # Resolve from acknowledged state
+        run resolve_alert "${alert_id}" "test_user"
+        assert_success
+        
+        # Verify status is resolved (check mock status directly)
+        # shellcheck disable=SC2030,SC2031
+        assert [ "${MOCK_ALERT_STATUS}" = "resolved" ]
+    else
+        skip "Could not retrieve alert ID"
+    fi
+}
+
+##
+# Test: acknowledge_alert handles invalid UUID gracefully
+##
+@test "acknowledge_alert handles invalid UUID gracefully" {
+    run acknowledge_alert "invalid-uuid" "test_user"
+    assert_failure
+}
+
+##
+# Test: resolve_alert handles invalid UUID gracefully
+##
+@test "resolve_alert handles invalid UUID gracefully" {
+    run resolve_alert "invalid-uuid" "test_user"
+    assert_failure
+}
+
+##
+# Test: show_stats filters by component
+##
+@test "show_stats filters by component" {
+    # Create test alerts for different components
+    send_alert "INGESTION" "warning" "test_type" "Test message 1"
+    send_alert "ANALYTICS" "critical" "test_type" "Test message 2"
+    
+    # Show stats for INGESTION only
+    run show_stats "INGESTION"
+    assert_success
+    assert_output --partial "INGESTION"
+}
+
+##
+# Test: aggregate_alerts handles empty result gracefully
+##
+@test "aggregate_alerts handles empty result gracefully" {
+    # Clean database
+    clean_test_database
+    
+    # Aggregate with no alerts
+    run aggregate_alerts "INGESTION" "60"
+    assert_success  # Should not error
+}
+
+##
+# Test: show_history handles zero days parameter
+##
+@test "show_history handles zero days parameter gracefully" {
+    run show_history "INGESTION" "0"
+    assert_success
+}
+
+##
+# Test: cleanup_alerts handles negative days parameter
+##
+@test "cleanup_alerts handles negative days parameter gracefully" {
+    run cleanup_alerts "-1"
+    assert_success  # Should handle gracefully
 }
 
 

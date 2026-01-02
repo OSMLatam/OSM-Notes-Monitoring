@@ -10,10 +10,15 @@
 set -euo pipefail
 
 SCRIPT_DIR=""
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Use PROJECT_ROOT if already set (e.g., by tests), otherwise calculate it
+if [[ -z "${PROJECT_ROOT:-}" ]]; then
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    PROJECT_ROOT="$(dirname "$(dirname "${SCRIPT_DIR}")")"
+else
+    # If PROJECT_ROOT is set, calculate SCRIPT_DIR from it
+    SCRIPT_DIR="${PROJECT_ROOT}/bin/alerts"
+fi
 readonly SCRIPT_DIR
-PROJECT_ROOT=""
-PROJECT_ROOT="$(dirname "$(dirname "${SCRIPT_DIR}")")"
 readonly PROJECT_ROOT
 
 # Source libraries
@@ -27,9 +32,21 @@ source "${PROJECT_ROOT}/bin/lib/configFunctions.sh"
 source "${PROJECT_ROOT}/bin/lib/alertFunctions.sh"
 
 # Set default LOG_DIR if not set
-export LOG_DIR="${LOG_DIR:-${PROJECT_ROOT}/logs}"
+# Respect existing LOG_DIR (set by tests or environment)
+if [[ -z "${LOG_DIR:-}" ]]; then
+    if [[ "${TEST_MODE:-false}" == "true" ]] && [[ -n "${TEST_LOG_DIR:-}" ]]; then
+        export LOG_DIR="${TEST_LOG_DIR}"
+    else
+        export LOG_DIR="${PROJECT_ROOT}/logs"
+    fi
+fi
 
 # Initialize logging
+# In test mode, ensure LOG_DIR exists and is writable
+if [[ "${TEST_MODE:-false}" == "true" ]]; then
+    mkdir -p "${LOG_DIR}" 2>/dev/null || true
+fi
+
 init_logging "${LOG_DIR}/alert_manager.log" "alertManager"
 
 # Initialize alerting

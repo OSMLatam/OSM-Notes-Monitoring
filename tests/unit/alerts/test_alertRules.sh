@@ -10,6 +10,13 @@
 export TEST_COMPONENT="ALERTS"
 export TEST_DB_NAME="${TEST_DB_NAME:-osm_notes_monitoring_test}"
 
+# Set test environment variables BEFORE sourcing scripts
+export TEST_MODE=true
+TEST_LOG_DIR="${BATS_TEST_DIRNAME}/../../../tmp/logs"
+mkdir -p "${TEST_LOG_DIR}"
+export TEST_LOG_DIR="${TEST_LOG_DIR}"
+export LOG_DIR="${TEST_LOG_DIR}"
+
 load "${BATS_TEST_DIRNAME}/../../test_helper.bash"
 
 # Source libraries
@@ -267,4 +274,112 @@ teardown() {
     run list_rules ""
     assert_success
     assert_output --partial "INGESTION"
+}
+
+##
+# Additional edge cases and error handling tests
+##
+
+@test "get_routing falls back to component-level rule" {
+    # Add component-level rule (without alert_type)
+    echo "INGESTION:critical:general:component-admin@example.com" >> "${TEST_RULES_FILE}"
+    
+    run get_routing "INGESTION" "critical" "unknown_type"
+    assert_success
+    assert_output "component-admin@example.com"
+}
+
+@test "get_routing handles missing rules file" {
+    export ALERT_RULES_FILE="/nonexistent/rules.conf"
+    
+    run get_routing "INGESTION" "critical" "test"
+    assert_success
+    # Should fall back to default routing
+    assert_output --partial "@example.com"
+}
+
+@test "add_template handles stdin input" {
+    echo "Template content from stdin" | add_template "stdin_template" "-"
+    
+    run show_template "stdin_template"
+    assert_success
+    assert_output "Template content from stdin"
+}
+
+@test "add_template handles file input" {
+    local temp_file="${BATS_TEST_DIRNAME}/../../../tmp/test_template_content.txt"
+    echo "Template content from file" > "${temp_file}"
+    
+    add_template "file_template" "${temp_file}"
+    
+    run show_template "file_template"
+    assert_success
+    assert_output "Template content from file"
+    
+    rm -f "${temp_file}"
+}
+
+@test "main handles add action with missing arguments" {
+    run bash "${BATS_TEST_DIRNAME}/../../../bin/alerts/alertRules.sh" add "INGESTION" "critical"
+    assert_failure
+    assert_output --partial "required"
+}
+
+@test "main handles remove action with missing argument" {
+    run bash "${BATS_TEST_DIRNAME}/../../../bin/alerts/alertRules.sh" remove
+    assert_failure
+    assert_output --partial "required"
+}
+
+@test "main handles route action with missing arguments" {
+    run bash "${BATS_TEST_DIRNAME}/../../../bin/alerts/alertRules.sh" route "INGESTION" "critical"
+    assert_failure
+    assert_output --partial "required"
+}
+
+@test "main handles template show with missing argument" {
+    run bash "${BATS_TEST_DIRNAME}/../../../bin/alerts/alertRules.sh" template show
+    assert_failure
+    assert_output --partial "required"
+}
+
+@test "main handles template add with missing arguments" {
+    run bash "${BATS_TEST_DIRNAME}/../../../bin/alerts/alertRules.sh" template add "test_template"
+    assert_failure
+    assert_output --partial "required"
+}
+
+@test "main handles unknown template action" {
+    run bash "${BATS_TEST_DIRNAME}/../../../bin/alerts/alertRules.sh" template unknown
+    assert_failure
+    assert_output --partial "Unknown template action"
+}
+
+@test "main handles unknown action" {
+    run bash "${BATS_TEST_DIRNAME}/../../../bin/alerts/alertRules.sh" unknown_action
+    assert_failure
+    assert_output --partial "Unknown action"
+}
+
+@test "main handles empty action" {
+    run bash "${BATS_TEST_DIRNAME}/../../../bin/alerts/alertRules.sh"
+    assert_failure
+    assert_output --partial "Action required"
+}
+
+@test "remove_rule handles invalid line number" {
+    add_rule "INGESTION" "critical" "test" "test@example.com"
+    
+    # Try to remove non-existent line
+    run remove_rule "999"
+    assert_success  # sed doesn't fail on non-existent line
+}
+
+@test "get_routing handles component-level rule with wildcard type" {
+    echo "INGESTION:critical:*:wildcard-admin@example.com" >> "${TEST_RULES_FILE}"
+    
+    run get_routing "INGESTION" "critical" "any_type"
+    assert_success
+    # Should match component-level rule
+    assert_output --partial "@example.com"
 }

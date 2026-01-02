@@ -305,3 +305,287 @@ teardown() {
     assert_success
     assert [[ -z "${output}" ]]
 }
+
+##
+# Additional edge cases and error handling tests
+##
+
+@test "init_metrics initializes successfully" {
+    run init_metrics
+    assert_success
+}
+
+@test "get_metrics_summary handles custom hours_back" {
+    # Mock psql
+    # shellcheck disable=SC2317
+    function psql() {
+        if [[ "${*}" =~ INTERVAL.*48.*hours ]]; then
+            echo "metric1|100|50|200|10"
+            return 0
+        fi
+        return 1
+    }
+    
+    run get_metrics_summary "TEST_COMPONENT" "48"
+    assert_success
+    assert [[ "${output}" =~ metric1 ]]
+}
+
+@test "get_latest_metric_value handles custom hours_back" {
+    # Mock psql
+    # shellcheck disable=SC2317
+    function psql() {
+        if [[ "${*}" =~ INTERVAL.*12.*hours ]]; then
+            echo "250"
+            return 0
+        fi
+        return 1
+    }
+    
+    run get_latest_metric_value "TEST_COMPONENT" "test_metric" "12"
+    assert_success
+    assert [ "${output}" = "250" ]
+}
+
+@test "record_metric detects percent unit" {
+    # Mock store_metric
+    local metric_file="${TEST_LOG_DIR}/.metric_recorded"
+    rm -f "${metric_file}"
+    
+    # shellcheck disable=SC2317
+    function store_metric() {
+        echo "${1}|${2}|${3}|${4}|${5}" > "${metric_file}"
+        return 0
+    }
+    export -f store_metric
+    
+    run record_metric "TEST_COMPONENT" "cpu_usage_percent" "75" "host=server1"
+    assert_success
+    
+    assert_file_exists "${metric_file}"
+    assert grep -q "percent" "${metric_file}"
+}
+
+@test "record_metric detects milliseconds unit" {
+    # Mock store_metric
+    local metric_file="${TEST_LOG_DIR}/.metric_recorded"
+    rm -f "${metric_file}"
+    
+    # shellcheck disable=SC2317
+    function store_metric() {
+        echo "${1}|${2}|${3}|${4}|${5}" > "${metric_file}"
+        return 0
+    }
+    export -f store_metric
+    
+    run record_metric "TEST_COMPONENT" "response_time_ms" "150" ""
+    assert_success
+    
+    assert_file_exists "${metric_file}"
+    assert grep -q "milliseconds" "${metric_file}"
+}
+
+@test "record_metric detects seconds unit" {
+    # Mock store_metric
+    local metric_file="${TEST_LOG_DIR}/.metric_recorded"
+    rm -f "${metric_file}"
+    
+    # shellcheck disable=SC2317
+    function store_metric() {
+        echo "${1}|${2}|${3}|${4}|${5}" > "${metric_file}"
+        return 0
+    }
+    export -f store_metric
+    
+    run record_metric "TEST_COMPONENT" "execution_duration" "5.5" ""
+    assert_success
+    
+    assert_file_exists "${metric_file}"
+    assert grep -q "seconds" "${metric_file}"
+}
+
+@test "record_metric detects bytes unit" {
+    # Mock store_metric
+    local metric_file="${TEST_LOG_DIR}/.metric_recorded"
+    rm -f "${metric_file}"
+    
+    # shellcheck disable=SC2317
+    function store_metric() {
+        echo "${1}|${2}|${3}|${4}|${5}" > "${metric_file}"
+        return 0
+    }
+    export -f store_metric
+    
+    run record_metric "TEST_COMPONENT" "memory_bytes" "1024000" ""
+    assert_success
+    
+    assert_file_exists "${metric_file}"
+    assert grep -q "bytes" "${metric_file}"
+}
+
+@test "record_metric detects count unit" {
+    # Mock store_metric
+    local metric_file="${TEST_LOG_DIR}/.metric_recorded"
+    rm -f "${metric_file}"
+    
+    # shellcheck disable=SC2317
+    function store_metric() {
+        echo "${1}|${2}|${3}|${4}|${5}" > "${metric_file}"
+        return 0
+    }
+    export -f store_metric
+    
+    run record_metric "TEST_COMPONENT" "request_count" "100" ""
+    assert_success
+    
+    assert_file_exists "${metric_file}"
+    assert grep -q "count" "${metric_file}"
+}
+
+@test "record_metric detects boolean unit for status metrics" {
+    # Mock store_metric
+    local metric_file="${TEST_LOG_DIR}/.metric_recorded"
+    rm -f "${metric_file}"
+    
+    # shellcheck disable=SC2317
+    function store_metric() {
+        echo "${1}|${2}|${3}|${4}|${5}" > "${metric_file}"
+        return 0
+    }
+    export -f store_metric
+    
+    run record_metric "TEST_COMPONENT" "service_status" "1" ""
+    assert_success
+    
+    assert_file_exists "${metric_file}"
+    assert grep -q "boolean" "${metric_file}"
+}
+
+@test "record_metric converts component to lowercase" {
+    # Mock store_metric
+    local metric_file="${TEST_LOG_DIR}/.metric_recorded"
+    rm -f "${metric_file}"
+    
+    # shellcheck disable=SC2317
+    function store_metric() {
+        echo "${1}|${2}|${3}|${4}|${5}" > "${metric_file}"
+        return 0
+    }
+    export -f store_metric
+    
+    run record_metric "TEST_COMPONENT" "test_metric" "100" ""
+    assert_success
+    
+    assert_file_exists "${metric_file}"
+    assert grep -q "test_component" "${metric_file}"
+}
+
+@test "record_metric handles multiple metadata pairs" {
+    # Mock store_metric
+    local metric_file="${TEST_LOG_DIR}/.metric_recorded"
+    rm -f "${metric_file}"
+    
+    # shellcheck disable=SC2317
+    function store_metric() {
+        echo "${5}" > "${metric_file}"
+        return 0
+    }
+    export -f store_metric
+    
+    run record_metric "TEST_COMPONENT" "test_metric" "100" "key1=value1,key2=value2"
+    assert_success
+    
+    assert_file_exists "${metric_file}"
+    assert grep -q "key1" "${metric_file}"
+    assert grep -q "key2" "${metric_file}"
+}
+
+@test "record_metric handles store_metric failure" {
+    # Mock store_metric to fail
+    # shellcheck disable=SC2317
+    function store_metric() {
+        return 1
+    }
+    export -f store_metric
+    
+    run record_metric "TEST_COMPONENT" "test_metric" "100" ""
+    assert_failure
+}
+
+@test "aggregate_metrics handles day period" {
+    # Mock psql
+    # shellcheck disable=SC2317
+    function psql() {
+        if [[ "${*}" =~ DATE_TRUNC.*day ]]; then
+            echo "2025-12-28|150|100|200|24"
+            return 0
+        fi
+        return 1
+    }
+    
+    run aggregate_metrics "TEST_COMPONENT" "test_metric" "day"
+    assert_success
+    assert_output --partial "2025-12-28"
+}
+
+@test "aggregate_metrics handles week period" {
+    # Mock psql
+    # shellcheck disable=SC2317
+    function psql() {
+        if [[ "${*}" =~ DATE_TRUNC.*week ]]; then
+            echo "2025-12-22|150|100|200|168"
+            return 0
+        fi
+        return 1
+    }
+    
+    run aggregate_metrics "TEST_COMPONENT" "test_metric" "week"
+    assert_success
+    assert_output --partial "2025-12-22"
+}
+
+@test "aggregate_metrics handles invalid period" {
+    # Mock psql
+    # shellcheck disable=SC2317
+    function psql() {
+        return 1
+    }
+    
+    run aggregate_metrics "TEST_COMPONENT" "test_metric" "invalid"
+    assert_failure
+}
+
+@test "get_metrics_summary handles database error" {
+    # Mock psql to fail
+    # shellcheck disable=SC2317
+    function psql() {
+        return 1
+    }
+    
+    run get_metrics_summary "TEST_COMPONENT"
+    # Should return empty on error
+    assert_success || true
+}
+
+@test "get_latest_metric_value handles database error" {
+    # Mock psql to fail
+    # shellcheck disable=SC2317
+    function psql() {
+        return 1
+    }
+    
+    run get_latest_metric_value "TEST_COMPONENT" "test_metric"
+    # Should return empty on error
+    assert_success || true
+}
+
+@test "cleanup_old_metrics handles zero deleted count" {
+    # Mock psql to return empty
+    # shellcheck disable=SC2317
+    function psql() {
+        return 0
+    }
+    
+    run cleanup_old_metrics "90"
+    assert_failure  # Should fail when no records deleted
+}

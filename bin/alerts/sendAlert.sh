@@ -27,7 +27,15 @@ source "${PROJECT_ROOT}/bin/lib/configFunctions.sh"
 source "${PROJECT_ROOT}/bin/lib/alertFunctions.sh"
 
 # Set default LOG_DIR if not set
-export LOG_DIR="${LOG_DIR:-${PROJECT_ROOT}/logs}"
+# In test mode, use TEST_LOG_DIR if available, otherwise use PROJECT_ROOT/logs
+if [[ "${TEST_MODE:-false}" == "true" ]] && [[ -n "${TEST_LOG_DIR:-}" ]]; then
+    export LOG_DIR="${TEST_LOG_DIR}"
+elif [[ -z "${LOG_DIR:-}" ]]; then
+    export LOG_DIR="${PROJECT_ROOT}/logs"
+fi
+
+# Ensure log directory exists
+mkdir -p "${LOG_DIR}"
 
 # Initialize logging
 init_logging "${LOG_DIR}/send_alert.log" "sendAlert"

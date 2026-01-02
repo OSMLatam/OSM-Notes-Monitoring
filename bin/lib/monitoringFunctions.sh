@@ -17,10 +17,18 @@ init_monitoring() {
     local project_root
     project_root="$(dirname "$(dirname "${script_dir}")")"
     
+    # Save LOG_DIR if already set (e.g., by tests) before loading properties
+    local saved_log_dir="${LOG_DIR:-}"
+    
     # Source configuration if available
     # shellcheck disable=SC1091
     if [[ -f "${project_root}/etc/properties.sh" ]]; then
         source "${project_root}/etc/properties.sh"
+    fi
+    
+    # Restore LOG_DIR if it was set before loading properties (test mode takes precedence)
+    if [[ -n "${saved_log_dir}" ]] && [[ "${TEST_MODE:-false}" == "true" ]]; then
+        export LOG_DIR="${saved_log_dir}"
     fi
     
     # Set defaults if not configured
