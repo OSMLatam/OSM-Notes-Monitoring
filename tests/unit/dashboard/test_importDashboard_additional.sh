@@ -19,67 +19,63 @@ setup() {
     export LOG_DIR="${TEST_LOG_DIR}"
     init_logging "${LOG_DIR}/test_importDashboard_additional.log" "test_importDashboard_additional"
     
-    # Source the script
-    # shellcheck disable=SC1091
-    source "${BATS_TEST_DIRNAME}/../../../bin/dashboard/importDashboard.sh"
+    # Set up dashboard output directory for tests
+    export DASHBOARD_OUTPUT_DIR="${TEST_LOG_DIR}/dashboards"
+    mkdir -p "${DASHBOARD_OUTPUT_DIR}/grafana"
+    mkdir -p "${DASHBOARD_OUTPUT_DIR}/html"
 }
 
 teardown() {
     rm -rf "${TEST_LOG_DIR:-}"
+    rm -rf "${DASHBOARD_OUTPUT_DIR:-}"
 }
 
 ##
-# Test: import_dashboard handles missing file
+# Test: importDashboard.sh handles invalid archive file
 ##
-@test "import_dashboard handles missing file" {
-    run import_dashboard "/nonexistent/file.json"
-    assert_failure
-}
-
-##
-# Test: import_dashboard handles invalid JSON
-##
-@test "import_dashboard handles invalid JSON" {
-    local test_file="${TEST_LOG_DIR}/invalid.json"
-    echo "invalid json content" > "${test_file}"
+@test "importDashboard.sh handles invalid archive file" {
+    local invalid_file="${TEST_LOG_DIR}/invalid.tar.gz"
+    echo "invalid archive content" > "${invalid_file}"
     
-    run import_dashboard "${test_file}"
+    # Should fail when trying to extract invalid archive
+    run "${BATS_TEST_DIRNAME}/../../../bin/dashboard/importDashboard.sh" --dashboard "${DASHBOARD_OUTPUT_DIR}" "${invalid_file}" grafana
     assert_failure
     
-    rm -f "${test_file}"
+    rm -f "${invalid_file}"
 }
 
 ##
-# Test: main handles --file option
+# Test: importDashboard.sh handles JSON file
 ##
-@test "main handles --file option" {
+@test "importDashboard.sh handles JSON file" {
     local test_file="${TEST_LOG_DIR}/test_dashboard.json"
     echo '{"dashboard": {"title": "Test"}}' > "${test_file}"
     
-    # Mock import_dashboard
-    # shellcheck disable=SC2317
-    function import_dashboard() {
-        return 0
-    }
-    export -f import_dashboard
-    
-    run main --file "${test_file}"
+    # JSON files are copied directly, so this should succeed
+    run "${BATS_TEST_DIRNAME}/../../../bin/dashboard/importDashboard.sh" --dashboard "${DASHBOARD_OUTPUT_DIR}" "${test_file}" grafana
     assert_success
     
     rm -f "${test_file}"
 }
 
 ##
-# Test: main handles --help option
+# Test: importDashboard.sh handles input file as positional argument
 ##
-@test "main handles --help option" {
-    # Mock usage
-    # shellcheck disable=SC2317
-    function usage() {
-        return 0
-    }
-    export -f usage
+@test "importDashboard.sh handles input file as positional argument" {
+    local test_file="${TEST_LOG_DIR}/test_dashboard.json"
+    echo '{"dashboard": {"title": "Test"}}' > "${test_file}"
     
-    run main --help
+    run "${BATS_TEST_DIRNAME}/../../../bin/dashboard/importDashboard.sh" --dashboard "${DASHBOARD_OUTPUT_DIR}" "${test_file}" grafana
     assert_success
+    
+    rm -f "${test_file}"
+}
+
+##
+# Test: importDashboard.sh handles --help option
+##
+@test "importDashboard.sh handles --help option" {
+    run "${BATS_TEST_DIRNAME}/../../../bin/dashboard/importDashboard.sh" --help
+    assert_success
+    assert_output --partial "Usage:"
 }

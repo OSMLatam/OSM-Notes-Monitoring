@@ -60,11 +60,19 @@ check_logrotate() {
 ##
 install_logrotate() {
     local source_file="${PROJECT_ROOT}/config/logrotate.conf"
+    local example_file="${PROJECT_ROOT}/config/logrotate.conf.example"
     local target_file="/etc/logrotate.d/osm-notes-monitoring"
     
+    # Use .conf if exists, otherwise use .example
     if [[ ! -f "${source_file}" ]]; then
-        print_message "${RED}" "Error: Source file not found: ${source_file}"
-        exit 1
+        if [[ -f "${example_file}" ]]; then
+            print_message "${YELLOW}" "Using example configuration file: ${example_file}"
+            source_file="${example_file}"
+        else
+            print_message "${RED}" "Error: Configuration file not found: ${source_file}"
+            print_message "${RED}" "Example file not found: ${example_file}"
+            exit 1
+        fi
     fi
     
     print_message "${BLUE}" "Installing logrotate configuration..."

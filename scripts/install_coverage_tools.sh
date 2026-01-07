@@ -5,7 +5,6 @@
 #
 # Version: 2.0.0
 # Date: 2026-01-02
-# Note: kcov removed - doesn't work with source-based tests
 #
 
 set -euo pipefail

@@ -33,14 +33,17 @@ readonly BASHCOV_OUTPUT="${COVERAGE_DIR}/bashcov"
 readonly COVERAGE_REPORT="${COVERAGE_DIR}/coverage_report_instrumented.txt"
 
 # Database configuration (use environment variables or defaults)
+# For bashcov, we want to avoid password prompts, so we'll use empty password
+# Tests should use mocks, but if they don't, psql will fail silently
 export TEST_DB_NAME="${TEST_DB_NAME:-osm_notes_monitoring_test}"
 export DBNAME="${DBNAME:-${TEST_DB_NAME}}"
 export DBHOST="${DBHOST:-${PGHOST:-localhost}}"
 export DBPORT="${DBPORT:-${PGPORT:-5432}}"
 export DBUSER="${DBUSER:-${PGUSER:-${USER:-postgres}}}"
-if [[ -n "${PGPASSWORD:-}" ]]; then
-    export PGPASSWORD
-fi
+# Set PGPASSWORD to empty to avoid password prompts (tests should use mocks)
+export PGPASSWORD="${PGPASSWORD:-}"
+# Also set PGOPTIONS to avoid interactive prompts
+export PGOPTIONS="-c statement_timeout=1s"
 
 ##
 # Print colored message
@@ -103,10 +106,11 @@ run_all_tests_with_bashcov() {
         local count=0
         for test_file in "${test_files[@]}"; do
             # Run each test file individually - bashcov will accumulate coverage
+            # Redirect stdin to /dev/null to prevent psql password prompts
             bashcov \
                 --root "${PROJECT_ROOT}" \
                 --skip-uncovered \
-                bats "${test_file}" >/dev/null 2>&1 || true
+                bats "${test_file}" </dev/null >/dev/null 2>&1 || true
             count=$((count + 1))
             # Show progress every 10 tests
             if [[ $((count % 10)) -eq 0 ]]; then
