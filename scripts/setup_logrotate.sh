@@ -79,6 +79,30 @@ install_logrotate() {
 }
 
 ##
+# Fix log file permissions
+##
+fix_log_permissions() {
+    local log_dir="/var/log/osm-notes-monitoring"
+    
+    if [[ ! -d "${log_dir}" ]]; then
+        print_message "${YELLOW}" "Log directory does not exist: ${log_dir}"
+        return 0
+    fi
+    
+    print_message "${BLUE}" "Fixing permissions for log files in ${log_dir}..."
+    
+    # Fix ownership and permissions for all log files
+    chown -R notes:maptimebogota "${log_dir}"
+    chmod 755 "${log_dir}"
+    
+    # Fix permissions for log files (readable by owner and group)
+    find "${log_dir}" -type f -name "*.log" -exec chmod 0640 {} \;
+    find "${log_dir}" -type f -name "*.log-*" -exec chmod 0640 {} \;
+    
+    print_message "${GREEN}" "✓ Log file permissions fixed"
+}
+
+##
 # Test logrotate configuration
 ##
 test_logrotate() {
@@ -104,6 +128,7 @@ Options:
     -h, --help      Show this help message
     -t, --test      Test configuration without installing
     -d, --dry-run   Dry run (test logrotate without installing)
+    -f, --fix-perms Fix log file permissions (requires root)
 
 Examples:
     sudo $0                    # Install logrotate configuration
@@ -119,6 +144,7 @@ EOF
 main() {
     local test_only=false
     local dry_run=false
+    local fix_perms=false
     
     # Parse arguments
     while [[ $# -gt 0 ]]; do
@@ -135,6 +161,10 @@ main() {
                 dry_run=true
                 shift
                 ;;
+            -f|--fix-perms)
+                fix_perms=true
+                shift
+                ;;
             *)
                 print_message "${RED}" "Unknown option: ${1}"
                 usage
@@ -145,6 +175,15 @@ main() {
     
     print_message "${GREEN}" "OSM-Notes-Monitoring Logrotate Setup"
     echo
+    
+    if [[ "${fix_perms}" == true ]]; then
+        # Only fix permissions
+        check_root
+        fix_log_permissions
+        echo
+        print_message "${GREEN}" "Permissions fixed!"
+        exit 0
+    fi
     
     check_logrotate
     
@@ -175,6 +214,7 @@ main() {
     else
         # Install
         check_root
+        fix_log_permissions
         install_logrotate
         test_logrotate
         

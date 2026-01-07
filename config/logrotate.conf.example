@@ -1,0 +1,80 @@
+# Logrotate configuration for OSM-Notes-Monitoring
+# Version: 1.0.0
+# Date: 2025-12-24
+#
+# Install this file to /etc/logrotate.d/osm-notes-monitoring
+# Or use: logrotate -d config/logrotate.conf (dry-run)
+# Or use: logrotate -f config/logrotate.conf (force rotation)
+#
+# To use this file in production:
+# 1. Copy this file to config/logrotate.conf
+# 2. Adjust user/group if needed (default: notes maptimebogota)
+# 3. Run: sudo ./scripts/setup_logrotate.sh
+
+/var/log/osm-notes-monitoring/*.log {
+    # Rotate daily
+    daily
+    
+    # Keep 30 days of logs
+    rotate 30
+    
+    # Compress old log files
+    compress
+    
+    # Delay compression until next rotation
+    delaycompress
+    
+    # Don't rotate if log file is missing
+    missingok
+    
+    # Don't create new log file if none exists
+    notifempty
+    
+    # Create new log file with these permissions
+    # Using notes user since cron jobs run as notes
+    # Group is maptimebogota (primary group of notes user)
+    # Adjust user/group if your setup is different
+    create 0640 notes maptimebogota
+    
+    # Use date extension for rotated files
+    dateext
+    dateformat -%Y%m%d
+    
+    # Shared scripts (run once for all matching files)
+    sharedscripts
+    
+    # Post-rotation script
+    postrotate
+        # Signal processes to reopen log files (if needed)
+        # This is optional - most processes handle log rotation automatically
+        # killall -HUP monitoring-process 2>/dev/null || true
+    endscript
+}
+
+# Separate configuration for error logs (keep longer)
+/var/log/osm-notes-monitoring/*error*.log {
+    daily
+    rotate 90
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0640 notes maptimebogota
+    dateext
+    dateformat -%Y%m%d
+    sharedscripts
+}
+
+# Configuration for debug logs (shorter retention)
+/var/log/osm-notes-monitoring/*debug*.log {
+    daily
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0640 notes maptimebogota
+    dateext
+    dateformat -%Y%m%d
+    sharedscripts
+}
