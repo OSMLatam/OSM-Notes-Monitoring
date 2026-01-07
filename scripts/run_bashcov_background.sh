@@ -15,7 +15,6 @@ PROJECT_ROOT="$(dirname "${SCRIPT_DIR}")"
 readonly GREEN='\033[0;32m'
 readonly BLUE='\033[0;34m'
 readonly YELLOW='\033[1;33m'
-readonly RED='\033[0;31m'
 readonly NC='\033[0m'
 
 # Output directories
@@ -103,9 +102,9 @@ monitor_bashcov() {
         # Count processed tests from log
         local processed=0
         if [[ -f "${LOG_FILE}" ]]; then
-            # Use grep without -c and count lines manually to avoid issues
+            # Use grep -c to count matching lines
             local grep_result
-            grep_result=$(grep "Processed.*test files" "${LOG_FILE}" 2>/dev/null | wc -l || echo "0")
+            grep_result=$(grep -c "Processed.*test files" "${LOG_FILE}" 2>/dev/null || echo "0")
             # Clean result: remove whitespace and ensure it's a number
             grep_result=$(echo "${grep_result}" | tr -d '[:space:]')
             if [[ -z "${grep_result}" ]] || ! [[ "${grep_result}" =~ ^[0-9]+$ ]]; then
@@ -127,7 +126,7 @@ monitor_bashcov() {
         fi
         
         # Show progress
-        printf "\r${BLUE}Progress: ${processed}/${total_tests} tests | Results: ${resultset_size}${NC}"
+        printf "\r%sProgress: %s/%s tests | Results: %s%s" "${BLUE}" "${processed}" "${total_tests}" "${resultset_size}" "${NC}"
         
         sleep 2
     done
