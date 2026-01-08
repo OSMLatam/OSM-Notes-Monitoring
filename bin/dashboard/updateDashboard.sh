@@ -134,6 +134,126 @@ update_grafana_dashboard() {
 }
 
 ##
+# Execute SQL query and return JSON result
+#
+# Arguments:
+#   $1 - SQL query to execute
+#   $2 - Database name (optional)
+#
+# Returns:
+#   JSON result via stdout
+##
+execute_json_query() {
+    local query="${1:?SQL query required}"
+    local dbname="${2:-${DBNAME:-osm_notes_monitoring}}"
+    local dbhost="${DBHOST:-localhost}"
+    local dbport="${DBPORT:-5432}"
+    local dbuser="${DBUSER:-postgres}"
+    local result
+    
+    # Build psql command (same logic as execute_sql_query)
+    local psql_cmd="psql"
+    local current_user="${USER:-$(whoami)}"
+    
+    if [[ "${dbuser}" == "${current_user}" ]] && [[ "${dbhost}" == "localhost" || "${dbhost}" == "127.0.0.1" || -z "${dbhost}" ]]; then
+        if [[ -n "${dbport}" && "${dbport}" != "5432" ]]; then
+            psql_cmd="${psql_cmd} -p ${dbport}"
+        fi
+    else
+        psql_cmd="${psql_cmd} -U ${dbuser}"
+        if [[ -n "${dbhost}" && "${dbhost}" != "localhost" && "${dbhost}" != "127.0.0.1" ]]; then
+            psql_cmd="${psql_cmd} -h ${dbhost}"
+        fi
+        if [[ -n "${dbport}" && "${dbport}" != "5432" ]]; then
+            psql_cmd="${psql_cmd} -p ${dbport}"
+        fi
+        if [[ -n "${PGPASSWORD:-}" ]]; then
+            psql_cmd="PGPASSWORD=\"${PGPASSWORD}\" ${psql_cmd}"
+        fi
+    fi
+    
+    # Execute query with JSON output format (-t removes headers, -A aligns, but we need raw JSON)
+    # Use -t to remove headers, but keep the JSON intact
+    if result=$(eval "${psql_cmd} -d ${dbname} -t -A -c \"${query}\"" 2>&1); then
+        # Trim whitespace
+        result=$(echo "${result}" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        echo "${result}"
+        return 0
+    else
+        echo "Error: ${result}" >&2
+        return 1
+    fi
+}
+
+##
+# Generate component health JSON file
+##
+generate_component_health_json() {
+    local dashboard_dir="${DASHBOARD_OUTPUT_DIR}/html"
+    local dbname="${DBNAME:-osm_notes_monitoring}"
+    
+    log_info "Generating component_health.json"
+    
+    mkdir -p "${dashboard_dir}"
+    
+    # Query to get component health as JSON
+    local query="SELECT COALESCE(json_object_agg(component, json_build_object('status', status, 'last_check', last_check, 'last_success', last_success, 'error_count', error_count)), '{}'::json) FROM component_health;"
+    
+    # Execute query and get JSON result
+    local result
+    if result=$(execute_json_query "${query}" "${dbname}" 2>/dev/null); then
+        # If result is empty, null, or {}, create default structure
+        if [[ -z "${result}" ]] || [[ "${result}" == "null" ]] || [[ "${result}" == "{}" ]]; then
+            result='{"ingestion":{"status":"unknown","last_check":null,"last_success":null,"error_count":0},"analytics":{"status":"unknown","last_check":null,"last_success":null,"error_count":0},"wms":{"status":"unknown","last_check":null,"last_success":null,"error_count":0},"api":{"status":"unknown","last_check":null,"last_success":null,"error_count":0},"data":{"status":"unknown","last_check":null,"last_success":null,"error_count":0},"infrastructure":{"status":"unknown","last_check":null,"last_success":null,"error_count":0}}'
+        fi
+        echo "${result}" > "${dashboard_dir}/component_health.json"
+        log_info "✓ Generated component_health.json"
+    else
+        log_warning "Failed to generate component_health.json, creating default"
+        # Create default structure if query fails
+        cat > "${dashboard_dir}/component_health.json" <<'EOF'
+{
+  "ingestion": {"status": "unknown", "last_check": null, "last_success": null, "error_count": 0},
+  "analytics": {"status": "unknown", "last_check": null, "last_success": null, "error_count": 0},
+  "wms": {"status": "unknown", "last_check": null, "last_success": null, "error_count": 0},
+  "api": {"status": "unknown", "last_check": null, "last_success": null, "error_count": 0},
+  "data": {"status": "unknown", "last_check": null, "last_success": null, "error_count": 0},
+  "infrastructure": {"status": "unknown", "last_check": null, "last_success": null, "error_count": 0}
+}
+EOF
+    fi
+}
+
+##
+# Generate recent alerts JSON file
+##
+generate_recent_alerts_json() {
+    local dashboard_dir="${DASHBOARD_OUTPUT_DIR}/html"
+    local dbname="${DBNAME:-osm_notes_monitoring}"
+    
+    log_info "Generating recent_alerts.json"
+    
+    mkdir -p "${dashboard_dir}"
+    
+    # Query to get recent alerts as JSON array
+    local query="SELECT COALESCE(json_agg(json_build_object('id', id, 'component', component, 'severity', severity, 'message', message, 'timestamp', timestamp, 'resolved', resolved) ORDER BY timestamp DESC), '[]'::json) FROM alerts WHERE timestamp > CURRENT_TIMESTAMP - INTERVAL '24 hours' LIMIT 50;"
+    
+    # Execute query and get JSON result
+    local result
+    if result=$(execute_json_query "${query}" "${dbname}" 2>/dev/null); then
+        # If result is empty or null, use empty array
+        if [[ -z "${result}" ]] || [[ "${result}" == "null" ]]; then
+            result="[]"
+        fi
+        echo "${result}" > "${dashboard_dir}/recent_alerts.json"
+        log_info "✓ Generated recent_alerts.json"
+    else
+        log_warning "Failed to generate recent_alerts.json, creating empty array"
+        echo "[]" > "${dashboard_dir}/recent_alerts.json"
+    fi
+}
+
+##
 # Update HTML dashboard data
 #
 # Arguments:
@@ -161,6 +281,12 @@ update_html_dashboard() {
         # Generate overview data
         log_info "Generating overview data"
         "${metrics_script}" all json > "${dashboard_dir}/overview_data.json" 2>/dev/null || true
+        
+        # Generate component health JSON
+        generate_component_health_json
+        
+        # Generate recent alerts JSON
+        generate_recent_alerts_json
     fi
     
     log_info "HTML dashboards updated"

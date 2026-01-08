@@ -781,7 +781,7 @@ check_ingestion_performance() {
             log_error "${COMPONENT}: Performance analysis failed (exit_code: ${exit_code}, duration: ${duration}s)"
             record_metric "${COMPONENT}" "performance_check_status" "0" "component=ingestion,check=analyzeDatabasePerformance"
             record_metric "${COMPONENT}" "performance_check_duration" "${duration}" "component=ingestion,check=analyzeDatabasePerformance"
-            send_alert "ERROR" "${COMPONENT}" "Performance analysis failed: exit_code=${exit_code}"
+            send_alert "${COMPONENT}" "ERROR" "performance_check_failed" "Performance analysis failed: exit_code=${exit_code}, duration=${duration}s"
         fi
     else
         log_warning "${COMPONENT}: analyzeDatabasePerformance.sh not found: ${perf_script}"
