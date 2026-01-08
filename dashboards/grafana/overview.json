@@ -1,99 +1,111 @@
 {
-  "dashboard": {
-    "title": "OSM Notes Monitoring - Overview",
-    "tags": ["osm", "monitoring", "overview"],
-    "timezone": "browser",
-    "schemaVersion": 27,
-    "version": 1,
-    "refresh": "30s",
-    "panels": [
-      {
-        "id": 1,
-        "title": "Component Health Status",
-        "type": "stat",
-        "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
-        "targets": [
-          {
-            "expr": "SELECT component, status FROM component_health",
-            "format": "table",
-            "rawSql": true,
-            "refId": "A"
-          }
-        ],
-        "options": {
-          "colorMode": "value",
-          "graphMode": "area",
-          "justifyMode": "auto",
-          "orientation": "auto",
-          "reduceOptions": {
-            "values": false,
-            "calcs": ["lastNotNull"],
-            "fields": ""
+  "id": null,
+  "uid": "osm-notes-overview-v3",
+  "title": "OSM Notes Monitoring - Overview (v3)",
+  "tags": ["osm", "monitoring", "overview"],
+  "timezone": "browser",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "30s",
+  "editable": true,
+  "panels": [
+    {
+      "id": 1,
+      "title": "Component Health Status",
+      "type": "table",
+      "gridPos": {"h": 10, "w": 8, "x": 0, "y": 0},
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
           },
-          "textMode": "auto"
-        },
-        "fieldConfig": {
-          "defaults": {
-            "mappings": [
-              {"type": "value", "options": {"healthy": {"text": "Healthy", "color": "green"}}},
-              {"type": "value", "options": {"degraded": {"text": "Degraded", "color": "yellow"}}},
-              {"type": "value", "options": {"down": {"text": "Down", "color": "red"}}},
-              {"type": "value", "options": {"unknown": {"text": "Unknown", "color": "gray"}}}
-            ],
-            "thresholds": {
-              "mode": "absolute",
-              "steps": [
-                {"value": null, "color": "green"},
-                {"value": 1, "color": "yellow"},
-                {"value": 2, "color": "red"}
-              ]
-            }
-          }
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT component, status, last_check, error_count FROM component_health ORDER BY component",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "sortBy": [],
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": ["sum"],
+          "countRows": false
         }
       },
-      {
-        "id": 2,
-        "title": "Error Rate (Last 24h)",
-        "type": "graph",
-        "gridPos": {"h": 8, "w": 12, "x": 6, "y": 0},
-        "targets": [
-          {
-            "expr": "SELECT timestamp, metric_value FROM metrics WHERE component = 'ingestion' AND metric_name = 'error_rate_percent' AND timestamp > NOW() - INTERVAL '24 hours' ORDER BY timestamp",
-            "format": "time_series",
-            "rawSql": true,
-            "refId": "A"
-          }
-        ],
-        "yaxes": [
-          {"format": "percent", "label": "Error Rate"},
-          {"format": "short"}
-        ]
-      },
-      {
-        "id": 3,
-        "title": "Active Alerts",
-        "type": "table",
-        "gridPos": {"h": 8, "w": 6, "x": 18, "y": 0},
-        "targets": [
-          {
-            "expr": "SELECT component, alert_level, alert_type, message, created_at FROM alerts WHERE status = 'active' ORDER BY created_at DESC LIMIT 10",
-            "format": "table",
-            "rawSql": true,
-            "refId": "A"
-          }
-        ]
+      "transformations": [],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
       }
-    ],
-    "time": {
-      "from": "now-24h",
-      "to": "now"
     },
-    "timepicker": {},
-    "templating": {
-      "list": []
+    {
+      "id": 2,
+      "title": "Database Connection Time (Last 24h)",
+      "type": "timeseries",
+      "gridPos": {"h": 10, "w": 10, "x": 8, "y": 0},
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT timestamp AS time, metric_value AS value FROM metrics WHERE component = 'ingestion' AND metric_name = 'db_connection_time_ms' AND $__timeFilter(timestamp) ORDER BY timestamp",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "decimals": 0
+        }
+      },
+      "yaxes": [
+        {"format": "ms", "label": "Time (ms)"},
+        {"format": "short"}
+      ]
     },
-    "annotations": {
-      "list": []
+    {
+      "id": 3,
+      "title": "Active Alerts",
+      "type": "table",
+      "gridPos": {"h": 10, "w": 8, "x": 0, "y": 10},
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT component, alert_level, alert_type, message, created_at FROM alerts WHERE status = 'active' ORDER BY created_at DESC LIMIT 10",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "sortBy": []
+      }
     }
+  ],
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "templating": {
+    "list": []
+  },
+  "annotations": {
+    "list": []
   }
 }

@@ -88,12 +88,13 @@ EOF
 check_script_execution_status() {
     log_info "${COMPONENT}: Starting script execution status check"
     
+    # Define scripts with their subdirectories
     local scripts_to_check=(
-        "processAPINotes.sh"
-        "processPlanetNotes.sh"
-        "notesCheckVerifier.sh"
-        "processCheckPlanetNotes.sh"
-        "analyzeDatabasePerformance.sh"
+        "process/processAPINotes.sh"
+        "process/processPlanetNotes.sh"
+        "monitor/notesCheckVerifier.sh"
+        "monitor/processCheckPlanetNotes.sh"
+        "monitor/analyzeDatabasePerformance.sh"
     )
     
     local scripts_dir="${INGESTION_REPO_PATH}/bin"
@@ -101,12 +102,14 @@ check_script_execution_status() {
     local scripts_executable=0
     local scripts_running=0
     
-    for script_name in "${scripts_to_check[@]}"; do
-        local script_path="${scripts_dir}/${script_name}"
+    for script_rel_path in "${scripts_to_check[@]}"; do
+        local script_path="${scripts_dir}/${script_rel_path}"
+        local script_name
+        script_name=$(basename "${script_rel_path}")
         
         # Check if script exists
         if [[ ! -f "${script_path}" ]]; then
-            log_debug "${COMPONENT}: Script not found: ${script_name}"
+            log_debug "${COMPONENT}: Script not found: ${script_rel_path}"
             continue
         fi
         

@@ -1,37 +1,48 @@
 {
-  "dashboard": {
-    "title": "Api Monitoring",
-    "tags": ["osm", "monitoring", "api"],
-    "timezone": "browser",
-    "schemaVersion": 27,
-    "version": 1,
-    "refresh": "30s",
-    "panels": [
-      {
-        "id": 1,
-        "title": "Api Health Status",
-        "type": "stat",
-        "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
-        "targets": [{
-          "expr": "SELECT status FROM component_health WHERE component = 'api'",
-          "format": "table",
-          "rawSql": true,
-          "refId": "A"
-        }]
-      },
-      {
-        "id": 2,
-        "title": "Key Metrics",
-        "type": "graph",
-        "gridPos": {"h": 8, "w": 18, "x": 6, "y": 0},
-        "targets": [{
-          "expr": "SELECT timestamp, metric_value FROM metrics WHERE component = 'api' AND timestamp > NOW() - INTERVAL '24 hours' ORDER BY timestamp DESC LIMIT 100",
-          "format": "time_series",
-          "rawSql": true,
-          "refId": "A"
-        }]
-      }
-    ],
-    "time": {"from": "now-24h", "to": "now"}
-  }
+  "id": null,
+  "uid": "osm-notes-api",
+  "title": "Api Monitoring",
+  "tags": ["osm", "monitoring", "api"],
+  "timezone": "browser",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "30s",
+  "editable": true,
+  "panels": [
+    {
+      "id": 1,
+      "title": "Api Health Status",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
+      "targets": [{
+        "datasource": {
+          "type": "postgres",
+          "uid": "PostgreSQL"
+        },
+        "editorMode": "code",
+        "format": "table",
+        "rawQuery": true,
+        "rawSql": "SELECT status FROM component_health WHERE component = 'api'",
+        "refId": "A"
+      }]
+    },
+    {
+      "id": 2,
+      "title": "Key Metrics",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 18, "x": 6, "y": 0},
+      "targets": [{
+        "datasource": {
+          "type": "postgres",
+          "uid": "PostgreSQL"
+        },
+        "editorMode": "code",
+        "format": "time_series",
+        "rawQuery": true,
+        "rawSql": "SELECT timestamp AS time, metric_value AS value, metric_name FROM metrics WHERE component = 'api' AND timestamp > NOW() - INTERVAL '24 hours' ORDER BY timestamp",
+        "refId": "A"
+      }]
+    }
+  ],
+  "time": {"from": "now-24h", "to": "now"}
 }

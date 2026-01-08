@@ -307,29 +307,30 @@ update_component_health() {
         WITH latest_metrics AS (
             SELECT DISTINCT ON (component)
                 component,
-                timestamp,
+                MAX(timestamp) as latest_timestamp,
                 CASE 
-                    WHEN COUNT(*) FILTER (WHERE metric_name LIKE '%error%' OR metric_name LIKE '%failure%') > 0 THEN 'degraded'
+                    WHEN COUNT(*) FILTER (WHERE (metric_name LIKE '%error%' OR metric_name LIKE '%failure%') AND metric_value::numeric > 0) > 0 THEN 'degraded'
                     WHEN COUNT(*) FILTER (WHERE metric_name LIKE '%availability%' AND metric_value::numeric < 1) > 0 THEN 'down'
                     WHEN MAX(timestamp) < CURRENT_TIMESTAMP - INTERVAL '1 hour' THEN 'unknown'
                     ELSE 'healthy'
                 END as status
             FROM metrics
             WHERE timestamp > CURRENT_TIMESTAMP - INTERVAL '24 hours'
-            GROUP BY component, timestamp
-            ORDER BY component, timestamp DESC
+            GROUP BY component
+            ORDER BY component, MAX(timestamp) DESC
         )
         INSERT INTO component_health (component, status, last_check, last_success)
         SELECT 
-            component,
-            status,
+            lm.component,
+            lm.status,
             CURRENT_TIMESTAMP,
-            CASE WHEN status = 'healthy' THEN CURRENT_TIMESTAMP ELSE last_success END
-        FROM latest_metrics
+            CASE WHEN lm.status = 'healthy' THEN CURRENT_TIMESTAMP ELSE ch.last_success END
+        FROM latest_metrics lm
+        LEFT JOIN component_health ch ON lm.component = ch.component
         ON CONFLICT (component) DO UPDATE SET
             status = EXCLUDED.status,
             last_check = EXCLUDED.last_check,
-            last_success = EXCLUDED.last_success,
+            last_success = CASE WHEN EXCLUDED.status = 'healthy' THEN EXCLUDED.last_success ELSE component_health.last_success END,
             error_count = CASE 
                 WHEN EXCLUDED.status != 'healthy' THEN component_health.error_count + 1
                 ELSE 0

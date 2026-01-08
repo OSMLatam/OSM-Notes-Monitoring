@@ -1,49 +1,77 @@
 {
-  "dashboard": {
-    "title": "Ingestion Monitoring",
-    "tags": ["osm", "monitoring", "ingestion"],
-    "timezone": "browser",
-    "schemaVersion": 27,
-    "version": 1,
-    "refresh": "30s",
-    "panels": [
-      {
-        "id": 1,
-        "title": "Script Execution Status",
-        "type": "stat",
-        "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
-        "targets": [{
-          "expr": "SELECT metric_value FROM metrics WHERE component = 'ingestion' AND metric_name = 'scripts_executable' ORDER BY timestamp DESC LIMIT 1",
-          "format": "table",
-          "rawSql": true,
-          "refId": "A"
-        }]
-      },
-      {
-        "id": 2,
-        "title": "Error Rate",
-        "type": "graph",
-        "gridPos": {"h": 8, "w": 12, "x": 6, "y": 0},
-        "targets": [{
-          "expr": "SELECT timestamp, metric_value FROM metrics WHERE component = 'ingestion' AND metric_name = 'error_rate_percent' AND timestamp > NOW() - INTERVAL '24 hours' ORDER BY timestamp",
-          "format": "time_series",
-          "rawSql": true,
-          "refId": "A"
-        }]
-      },
-      {
-        "id": 3,
-        "title": "Database Query Time",
-        "type": "graph",
-        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
-        "targets": [{
-          "expr": "SELECT timestamp, metric_value FROM metrics WHERE component = 'ingestion' AND metric_name = 'db_query_time_ms' AND timestamp > NOW() - INTERVAL '24 hours' ORDER BY timestamp",
-          "format": "time_series",
-          "rawSql": true,
-          "refId": "A"
-        }]
+  "id": null,
+  "uid": "osm-notes-ingestion",
+  "title": "Ingestion Monitoring",
+  "tags": ["osm", "monitoring", "ingestion"],
+  "timezone": "browser",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "30s",
+  "editable": true,
+  "panels": [
+    {
+      "id": 1,
+      "title": "Script Execution Status",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
+      "targets": [{
+        "datasource": {
+          "type": "postgres",
+          "uid": "PostgreSQL"
+        },
+        "editorMode": "code",
+        "format": "table",
+        "rawQuery": true,
+        "rawSql": "SELECT COUNT(*) as value FROM metrics WHERE component = 'ingestion' AND metric_name = 'scripts_executable'",
+        "refId": "A"
+      }]
+    },
+    {
+      "id": 2,
+      "title": "Database Connection Time (ms)",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 6, "y": 0},
+      "targets": [{
+        "datasource": {
+          "type": "postgres",
+          "uid": "PostgreSQL"
+        },
+        "editorMode": "code",
+        "format": "time_series",
+        "rawQuery": true,
+        "rawSql": "SELECT timestamp AS time, metric_value AS value FROM metrics WHERE component = 'ingestion' AND metric_name = 'db_connection_time_ms' AND \$__timeFilter(timestamp) ORDER BY timestamp",
+        "refId": "A"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "decimals": 0
+        }
       }
-    ],
-    "time": {"from": "now-24h", "to": "now"}
-  }
+    },
+    {
+      "id": 3,
+      "title": "Scripts Running",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+      "targets": [{
+        "datasource": {
+          "type": "postgres",
+          "uid": "PostgreSQL"
+        },
+        "editorMode": "code",
+        "format": "time_series",
+        "rawQuery": true,
+        "rawSql": "SELECT timestamp AS time, metric_value AS value FROM metrics WHERE component = 'ingestion' AND metric_name = 'scripts_running' AND \$__timeFilter(timestamp) ORDER BY timestamp",
+        "refId": "A"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0
+        }
+      }
+    }
+  ],
+  "time": {"from": "now-24h", "to": "now"}
 }
