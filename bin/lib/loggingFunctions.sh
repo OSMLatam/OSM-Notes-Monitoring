@@ -22,7 +22,8 @@ readonly LOG_LEVEL_ERROR=3
 fi
 
 # Default log level
-LOG_LEVEL="${LOG_LEVEL:-${LOG_LEVEL_INFO}}"
+# Use default value if LOG_LEVEL_INFO is not set (for cron environment)
+LOG_LEVEL="${LOG_LEVEL:-${LOG_LEVEL_INFO:-1}}"
 LOG_FILE="${LOG_FILE:-/dev/stderr}"
 SCRIPT_NAME="${SCRIPT_NAME:-$(basename "${0:-unknown}")}"
 
@@ -77,29 +78,65 @@ log_message() {
     timestamp=$(get_timestamp)
     
     # Map level to numeric value
+    # Ensure constants are defined (may not be available in cron environment)
+    local log_level_debug="${LOG_LEVEL_DEBUG:-0}"
+    local log_level_info="${LOG_LEVEL_INFO:-1}"
+    local log_level_warning="${LOG_LEVEL_WARNING:-2}"
+    local log_level_error="${LOG_LEVEL_ERROR:-3}"
+    
     local level_num
     case "${level}" in
         DEBUG)
-            level_num=${LOG_LEVEL_DEBUG}
+            level_num="${log_level_debug}"
             ;;
         INFO)
-            level_num=${LOG_LEVEL_INFO}
+            level_num="${log_level_info}"
             ;;
         WARNING)
-            level_num=${LOG_LEVEL_WARNING}
+            level_num="${log_level_warning}"
             ;;
         ERROR)
-            level_num=${LOG_LEVEL_ERROR}
+            level_num="${log_level_error}"
             ;;
         *)
-            level_num=${LOG_LEVEL_INFO}
+            level_num="${log_level_info}"
             ;;
     esac
     
     # Check if we should log this level
     # Use default LOG_LEVEL_INFO if LOG_LEVEL is not set
-    local current_log_level="${LOG_LEVEL:-${LOG_LEVEL_INFO}}"
-    if [[ ${level_num} -lt ${current_log_level} ]]; then
+    # Handle case where LOG_LEVEL might be a string (INFO, DEBUG, etc.) or a number
+    local current_log_level_raw="${LOG_LEVEL:-}"
+    local current_log_level="${log_level_info}"  # Default to INFO level
+    
+    if [[ -n "${current_log_level_raw}" ]]; then
+        # If LOG_LEVEL is a number, use it directly
+        if [[ "${current_log_level_raw}" =~ ^[0-9]+$ ]]; then
+            current_log_level="${current_log_level_raw}"
+        # If LOG_LEVEL is a string (INFO, DEBUG, etc.), convert to number
+        else
+            case "${current_log_level_raw}" in
+                DEBUG)
+                    current_log_level="${log_level_debug}"
+                    ;;
+                INFO)
+                    current_log_level="${log_level_info}"
+                    ;;
+                WARNING)
+                    current_log_level="${log_level_warning}"
+                    ;;
+                ERROR)
+                    current_log_level="${log_level_error}"
+                    ;;
+                *)
+                    # Unknown level, default to INFO
+                    current_log_level="${log_level_info}"
+                    ;;
+            esac
+        fi
+    fi
+    
+    if [[ "${level_num}" -lt "${current_log_level}" ]]; then
         return 0
     fi
     

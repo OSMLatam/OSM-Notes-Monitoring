@@ -78,30 +78,41 @@ execute_sql_query() {
     local dbname="${2:-${DBNAME}}"
     local result
     
-    # Use PGPASSWORD if set, otherwise let psql use default authentication (peer, md5, etc.)
-    # Only set PGPASSWORD if it's actually configured to avoid forcing password auth
-    if [[ -n "${PGPASSWORD:-}" ]]; then
-        if ! result=$(PGPASSWORD="${PGPASSWORD}" psql \
-            -h "${DBHOST}" \
-            -p "${DBPORT}" \
-            -U "${DBUSER}" \
-            -d "${dbname}" \
-            -t -A \
-            -c "${query}" 2>&1); then
-            echo "Error executing query: ${result}" >&2
-            return 1
+    # Build psql command
+    # For localhost, use socket (peer auth) if user matches, otherwise use TCP with password
+    local psql_cmd="psql"
+    local current_user="${USER:-$(whoami)}"
+    
+    # If DBUSER matches current user and DBHOST is localhost, use peer authentication (socket)
+    if [[ "${DBUSER}" == "${current_user}" ]] && [[ "${DBHOST}" == "localhost" || "${DBHOST}" == "127.0.0.1" || -z "${DBHOST}" ]]; then
+        # Peer authentication - don't specify user or host
+        if [[ -n "${DBPORT}" && "${DBPORT}" != "5432" ]]; then
+            psql_cmd="${psql_cmd} -p ${DBPORT}"
         fi
     else
-        if ! result=$(psql \
-            -h "${DBHOST}" \
-            -p "${DBPORT}" \
-            -U "${DBUSER}" \
-            -d "${dbname}" \
-            -t -A \
-            -c "${query}" 2>&1); then
-            echo "Error executing query: ${result}" >&2
-            return 1
+        # Password authentication - specify user and use TCP
+        psql_cmd="${psql_cmd} -U ${DBUSER}"
+        if [[ -n "${DBHOST}" && "${DBHOST}" != "localhost" && "${DBHOST}" != "127.0.0.1" ]]; then
+            psql_cmd="${psql_cmd} -h ${DBHOST}"
         fi
+        if [[ -n "${DBPORT}" && "${DBPORT}" != "5432" ]]; then
+            psql_cmd="${psql_cmd} -p ${DBPORT}"
+        fi
+        # Use PGPASSWORD if set, otherwise rely on .pgpass
+        if [[ -n "${PGPASSWORD:-}" ]]; then
+            psql_cmd="PGPASSWORD=\"${PGPASSWORD}\" ${psql_cmd}"
+        fi
+    fi
+    
+    # Execute query
+    # Use printf %q to properly escape the query for eval, or pass it differently
+    # For now, use a temporary approach: write query to a variable and use it carefully
+    local query_escaped
+    query_escaped=$(printf '%q' "${query}")
+    
+    if ! result=$(eval "${psql_cmd} -d ${dbname} -t -A -c ${query_escaped}" 2>&1); then
+        echo "Error executing query: ${result}" >&2
+        return 1
     fi
     
     echo "${result}"
@@ -127,27 +138,32 @@ execute_sql_file() {
         return 1
     fi
     
-    # Use PGPASSWORD if set, otherwise let psql use default authentication
-    if [[ -n "${PGPASSWORD:-}" ]]; then
-        if ! PGPASSWORD="${PGPASSWORD}" psql \
-            -h "${DBHOST}" \
-            -p "${DBPORT}" \
-            -U "${DBUSER}" \
-            -d "${dbname}" \
-            -f "${sql_file}" > /dev/null 2>&1; then
-            echo "Error executing SQL file: ${sql_file}" >&2
-            return 1
+    # Build psql command (same logic as execute_sql_query)
+    local psql_cmd="psql"
+    local current_user="${USER:-$(whoami)}"
+    
+    if [[ "${DBUSER}" == "${current_user}" ]] && [[ "${DBHOST}" == "localhost" || "${DBHOST}" == "127.0.0.1" || -z "${DBHOST}" ]]; then
+        # Peer authentication
+        if [[ -n "${DBPORT}" && "${DBPORT}" != "5432" ]]; then
+            psql_cmd="${psql_cmd} -p ${DBPORT}"
         fi
     else
-        if ! psql \
-            -h "${DBHOST}" \
-            -p "${DBPORT}" \
-            -U "${DBUSER}" \
-            -d "${dbname}" \
-            -f "${sql_file}" > /dev/null 2>&1; then
-            echo "Error executing SQL file: ${sql_file}" >&2
-            return 1
+        # Password authentication
+        psql_cmd="${psql_cmd} -U ${DBUSER}"
+        if [[ -n "${DBHOST}" && "${DBHOST}" != "localhost" && "${DBHOST}" != "127.0.0.1" ]]; then
+            psql_cmd="${psql_cmd} -h ${DBHOST}"
         fi
+        if [[ -n "${DBPORT}" && "${DBPORT}" != "5432" ]]; then
+            psql_cmd="${psql_cmd} -p ${DBPORT}"
+        fi
+        if [[ -n "${PGPASSWORD:-}" ]]; then
+            psql_cmd="PGPASSWORD=\"${PGPASSWORD}\" ${psql_cmd}"
+        fi
+    fi
+    
+    if ! eval "${psql_cmd} -d ${dbname} -f \"${sql_file}\"" > /dev/null 2>&1; then
+        echo "Error executing SQL file: ${sql_file}" >&2
+        return 1
     fi
     
     return 0
@@ -165,30 +181,33 @@ execute_sql_file() {
 check_database_connection() {
     local dbname="${1:-${DBNAME}}"
     
-    # Use PGPASSWORD if set, otherwise let psql use default authentication (peer, md5, etc.)
-    # Only set PGPASSWORD if it's actually configured to avoid forcing password auth
-    if [[ -n "${PGPASSWORD:-}" ]]; then
-        if PGPASSWORD="${PGPASSWORD}" psql \
-            -h "${DBHOST}" \
-            -p "${DBPORT}" \
-            -U "${DBUSER}" \
-            -d "${dbname}" \
-            -c "SELECT 1" > /dev/null 2>&1; then
-            return 0
-        else
-            return 1
+    # Build psql command (same logic as execute_sql_query)
+    local psql_cmd="psql"
+    local current_user="${USER:-$(whoami)}"
+    
+    if [[ "${DBUSER}" == "${current_user}" ]] && [[ "${DBHOST}" == "localhost" || "${DBHOST}" == "127.0.0.1" || -z "${DBHOST}" ]]; then
+        # Peer authentication
+        if [[ -n "${DBPORT}" && "${DBPORT}" != "5432" ]]; then
+            psql_cmd="${psql_cmd} -p ${DBPORT}"
         fi
     else
-        if psql \
-            -h "${DBHOST}" \
-            -p "${DBPORT}" \
-            -U "${DBUSER}" \
-            -d "${dbname}" \
-            -c "SELECT 1" > /dev/null 2>&1; then
-            return 0
-        else
-            return 1
+        # Password authentication
+        psql_cmd="${psql_cmd} -U ${DBUSER}"
+        if [[ -n "${DBHOST}" && "${DBHOST}" != "localhost" && "${DBHOST}" != "127.0.0.1" ]]; then
+            psql_cmd="${psql_cmd} -h ${DBHOST}"
         fi
+        if [[ -n "${DBPORT}" && "${DBPORT}" != "5432" ]]; then
+            psql_cmd="${psql_cmd} -p ${DBPORT}"
+        fi
+        if [[ -n "${PGPASSWORD:-}" ]]; then
+            psql_cmd="PGPASSWORD=\"${PGPASSWORD}\" ${psql_cmd}"
+        fi
+    fi
+    
+    if eval "${psql_cmd} -d ${dbname} -c \"SELECT 1\"" > /dev/null 2>&1; then
+        return 0
+    else
+        return 1
     fi
 }
 
@@ -223,9 +242,17 @@ store_metric() {
     esac
     
     # Build SQL query
+    # Escape single quotes in metadata JSON for SQL
+    # PostgreSQL requires single quotes to be doubled in string literals
+    local metadata_escaped="${metadata}"
+    # Escape single quotes by doubling them (PostgreSQL escaping)
+    metadata_escaped="${metadata_escaped//\'/\'\'}"
+    
+    # Build query - wrap JSON in single quotes and cast to jsonb
+    # The JSON should already be properly formatted from record_metric
     local query
     query="INSERT INTO metrics (component, metric_name, metric_value, metric_unit, metadata)
-           VALUES ('${component}', '${metric_name}', ${metric_value}, '${metric_unit}', '${metadata}'::jsonb);"
+           VALUES ('${component}', '${metric_name}', ${metric_value}, '${metric_unit}', '${metadata_escaped}'::jsonb);"
     
     if ! execute_sql_query "${query}" > /dev/null; then
         return 1

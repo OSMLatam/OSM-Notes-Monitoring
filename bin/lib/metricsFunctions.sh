@@ -304,7 +304,13 @@ record_metric() {
         for pair in "${pairs[@]}"; do
             local key="${pair%%=*}"
             local value="${pair#*=}"
-            # Escape quotes in value
+            # Trim whitespace
+            key="${key#"${key%%[![:space:]]*}"}"
+            key="${key%"${key##*[![:space:]]}"}"
+            value="${value#"${value%%[![:space:]]*}"}"
+            value="${value%"${value##*[![:space:]]}"}"
+            # Escape quotes and backslashes in value for JSON
+            value="${value//\\/\\\\}"
             value="${value//\"/\\\"}"
             json_pairs+=("\"${key}\":\"${value}\"")
         done
