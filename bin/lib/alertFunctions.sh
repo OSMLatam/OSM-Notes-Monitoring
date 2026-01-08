@@ -69,6 +69,14 @@ store_alert() {
     local message="${4:?Message required}"
     local metadata="${5:-null}"
     
+    # Normalize alert level to lowercase
+    alert_level=$(echo "${alert_level}" | tr '[:upper:]' '[:lower:]')
+    
+    # Map ERROR to critical (since ERROR is not a valid level)
+    if [[ "${alert_level}" == "error" ]]; then
+        alert_level="critical"
+    fi
+    
     # Validate alert level
     case "${alert_level}" in
         critical|warning|info)
@@ -88,24 +96,24 @@ store_alert() {
     fi
     
     # Get database connection info
-    local dbname="${DBNAME:-osm_notes_monitoring}"
-    local dbhost="${DBHOST:-localhost}"
-    local dbport="${DBPORT:-5432}"
-    local dbuser="${DBUSER:-postgres}"
+    local dbname="${DBNAME:-notes_monitoring}"
     
-    # Insert alert
+    # Insert alert - escape single quotes in message and metadata
+    local message_escaped="${message//\'/\'\'}"
+    local metadata_escaped="${metadata}"
+    metadata_escaped="${metadata_escaped//\'/\'\'}"
+    
+    # Build query
     local query
-    query="INSERT INTO alerts (component, alert_level, alert_type, message, metadata)
-           VALUES ('${component}', '${alert_level}', '${alert_type}', '${message}', '${metadata}'::jsonb);"
+    if [[ "${metadata}" == "null" || -z "${metadata}" ]]; then
+        query="INSERT INTO alerts (component, alert_level, alert_type, message) VALUES ('${component}', '${alert_level}', '${alert_type}', '${message_escaped}');"
+    else
+        query="INSERT INTO alerts (component, alert_level, alert_type, message, metadata) VALUES ('${component}', '${alert_level}', '${alert_type}', '${message_escaped}', E'${metadata_escaped}'::jsonb);"
+    fi
     
-    # Use PGPASSWORD only if set, otherwise let psql use default authentication
-    if [[ -n "${PGPASSWORD:-}" ]]; then
-        if PGPASSWORD="${PGPASSWORD}" psql \
-            -h "${dbhost}" \
-            -p "${dbport}" \
-            -U "${dbuser}" \
-            -d "${dbname}" \
-            -c "${query}" > /dev/null 2>&1; then
+    # Use execute_sql_query if available, otherwise fall back to direct psql
+    if command -v execute_sql_query > /dev/null 2>&1; then
+        if execute_sql_query "${query}" "${dbname}" > /dev/null 2>&1; then
             log_info "Alert stored: ${component}/${alert_type}"
             return 0
         else
@@ -113,12 +121,34 @@ store_alert() {
             return 1
         fi
     else
-        if psql \
-            -h "${dbhost}" \
-            -p "${dbport}" \
-            -U "${dbuser}" \
-            -d "${dbname}" \
-            -c "${query}" > /dev/null 2>&1; then
+        # Fallback: use psql directly (same logic as execute_sql_query)
+        local dbhost="${DBHOST:-localhost}"
+        local dbport="${DBPORT:-5432}"
+        local dbuser="${DBUSER:-notes}"
+        local psql_cmd="psql"
+        local current_user="${USER:-$(whoami)}"
+        
+        if [[ "${dbuser}" == "${current_user}" ]] && [[ "${dbhost}" == "localhost" || "${dbhost}" == "127.0.0.1" || -z "${dbhost}" ]]; then
+            if [[ -n "${dbport}" && "${dbport}" != "5432" ]]; then
+                psql_cmd="${psql_cmd} -p ${dbport}"
+            fi
+        else
+            psql_cmd="${psql_cmd} -U ${dbuser}"
+            if [[ -n "${dbhost}" && "${dbhost}" != "localhost" && "${dbhost}" != "127.0.0.1" ]]; then
+                psql_cmd="${psql_cmd} -h ${dbhost}"
+            fi
+            if [[ -n "${dbport}" && "${dbport}" != "5432" ]]; then
+                psql_cmd="${psql_cmd} -p ${dbport}"
+            fi
+            if [[ -n "${PGPASSWORD:-}" ]]; then
+                psql_cmd="PGPASSWORD=\"${PGPASSWORD}\" ${psql_cmd}"
+            fi
+        fi
+        
+        local query_escaped
+        query_escaped=$(printf '%q' "${query}")
+        
+        if eval "${psql_cmd} -d ${dbname} -c ${query_escaped}" > /dev/null 2>&1; then
             log_info "Alert stored: ${component}/${alert_type}"
             return 0
         else
@@ -242,7 +272,7 @@ send_alert() {
     local message="${4:?Message required}"
     local metadata="${5:-null}"
     
-    # Store alert in database
+    # Store alert in database (normalization happens in store_alert)
     if ! store_alert "${component}" "${alert_level}" "${alert_type}" "${message}" "${metadata}"; then
         log_error "Failed to store alert, aborting send_alert"
         return 1
