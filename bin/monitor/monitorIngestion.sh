@@ -27,6 +27,8 @@ source "${PROJECT_ROOT}/bin/lib/configFunctions.sh"
 source "${PROJECT_ROOT}/bin/lib/alertFunctions.sh"
 # shellcheck disable=SC1091
 source "${PROJECT_ROOT}/bin/lib/metricsFunctions.sh"
+# shellcheck disable=SC1091
+source "${PROJECT_ROOT}/bin/lib/parseApiLogs.sh"
 
 # Set default LOG_DIR if not set
 export LOG_DIR="${LOG_DIR:-${PROJECT_ROOT}/logs}"
@@ -67,6 +69,7 @@ Check Types:
     error-rate      Check error rate from logs
     disk-space      Check disk space usage
     api-download    Check API download status
+    api-advanced    Check advanced API metrics
     daemon          Check daemon process metrics
     all             Run all checks (default)
 
@@ -1372,6 +1375,172 @@ check_api_download_status() {
 }
 
 ##
+# Check advanced API metrics using log parser
+##
+check_advanced_api_metrics() {
+    log_info "${COMPONENT}: Starting advanced API metrics check"
+    
+    # Check if ingestion repository exists
+    if [[ ! -d "${INGESTION_REPO_PATH}" ]]; then
+        log_debug "${COMPONENT}: Ingestion repository not found: ${INGESTION_REPO_PATH}"
+        return 0
+    fi
+    
+    # Check if parseApiLogs.sh exists
+    local parse_script="${PROJECT_ROOT}/bin/lib/parseApiLogs.sh"
+    if [[ ! -f "${parse_script}" ]]; then
+        log_debug "${COMPONENT}: API log parser script not found: ${parse_script}"
+        return 0
+    fi
+    
+    # Look for API download logs
+    local ingestion_log_dir="${INGESTION_REPO_PATH}/logs"
+    if [[ ! -d "${ingestion_log_dir}" ]]; then
+        log_debug "${COMPONENT}: Ingestion log directory not found: ${ingestion_log_dir}"
+        return 0
+    fi
+    
+    # Parse logs for last 60 minutes
+    local time_window_minutes=60
+    local metrics_output
+    metrics_output=$(parse_api_logs_aggregated "${ingestion_log_dir}" "${time_window_minutes}" 2>/dev/null || echo "")
+    
+    if [[ -z "${metrics_output}" ]]; then
+        log_debug "${COMPONENT}: No API metrics extracted from logs"
+        return 0
+    fi
+    
+    # Extract metrics from output
+    local total_requests=0
+    local errors_4xx=0
+    local errors_5xx=0
+    local rate_limit_hits=0
+    local avg_response_time_ms=0
+    local avg_response_size_bytes=0
+    local avg_notes_per_request=0
+    local success_rate_percent=100
+    local timeout_rate_percent=0
+    local requests_per_minute=0
+    local requests_per_hour=0
+    local last_note_timestamp=0
+    
+    # Note: successful_requests, failed_requests, timeout_requests, and last_request_timestamp
+    # are extracted but not directly used (they're used indirectly via success_rate_percent, etc.)
+    while IFS='=' read -r key value; do
+        case "${key}" in
+            total_requests)
+                total_requests=${value}
+                ;;
+            errors_4xx)
+                errors_4xx=${value}
+                ;;
+            errors_5xx)
+                errors_5xx=${value}
+                ;;
+            rate_limit_hits)
+                rate_limit_hits=${value}
+                ;;
+            avg_response_time_ms)
+                avg_response_time_ms=${value}
+                ;;
+            avg_response_size_bytes)
+                avg_response_size_bytes=${value}
+                ;;
+            avg_notes_per_request)
+                avg_notes_per_request=${value}
+                ;;
+            success_rate_percent)
+                success_rate_percent=${value}
+                ;;
+            timeout_rate_percent)
+                timeout_rate_percent=${value}
+                ;;
+            requests_per_minute)
+                requests_per_minute=${value}
+                ;;
+            requests_per_hour)
+                requests_per_hour=${value}
+                ;;
+            last_note_timestamp)
+                last_note_timestamp=${value}
+                ;;
+            # Ignore unused metrics: successful_requests, failed_requests, timeout_requests, last_request_timestamp
+            successful_requests|failed_requests|timeout_requests|last_request_timestamp)
+                ;;
+        esac
+    done <<< "${metrics_output}"
+    
+    # Record metrics
+    if [[ ${total_requests} -gt 0 ]]; then
+        record_metric "${COMPONENT}" "api_response_time_ms" "${avg_response_time_ms}" "component=ingestion"
+        record_metric "${COMPONENT}" "api_success_rate_percent" "${success_rate_percent}" "component=ingestion"
+        record_metric "${COMPONENT}" "api_timeout_rate_percent" "${timeout_rate_percent}" "component=ingestion"
+        record_metric "${COMPONENT}" "api_errors_4xx_count" "${errors_4xx}" "component=ingestion"
+        record_metric "${COMPONENT}" "api_errors_5xx_count" "${errors_5xx}" "component=ingestion"
+        record_metric "${COMPONENT}" "api_requests_per_minute" "${requests_per_minute}" "component=ingestion"
+        record_metric "${COMPONENT}" "api_requests_per_hour" "${requests_per_hour}" "component=ingestion"
+        record_metric "${COMPONENT}" "api_rate_limit_hits_count" "${rate_limit_hits}" "component=ingestion"
+        record_metric "${COMPONENT}" "api_response_size_bytes" "${avg_response_size_bytes}" "component=ingestion"
+        record_metric "${COMPONENT}" "api_notes_per_request" "${avg_notes_per_request}" "component=ingestion"
+        
+        if [[ ${last_note_timestamp} -gt 0 ]]; then
+            record_metric "${COMPONENT}" "api_last_note_timestamp" "${last_note_timestamp}" "component=ingestion"
+        fi
+        
+        log_debug "${COMPONENT}: API metrics - Requests: ${total_requests}, Success: ${success_rate_percent}%, Response time: ${avg_response_time_ms}ms"
+    fi
+    
+    # Check thresholds and send alerts
+    local success_threshold="${INGESTION_API_SUCCESS_RATE_THRESHOLD:-95}"
+    if [[ ${total_requests} -gt 0 ]] && [[ ${success_rate_percent} -lt ${success_threshold} ]]; then
+        log_warning "${COMPONENT}: API success rate (${success_rate_percent}%) below threshold (${success_threshold}%)"
+        send_alert "${COMPONENT}" "WARNING" "api_success_rate_low" "API success rate is low: ${success_rate_percent}% (threshold: ${success_threshold}%)"
+    fi
+    
+    if [[ ${errors_5xx} -gt 0 ]]; then
+        log_critical "${COMPONENT}: Detected ${errors_5xx} HTTP 5xx errors"
+        send_alert "${COMPONENT}" "CRITICAL" "api_errors_5xx" "Detected ${errors_5xx} HTTP 5xx errors"
+        return 1
+    fi
+    
+    local rate_limit_threshold="${INGESTION_API_RATE_LIMIT_THRESHOLD:-10}"
+    if [[ ${rate_limit_hits} -gt ${rate_limit_threshold} ]]; then
+        log_warning "${COMPONENT}: Rate limit hits (${rate_limit_hits}) exceed threshold (${rate_limit_threshold})"
+        send_alert "${COMPONENT}" "WARNING" "api_rate_limit_frequent" "Rate limit reached frequently: ${rate_limit_hits} hits"
+    fi
+    
+    # Check sync gap (compare last note timestamp with database)
+    if [[ ${last_note_timestamp} -gt 0 ]]; then
+        local sync_gap_query
+        sync_gap_query="SELECT EXTRACT(EPOCH FROM (NOW() - MAX(created_at)))::integer FROM notes;"
+        local db_last_note_age
+        db_last_note_age=$(execute_sql_query "${sync_gap_query}" 2>/dev/null | tr -d '[:space:]' || echo "")
+        
+        if [[ -n "${db_last_note_age}" ]] && [[ "${db_last_note_age}" =~ ^[0-9]+$ ]]; then
+            local api_note_age
+            api_note_age=$(date +%s)
+            api_note_age=$((api_note_age - last_note_timestamp))
+            
+            local sync_gap=$((api_note_age - db_last_note_age))
+            if [[ ${sync_gap} -lt 0 ]]; then
+                sync_gap=$((sync_gap * -1))
+            fi
+            
+            record_metric "${COMPONENT}" "api_sync_gap_seconds" "${sync_gap}" "component=ingestion"
+            
+            local sync_gap_threshold="${INGESTION_API_SYNC_GAP_THRESHOLD:-3600}"
+            if [[ ${sync_gap} -gt ${sync_gap_threshold} ]]; then
+                log_warning "${COMPONENT}: API sync gap (${sync_gap}s) exceeds threshold (${sync_gap_threshold}s)"
+                send_alert "${COMPONENT}" "WARNING" "api_sync_gap_high" "API sync gap is high: ${sync_gap}s (threshold: ${sync_gap_threshold}s)"
+            fi
+        fi
+    fi
+    
+    log_info "${COMPONENT}: Advanced API metrics check completed"
+    return 0
+}
+
+##
 # Check API download success rate
 ##
 check_api_download_success_rate() {
@@ -1650,6 +1819,13 @@ run_all_checks() {
         checks_failed=$((checks_failed + 1))
     fi
     
+    # Advanced API metrics check
+    if check_advanced_api_metrics; then
+        checks_passed=$((checks_passed + 1))
+    else
+        checks_failed=$((checks_failed + 1))
+    fi
+    
     # Daemon metrics check
     if check_daemon_metrics; then
         checks_passed=$((checks_passed + 1))
@@ -1779,6 +1955,13 @@ main() {
             ;;
         api-download)
             if check_api_download_status && check_api_download_success_rate; then
+                exit 0
+            else
+                exit 1
+            fi
+            ;;
+        api-advanced)
+            if check_advanced_api_metrics; then
                 exit 0
             else
                 exit 1

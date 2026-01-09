@@ -672,6 +672,128 @@ The following metrics are referenced in the code but functions are not yet imple
 - **Expected Range:** Varies
 - **Alert Threshold:** Unexpected size changes
 
+### Advanced API Integration Metrics
+
+#### `api_response_time_ms`
+- **Description:** Average API response time in milliseconds
+- **Type:** Gauge
+- **Unit:** `milliseconds`
+- **Collection:** Extracted from API logs using `parseApiLogs.sh`
+- **Frequency:** Every monitoring cycle
+- **Expected Range:** 100-2000ms
+- **Alert Threshold:** > 5000ms (configurable)
+- **Metadata:** `component=ingestion`
+
+#### `api_success_rate_percent`
+- **Description:** Percentage of successful API requests
+- **Type:** Gauge
+- **Unit:** `percent`
+- **Collection:** Calculated from API logs using `parseApiLogs.sh`
+- **Frequency:** Every monitoring cycle
+- **Expected Range:** 95-100%
+- **Alert Threshold:** < 95% (configurable via `INGESTION_API_SUCCESS_RATE_THRESHOLD`)
+- **Metadata:** `component=ingestion`
+
+#### `api_timeout_rate_percent`
+- **Description:** Percentage of API requests that timed out
+- **Type:** Gauge
+- **Unit:** `percent`
+- **Collection:** Extracted from API logs using `parseApiLogs.sh`
+- **Frequency:** Every monitoring cycle
+- **Expected Range:** 0-5%
+- **Alert Threshold:** > 10%
+- **Metadata:** `component=ingestion`
+
+#### `api_errors_4xx_count`
+- **Description:** Number of HTTP 4xx errors (client errors)
+- **Type:** Counter
+- **Unit:** `count`
+- **Collection:** Extracted from API logs using `parseApiLogs.sh`
+- **Frequency:** Every monitoring cycle
+- **Expected Range:** 0
+- **Alert Threshold:** > 0 (warning)
+- **Metadata:** `component=ingestion`
+
+#### `api_errors_5xx_count`
+- **Description:** Number of HTTP 5xx errors (server errors)
+- **Type:** Counter
+- **Unit:** `count`
+- **Collection:** Extracted from API logs using `parseApiLogs.sh`
+- **Frequency:** Every monitoring cycle
+- **Expected Range:** 0
+- **Alert Threshold:** > 0 (critical)
+- **Metadata:** `component=ingestion`
+
+#### `api_requests_per_minute`
+- **Description:** Number of API requests per minute
+- **Type:** Gauge
+- **Unit:** `count`
+- **Collection:** Calculated from API logs using `parseApiLogs.sh`
+- **Frequency:** Every monitoring cycle
+- **Expected Range:** Varies with usage
+- **Alert Threshold:** None (informational)
+- **Metadata:** `component=ingestion`
+
+#### `api_requests_per_hour`
+- **Description:** Number of API requests per hour
+- **Type:** Gauge
+- **Unit:** `count`
+- **Collection:** Calculated from API logs using `parseApiLogs.sh`
+- **Frequency:** Every monitoring cycle
+- **Expected Range:** Varies with usage
+- **Alert Threshold:** None (informational)
+- **Metadata:** `component=ingestion`
+
+#### `api_rate_limit_hits_count`
+- **Description:** Number of times rate limit was hit
+- **Type:** Counter
+- **Unit:** `count`
+- **Collection:** Extracted from API logs using `parseApiLogs.sh`
+- **Frequency:** Every monitoring cycle
+- **Expected Range:** 0
+- **Alert Threshold:** > 10 (configurable via `INGESTION_API_RATE_LIMIT_THRESHOLD`)
+- **Metadata:** `component=ingestion`
+
+#### `api_response_size_bytes`
+- **Description:** Average size of API responses in bytes
+- **Type:** Gauge
+- **Unit:** `bytes`
+- **Collection:** Extracted from API logs using `parseApiLogs.sh`
+- **Frequency:** Every monitoring cycle
+- **Expected Range:** Varies with response content
+- **Alert Threshold:** None (informational)
+- **Metadata:** `component=ingestion`
+
+#### `api_notes_per_request`
+- **Description:** Average number of notes downloaded per API request
+- **Type:** Gauge
+- **Unit:** `count`
+- **Collection:** Extracted from API logs using `parseApiLogs.sh`
+- **Frequency:** Every monitoring cycle
+- **Expected Range:** Varies with API response
+- **Alert Threshold:** None (informational)
+- **Metadata:** `component=ingestion`
+
+#### `api_last_note_timestamp`
+- **Description:** Unix timestamp of the last note received from API
+- **Type:** Gauge
+- **Unit:** `seconds` (Unix timestamp)
+- **Collection:** Extracted from API logs using `parseApiLogs.sh`
+- **Frequency:** Every monitoring cycle
+- **Expected Range:** Current timestamp ± 1 hour
+- **Alert Threshold:** None (used for sync gap calculation)
+- **Metadata:** `component=ingestion`
+
+#### `api_sync_gap_seconds`
+- **Description:** Time difference between API last note timestamp and database last note timestamp
+- **Type:** Gauge
+- **Unit:** `seconds`
+- **Collection:** Calculated by comparing `api_last_note_timestamp` with database `MAX(created_at)`
+- **Frequency:** Every monitoring cycle
+- **Expected Range:** 0-300 seconds
+- **Alert Threshold:** > 3600 seconds (1 hour, configurable via `INGESTION_API_SYNC_GAP_THRESHOLD`)
+- **Metadata:** `component=ingestion`
+
 ### Data Processing Metrics
 
 #### `records_processed_count`
