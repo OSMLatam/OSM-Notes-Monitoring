@@ -69,6 +69,10 @@ INGESTION_API_SYNC_GAP_THRESHOLD=3600  # seconds (1 hour) - alert if sync gap ex
 INGESTION_BOUNDARY_UPDATE_AGE_THRESHOLD=168  # hours (7 days) - alert if boundary data is older than this
 INGESTION_BOUNDARY_NO_COUNTRY_THRESHOLD=10  # percentage - alert if percentage of notes without country exceeds this
 
+# Structured Log Analysis Thresholds
+INGESTION_LOG_ANALYSIS_WINDOW_HOURS=24  # hours - time window for log analysis
+INGESTION_SLOW_STAGE_THRESHOLD_SECONDS=30  # seconds - alert if stage duration exceeds this
+
 # Daemon Monitoring Thresholds
 INGESTION_DAEMON_CYCLE_DURATION_THRESHOLD=30  # seconds - alert if cycle duration exceeds this
 INGESTION_DAEMON_SUCCESS_RATE_THRESHOLD=95  # percentage - minimum acceptable cycle success rate

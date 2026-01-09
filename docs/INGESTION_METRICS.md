@@ -889,6 +889,210 @@ The following metrics are referenced in the code but functions are not yet imple
 - **Alert Threshold:** > 0 (warning - indicates notes need reassignment after boundary update)
 - **Metadata:** `component=ingestion`
 
+### Structured Log Analysis Metrics
+
+Metrics extracted from structured daemon logs using `parseStructuredLogs.sh`.
+
+#### `log_cycle_total_duration_seconds`
+- **Description:** Total duration of the last completed cycle in seconds
+- **Type:** Gauge
+- **Unit:** `seconds`
+- **Collection:** Collected during `parse_cycle_metrics()`
+- **Frequency:** Every monitoring cycle
+- **Expected Range:** 5-60 seconds (typical cycle duration)
+- **Alert Threshold:** > 30 seconds (configurable via `INGESTION_DAEMON_CYCLE_DURATION_THRESHOLD`)
+- **Metadata:** `component=ingestion`
+
+#### `log_cycle_number`
+- **Description:** Current cycle number from daemon logs
+- **Type:** Gauge
+- **Unit:** `count`
+- **Collection:** Collected during `parse_cycle_metrics()`
+- **Frequency:** Every monitoring cycle
+- **Expected Range:** Incrementing integer
+- **Alert Threshold:** None (informational)
+- **Metadata:** `component=ingestion`
+
+#### `log_cycles_frequency_per_hour`
+- **Description:** Number of cycles completed per hour (calculated from log timestamps)
+- **Type:** Gauge
+- **Unit:** `count/hour`
+- **Collection:** Collected during `parse_cycle_metrics()`
+- **Frequency:** Every monitoring cycle
+- **Expected Range:** 30-120 cycles/hour (depends on cycle interval)
+- **Alert Threshold:** 0 (indicates log gap or processing stopped)
+- **Metadata:** `component=ingestion`
+
+#### `log_cycle_success_rate_percent`
+- **Description:** Percentage of cycles that completed successfully vs failed
+- **Type:** Gauge
+- **Unit:** `percent`
+- **Collection:** Collected during `parse_cycle_metrics()`
+- **Frequency:** Every monitoring cycle
+- **Expected Range:** 95-100%
+- **Alert Threshold:** < 95% (configurable via `INGESTION_DAEMON_SUCCESS_RATE_THRESHOLD`)
+- **Metadata:** `component=ingestion`
+
+#### `log_cycle_avg_duration_seconds`
+- **Description:** Average cycle duration over the analysis window
+- **Type:** Gauge
+- **Unit:** `seconds`
+- **Collection:** Collected during `parse_cycle_metrics()`
+- **Frequency:** Every monitoring cycle
+- **Expected Range:** 5-30 seconds
+- **Alert Threshold:** > 30 seconds
+- **Metadata:** `component=ingestion`
+
+#### `log_cycle_min_duration_seconds`
+- **Description:** Minimum cycle duration observed in the analysis window
+- **Type:** Gauge
+- **Unit:** `seconds`
+- **Collection:** Collected during `parse_cycle_metrics()`
+- **Frequency:** Every monitoring cycle
+- **Expected Range:** 1-10 seconds
+- **Alert Threshold:** None (informational)
+- **Metadata:** `component=ingestion`
+
+#### `log_cycle_max_duration_seconds`
+- **Description:** Maximum cycle duration observed in the analysis window
+- **Type:** Gauge
+- **Unit:** `seconds`
+- **Collection:** Collected during `parse_cycle_metrics()`
+- **Frequency:** Every monitoring cycle
+- **Expected Range:** 10-60 seconds
+- **Alert Threshold:** > 60 seconds
+- **Metadata:** `component=ingestion`
+
+#### `log_notes_processed_per_cycle`
+- **Description:** Number of notes processed in the last cycle
+- **Type:** Gauge
+- **Unit:** `count`
+- **Collection:** Collected during `parse_processing_metrics()`
+- **Frequency:** Every monitoring cycle
+- **Expected Range:** Varies with data volume
+- **Alert Threshold:** 0 (no notes processed)
+- **Metadata:** `component=ingestion`
+
+#### `log_notes_new_count`
+- **Description:** Number of new notes inserted in the last cycle
+- **Type:** Gauge
+- **Unit:** `count`
+- **Collection:** Collected during `parse_processing_metrics()`
+- **Frequency:** Every monitoring cycle
+- **Expected Range:** Varies with data volume
+- **Alert Threshold:** None (informational)
+- **Metadata:** `component=ingestion`
+
+#### `log_notes_updated_count`
+- **Description:** Number of notes updated in the last cycle
+- **Type:** Gauge
+- **Unit:** `count`
+- **Collection:** Collected during `parse_processing_metrics()`
+- **Frequency:** Every monitoring cycle
+- **Expected Range:** Varies with data volume
+- **Alert Threshold:** None (informational)
+- **Metadata:** `component=ingestion`
+
+#### `log_comments_processed_per_cycle`
+- **Description:** Number of comments processed in the last cycle
+- **Type:** Gauge
+- **Unit:** `count`
+- **Collection:** Collected during `parse_processing_metrics()`
+- **Frequency:** Every monitoring cycle
+- **Expected Range:** Varies with data volume
+- **Alert Threshold:** None (informational)
+- **Metadata:** `component=ingestion`
+
+#### `log_processing_rate_notes_per_second`
+- **Description:** Processing rate calculated as notes processed divided by cycle duration
+- **Type:** Gauge
+- **Unit:** `notes/second`
+- **Collection:** Collected during `parse_processing_metrics()`
+- **Frequency:** Every monitoring cycle
+- **Expected Range:** 1-100 notes/second (depends on data volume and processing complexity)
+- **Alert Threshold:** 0 (no processing)
+- **Metadata:** `component=ingestion`
+
+#### `log_stage_duration_seconds`
+- **Description:** Average duration of a specific processing stage (from [TIMING] logs)
+- **Type:** Gauge
+- **Unit:** `seconds`
+- **Collection:** Collected during `parse_stage_timing_metrics()`
+- **Frequency:** Every monitoring cycle
+- **Expected Range:** Varies by stage (typically 0.1-10 seconds)
+- **Alert Threshold:** > 30 seconds per stage (configurable via `INGESTION_SLOW_STAGE_THRESHOLD_SECONDS`)
+- **Metadata:** `component=ingestion,stage=<stage_name>`
+
+#### `log_slowest_stage_duration_seconds`
+- **Description:** Duration of the slowest stage in the last analysis window
+- **Type:** Gauge
+- **Unit:** `seconds`
+- **Collection:** Collected during `parse_stage_timing_metrics()`
+- **Frequency:** Every monitoring cycle
+- **Expected Range:** 1-30 seconds
+- **Alert Threshold:** > 30 seconds (configurable via `INGESTION_SLOW_STAGE_THRESHOLD_SECONDS`)
+- **Metadata:** `component=ingestion,stage=<stage_name>`
+
+#### `log_analyze_cache_hits`
+- **Description:** Number of ANALYZE cache hits detected in logs
+- **Type:** Counter
+- **Unit:** `count`
+- **Collection:** Collected during `parse_optimization_metrics()`
+- **Frequency:** Every monitoring cycle
+- **Expected Range:** Varies (higher is better)
+- **Alert Threshold:** None (informational)
+- **Metadata:** `component=ingestion`
+
+#### `log_analyze_cache_misses`
+- **Description:** Number of ANALYZE cache misses detected in logs
+- **Type:** Counter
+- **Unit:** `count`
+- **Collection:** Collected during `parse_optimization_metrics()`
+- **Frequency:** Every monitoring cycle
+- **Expected Range:** Varies (lower is better)
+- **Alert Threshold:** None (informational)
+- **Metadata:** `component=ingestion`
+
+#### `log_analyze_cache_effectiveness`
+- **Description:** Percentage of ANALYZE operations that hit the cache (cache hits / total operations)
+- **Type:** Gauge
+- **Unit:** `percent`
+- **Collection:** Collected during `parse_optimization_metrics()`
+- **Frequency:** Every monitoring cycle
+- **Expected Range:** 50-100% (higher is better)
+- **Alert Threshold:** < 50% (indicates cache may not be effective)
+- **Metadata:** `component=ingestion`
+
+#### `log_integrity_optimization_count`
+- **Description:** Number of integrity optimization operations detected (skipped checks, etc.)
+- **Type:** Counter
+- **Unit:** `count`
+- **Collection:** Collected during `parse_optimization_metrics()`
+- **Frequency:** Every monitoring cycle
+- **Expected Range:** Varies (higher indicates more optimizations applied)
+- **Alert Threshold:** None (informational)
+- **Metadata:** `component=ingestion`
+
+#### `log_sequence_sync_count`
+- **Description:** Number of sequence synchronization operations detected
+- **Type:** Counter
+- **Unit:** `count`
+- **Collection:** Collected during `parse_optimization_metrics()`
+- **Frequency:** Every monitoring cycle
+- **Expected Range:** Varies (typically low, only when needed)
+- **Alert Threshold:** None (informational)
+- **Metadata:** `component=ingestion`
+
+#### `log_optimization_time_saved_seconds`
+- **Description:** Total time saved by optimizations (extracted from log messages)
+- **Type:** Counter
+- **Unit:** `seconds`
+- **Collection:** Collected during `parse_optimization_metrics()`
+- **Frequency:** Every monitoring cycle
+- **Expected Range:** Varies (higher is better)
+- **Alert Threshold:** None (informational)
+- **Metadata:** `component=ingestion`
+
 ### Data Processing Metrics
 
 #### `records_processed_count`

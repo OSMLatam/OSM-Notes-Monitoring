@@ -29,6 +29,8 @@ source "${PROJECT_ROOT}/bin/lib/alertFunctions.sh"
 source "${PROJECT_ROOT}/bin/lib/metricsFunctions.sh"
 # shellcheck disable=SC1091
 source "${PROJECT_ROOT}/bin/lib/parseApiLogs.sh"
+# shellcheck disable=SC1091
+source "${PROJECT_ROOT}/bin/lib/parseStructuredLogs.sh"
 
 # Set default LOG_DIR if not set
 export LOG_DIR="${LOG_DIR:-${PROJECT_ROOT}/logs}"
@@ -72,6 +74,7 @@ Check Types:
     api-advanced    Check advanced API metrics
     daemon          Check daemon process metrics
     boundary        Check boundary processing metrics
+    log-analysis    Check structured log analysis metrics
     all             Run all checks (default)
 
 Examples:
@@ -1659,6 +1662,61 @@ check_boundary_metrics() {
 }
 
 ##
+# Check structured log metrics
+##
+check_structured_log_metrics() {
+    log_info "${COMPONENT}: Starting structured log metrics check"
+    
+    # Check if daemon log file exists
+    local daemon_log_file="${DAEMON_LOG_FILE:-/var/log/osm-notes-ingestion/daemon/processAPINotesDaemon.log}"
+    
+    if [[ ! -f "${daemon_log_file}" ]]; then
+        log_debug "${COMPONENT}: Daemon log file not found: ${daemon_log_file}"
+        return 0
+    fi
+    
+    # Parse structured logs (last 24 hours by default)
+    local time_window_hours="${INGESTION_LOG_ANALYSIS_WINDOW_HOURS:-24}"
+    
+    if ! parse_structured_logs "${daemon_log_file}" "${time_window_hours}"; then
+        log_warning "${COMPONENT}: Structured log parsing failed"
+        send_alert "${COMPONENT}" "WARNING" "structured_log_parsing_failed" "Failed to parse structured logs from ${daemon_log_file}"
+        return 1
+    fi
+    
+    # Check for failed cycles
+    local failed_cycles
+    failed_cycles=$(get_metric_value "${COMPONENT}" "daemon_cycles_failed_count" "component=ingestion" || echo "0")
+    
+    if [[ -n "${failed_cycles}" ]] && [[ "${failed_cycles}" =~ ^[0-9]+$ ]] && [[ ${failed_cycles} -gt 0 ]]; then
+        log_warning "${COMPONENT}: Detected ${failed_cycles} failed cycles in logs"
+        send_alert "${COMPONENT}" "CRITICAL" "cycles_failed" "Detected ${failed_cycles} failed cycles in daemon logs"
+    fi
+    
+    # Check for slow stages
+    local slowest_stage_duration
+    slowest_stage_duration=$(get_metric_value "${COMPONENT}" "log_slowest_stage_duration_seconds" "component=ingestion" || echo "0")
+    local stage_threshold="${INGESTION_SLOW_STAGE_THRESHOLD_SECONDS:-30}"
+    
+    if [[ -n "${slowest_stage_duration}" ]] && [[ "${slowest_stage_duration}" =~ ^[0-9]+$ ]] && [[ ${slowest_stage_duration} -gt ${stage_threshold} ]]; then
+        log_warning "${COMPONENT}: Slowest stage duration (${slowest_stage_duration}s) exceeds threshold (${stage_threshold}s)"
+        send_alert "${COMPONENT}" "WARNING" "slow_stage_detected" "Slowest stage duration: ${slowest_stage_duration}s (threshold: ${stage_threshold}s)"
+    fi
+    
+    # Check for log gaps (no cycles in last hour)
+    local cycles_per_hour
+    cycles_per_hour=$(get_metric_value "${COMPONENT}" "log_cycles_frequency_per_hour" "component=ingestion" || echo "0")
+    
+    if [[ -n "${cycles_per_hour}" ]] && [[ "${cycles_per_hour}" =~ ^[0-9]+$ ]] && [[ ${cycles_per_hour} -eq 0 ]]; then
+        log_warning "${COMPONENT}: No cycles detected in last hour (possible log gap)"
+        send_alert "${COMPONENT}" "WARNING" "log_gap_detected" "No cycles detected in last hour - possible processing gap"
+    fi
+    
+    log_info "${COMPONENT}: Structured log metrics check completed"
+    return 0
+}
+
+##
 # Check API download success rate
 ##
 check_api_download_success_rate() {
@@ -1958,6 +2016,13 @@ run_all_checks() {
         checks_failed=$((checks_failed + 1))
     fi
     
+    # Structured log metrics check
+    if check_structured_log_metrics; then
+        checks_passed=$((checks_passed + 1))
+    else
+        checks_failed=$((checks_failed + 1))
+    fi
+    
     log_info "${COMPONENT}: Monitoring checks completed - passed: ${checks_passed}, failed: ${checks_failed}"
     
     if [[ ${checks_failed} -gt 0 ]]; then
@@ -2101,6 +2166,13 @@ main() {
             ;;
         boundary)
             if check_boundary_metrics; then
+                exit 0
+            else
+                exit 1
+            fi
+            ;;
+        log-analysis|structured-logs)
+            if check_structured_log_metrics; then
                 exit 0
             else
                 exit 1
