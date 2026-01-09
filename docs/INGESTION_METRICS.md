@@ -794,6 +794,101 @@ The following metrics are referenced in the code but functions are not yet imple
 - **Alert Threshold:** > 3600 seconds (1 hour, configurable via `INGESTION_API_SYNC_GAP_THRESHOLD`)
 - **Metadata:** `component=ingestion`
 
+### Boundary Processing Metrics
+
+#### `boundary_countries_last_update_timestamp`
+- **Description:** Unix timestamp of last update to countries table
+- **Type:** Gauge
+- **Unit:** `seconds` (Unix timestamp)
+- **Collection:** Collected during `get_countries_last_update()`
+- **Frequency:** Every monitoring cycle
+- **Expected Range:** Current timestamp ± 7 days
+- **Alert Threshold:** Age > 7 days (configurable via `INGESTION_BOUNDARY_UPDATE_AGE_THRESHOLD`)
+- **Metadata:** `component=ingestion`
+
+#### `boundary_maritime_last_update_timestamp`
+- **Description:** Unix timestamp of last update to maritime_boundaries table
+- **Type:** Gauge
+- **Unit:** `seconds` (Unix timestamp)
+- **Collection:** Collected during `get_maritime_boundaries_last_update()`
+- **Frequency:** Every monitoring cycle
+- **Expected Range:** Current timestamp ± 7 days
+- **Alert Threshold:** Age > 7 days (configurable via `INGESTION_BOUNDARY_UPDATE_AGE_THRESHOLD`)
+- **Metadata:** `component=ingestion`
+
+#### `boundary_update_frequency_hours`
+- **Description:** Hours since last boundary update (countries or maritime)
+- **Type:** Gauge
+- **Unit:** `hours`
+- **Collection:** Calculated during `calculate_update_frequency()`
+- **Frequency:** Every monitoring cycle
+- **Expected Range:** 0-168 hours (7 days)
+- **Alert Threshold:** > 168 hours (configurable via `INGESTION_BOUNDARY_UPDATE_AGE_THRESHOLD`)
+- **Metadata:** `component=ingestion,type={countries|maritime}`
+
+#### `boundary_notes_without_country_count`
+- **Description:** Number of notes without country assignment (country_id IS NULL)
+- **Type:** Gauge
+- **Unit:** `count`
+- **Collection:** Collected during `count_notes_without_country()`
+- **Frequency:** Every monitoring cycle
+- **Expected Range:** 0-10% of total notes
+- **Alert Threshold:** > 10% of total notes (configurable via `INGESTION_BOUNDARY_NO_COUNTRY_THRESHOLD`)
+- **Metadata:** `component=ingestion`
+
+#### `boundary_notes_with_country_count`
+- **Description:** Number of notes with country assignment (country_id IS NOT NULL)
+- **Type:** Gauge
+- **Unit:** `count`
+- **Collection:** Collected during `count_notes_with_country()`
+- **Frequency:** Every monitoring cycle
+- **Expected Range:** 90-100% of total notes
+- **Alert Threshold:** None (used for percentage calculation)
+- **Metadata:** `component=ingestion`
+
+#### `boundary_notes_out_of_bounds_count`
+- **Description:** Number of notes with coordinates outside valid ranges (lat: -90 to 90, lon: -180 to 180)
+- **Type:** Gauge
+- **Unit:** `count`
+- **Collection:** Collected during `detect_notes_out_of_bounds()`
+- **Frequency:** Every monitoring cycle
+- **Expected Range:** 0
+- **Alert Threshold:** > 0 (warning)
+- **Metadata:** `component=ingestion`
+
+#### `boundary_notes_wrong_country_count`
+- **Description:** Total number of notes with incorrect country assignment. Includes:
+  - Notes with country_id that doesn't exist in countries table (referential integrity)
+  - Notes that are geographically outside their assigned country (spatial mismatch)
+  - This is particularly important when boundary data is updated and countries change
+- **Type:** Gauge
+- **Unit:** `count`
+- **Collection:** Collected during `detect_wrong_country_assignments()`
+- **Frequency:** Every monitoring cycle
+- **Expected Range:** 0
+- **Alert Threshold:** > 0 (warning)
+- **Metadata:** `component=ingestion`
+
+#### `boundary_notes_spatial_mismatch_count`
+- **Description:** Number of notes that are geographically outside their assigned country boundaries. These notes need reassignment after boundary updates when country boundaries change.
+- **Type:** Gauge
+- **Unit:** `count`
+- **Collection:** Collected during `detect_wrong_country_assignments()` (spatial check)
+- **Frequency:** Every monitoring cycle
+- **Expected Range:** 0 (should be 0 after reassignment)
+- **Alert Threshold:** > 0 (warning - indicates notes need reassignment)
+- **Metadata:** `component=ingestion`
+
+#### `boundary_notes_affected_by_changes_count`
+- **Description:** Number of notes that were assigned to a country before a boundary update, but after the update their coordinates fall outside the updated country boundaries. This metric helps track how many notes need reassignment after boundary updates.
+- **Type:** Gauge
+- **Unit:** `count`
+- **Collection:** Collected during `detect_notes_affected_by_boundary_changes()`
+- **Frequency:** Every monitoring cycle
+- **Expected Range:** 0 (should be 0 after reassignment)
+- **Alert Threshold:** > 0 (warning - indicates notes need reassignment after boundary update)
+- **Metadata:** `component=ingestion`
+
 ### Data Processing Metrics
 
 #### `records_processed_count`

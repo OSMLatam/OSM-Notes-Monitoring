@@ -71,6 +71,7 @@ Check Types:
     api-download    Check API download status
     api-advanced    Check advanced API metrics
     daemon          Check daemon process metrics
+    boundary        Check boundary processing metrics
     all             Run all checks (default)
 
 Examples:
@@ -1541,6 +1542,123 @@ check_advanced_api_metrics() {
 }
 
 ##
+# Check boundary processing metrics
+##
+check_boundary_metrics() {
+    log_info "${COMPONENT}: Starting boundary metrics check"
+    
+    # Check if boundary metrics collection script exists
+    local boundary_metrics_script="${SCRIPT_DIR}/collectBoundaryMetrics.sh"
+    
+    if [[ ! -f "${boundary_metrics_script}" ]]; then
+        log_debug "${COMPONENT}: Boundary metrics collection script not found: ${boundary_metrics_script}"
+        return 0
+    fi
+    
+    # Check if script is executable
+    if [[ ! -x "${boundary_metrics_script}" ]]; then
+        log_debug "${COMPONENT}: Boundary metrics collection script is not executable: ${boundary_metrics_script}"
+        return 0
+    fi
+    
+    # Run boundary metrics collection
+    local output
+    local exit_code=0
+    
+    if [[ "${TEST_MODE:-false}" == "true" ]]; then
+        # In test mode, capture output for debugging
+        output=$(bash "${boundary_metrics_script}" 2>&1) || exit_code=$?
+        if [[ ${exit_code} -ne 0 ]]; then
+            log_debug "${COMPONENT}: Boundary metrics collection output: ${output}"
+        fi
+    else
+        # In production, run silently and log errors
+        bash "${boundary_metrics_script}" > /dev/null 2>&1 || exit_code=$?
+    fi
+    
+    if [[ ${exit_code} -ne 0 ]]; then
+        log_warning "${COMPONENT}: Boundary metrics collection failed (exit code: ${exit_code})"
+        send_alert "${COMPONENT}" "WARNING" "boundary_metrics_collection_failed" "Boundary metrics collection failed with exit code ${exit_code}"
+        return 1
+    fi
+    
+    # Check collected metrics and send alerts
+    local countries_update_age_query
+    countries_update_age_query="SELECT metric_value FROM metrics 
+                                WHERE component = 'ingestion' 
+                                  AND metric_name = 'boundary_update_frequency_hours' 
+                                  AND metadata LIKE '%type=countries%'
+                                ORDER BY timestamp DESC 
+                                LIMIT 1;"
+    
+    local countries_update_age
+    countries_update_age=$(execute_sql_query "${countries_update_age_query}" 2>/dev/null | tr -d '[:space:]' || echo "")
+    
+    local update_age_threshold="${INGESTION_BOUNDARY_UPDATE_AGE_THRESHOLD:-168}"  # 7 days = 168 hours
+    if [[ -n "${countries_update_age}" ]] && [[ "${countries_update_age}" =~ ^[0-9]+$ ]]; then
+        if [[ ${countries_update_age} -gt ${update_age_threshold} ]]; then
+            log_warning "${COMPONENT}: Countries boundary update age (${countries_update_age} hours) exceeds threshold (${update_age_threshold} hours)"
+            send_alert "${COMPONENT}" "WARNING" "boundary_update_stale" "Countries boundary data is stale: ${countries_update_age} hours old (threshold: ${update_age_threshold} hours)"
+        fi
+    fi
+    
+    # Check percentage of notes without country
+    local notes_without_country_query
+    notes_without_country_query="SELECT metric_value FROM metrics 
+                                 WHERE component = 'ingestion' 
+                                   AND metric_name = 'boundary_notes_without_country_count' 
+                                 ORDER BY timestamp DESC 
+                                 LIMIT 1;"
+    
+    local notes_without_country
+    notes_without_country=$(execute_sql_query "${notes_without_country_query}" 2>/dev/null | tr -d '[:space:]' || echo "")
+    
+    local notes_with_country_query
+    notes_with_country_query="SELECT metric_value FROM metrics 
+                              WHERE component = 'ingestion' 
+                                AND metric_name = 'boundary_notes_with_country_count' 
+                              ORDER BY timestamp DESC 
+                              LIMIT 1;"
+    
+    local notes_with_country
+    notes_with_country=$(execute_sql_query "${notes_with_country_query}" 2>/dev/null | tr -d '[:space:]' || echo "")
+    
+    if [[ -n "${notes_without_country}" ]] && [[ "${notes_without_country}" =~ ^[0-9]+$ ]] && \
+       [[ -n "${notes_with_country}" ]] && [[ "${notes_with_country}" =~ ^[0-9]+$ ]]; then
+        local total_notes=$((notes_without_country + notes_with_country))
+        if [[ ${total_notes} -gt 0 ]]; then
+            local percentage_without_country=0
+            percentage_without_country=$((notes_without_country * 100 / total_notes))
+            
+            local percentage_threshold="${INGESTION_BOUNDARY_NO_COUNTRY_THRESHOLD:-10}"
+            if [[ ${percentage_without_country} -gt ${percentage_threshold} ]]; then
+                log_warning "${COMPONENT}: Percentage of notes without country (${percentage_without_country}%) exceeds threshold (${percentage_threshold}%)"
+                send_alert "${COMPONENT}" "WARNING" "boundary_no_country_high" "High percentage of notes without country: ${percentage_without_country}% (${notes_without_country}/${total_notes})"
+            fi
+        fi
+    fi
+    
+    # Check for notes with wrong country assignments
+    local wrong_country_query
+    wrong_country_query="SELECT metric_value FROM metrics 
+                        WHERE component = 'ingestion' 
+                          AND metric_name = 'boundary_notes_wrong_country_count' 
+                        ORDER BY timestamp DESC 
+                        LIMIT 1;"
+    
+    local wrong_country_count
+    wrong_country_count=$(execute_sql_query "${wrong_country_query}" 2>/dev/null | tr -d '[:space:]' || echo "")
+    
+    if [[ -n "${wrong_country_count}" ]] && [[ "${wrong_country_count}" =~ ^[0-9]+$ ]] && [[ ${wrong_country_count} -gt 0 ]]; then
+        log_warning "${COMPONENT}: Detected ${wrong_country_count} notes with wrong country assignment"
+        send_alert "${COMPONENT}" "WARNING" "boundary_wrong_country" "Detected ${wrong_country_count} notes with wrong country assignment"
+    fi
+    
+    log_info "${COMPONENT}: Boundary metrics check completed"
+    return 0
+}
+
+##
 # Check API download success rate
 ##
 check_api_download_success_rate() {
@@ -1833,6 +1951,13 @@ run_all_checks() {
         checks_failed=$((checks_failed + 1))
     fi
     
+    # Boundary metrics check
+    if check_boundary_metrics; then
+        checks_passed=$((checks_passed + 1))
+    else
+        checks_failed=$((checks_failed + 1))
+    fi
+    
     log_info "${COMPONENT}: Monitoring checks completed - passed: ${checks_passed}, failed: ${checks_failed}"
     
     if [[ ${checks_failed} -gt 0 ]]; then
@@ -1969,6 +2094,13 @@ main() {
             ;;
         daemon)
             if check_daemon_metrics; then
+                exit 0
+            else
+                exit 1
+            fi
+            ;;
+        boundary)
+            if check_boundary_metrics; then
                 exit 0
             else
                 exit 1
