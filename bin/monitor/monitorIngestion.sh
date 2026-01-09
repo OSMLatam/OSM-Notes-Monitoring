@@ -717,6 +717,134 @@ check_database_table_sizes() {
 }
 
 ##
+# Check advanced database metrics
+##
+check_advanced_database_metrics() {
+    log_info "${COMPONENT}: Starting advanced database metrics collection"
+    
+    # Check if collectDatabaseMetrics.sh script exists
+    local db_metrics_script="${SCRIPT_DIR}/collectDatabaseMetrics.sh"
+    
+    if [[ ! -f "${db_metrics_script}" ]]; then
+        log_debug "${COMPONENT}: Advanced database metrics collection script not found: ${db_metrics_script}"
+        return 0
+    fi
+    
+    # Check if script is executable
+    if [[ ! -x "${db_metrics_script}" ]]; then
+        log_debug "${COMPONENT}: Advanced database metrics collection script is not executable: ${db_metrics_script}"
+        return 0
+    fi
+    
+    # Run advanced database metrics collection
+    local output
+    local exit_code=0
+    
+    if [[ "${TEST_MODE:-false}" == "true" ]]; then
+        # In test mode, capture output for debugging
+        output=$(bash "${db_metrics_script}" 2>&1) || exit_code=$?
+        if [[ ${exit_code} -ne 0 ]]; then
+            log_debug "${COMPONENT}: Advanced database metrics collection output: ${output}"
+        fi
+    else
+        # In production, run silently and log errors
+        bash "${db_metrics_script}" > /dev/null 2>&1 || exit_code=$?
+    fi
+    
+    if [[ ${exit_code} -ne 0 ]]; then
+        log_warning "${COMPONENT}: Advanced database metrics collection failed (exit code: ${exit_code})"
+        return 1
+    fi
+    
+    # Check cache hit ratio threshold
+    local cache_hit_query
+    cache_hit_query="SELECT metric_value FROM metrics 
+                     WHERE component = 'ingestion' 
+                       AND metric_name = 'db_cache_hit_ratio' 
+                     ORDER BY timestamp DESC 
+                     LIMIT 1;"
+    
+    local cache_hit_ratio
+    cache_hit_ratio=$(execute_sql_query "${cache_hit_query}" 2>/dev/null | tr -d '[:space:]' || echo "")
+    
+    if [[ -n "${cache_hit_ratio}" ]] && [[ "${cache_hit_ratio}" =~ ^[0-9]+\.?[0-9]*$ ]]; then
+        local cache_hit_threshold="${INGESTION_DB_CACHE_HIT_THRESHOLD:-95}"
+        # Compare as float (multiply by 100 to avoid decimal comparison issues)
+        local cache_hit_int
+        cache_hit_int=$(echo "${cache_hit_ratio}" | awk '{printf "%.0f", $1}')
+        local threshold_int=${cache_hit_threshold}
+        
+        if [[ ${cache_hit_int} -lt ${threshold_int} ]]; then
+            log_warning "${COMPONENT}: Cache hit ratio (${cache_hit_ratio}%) below threshold (${cache_hit_threshold}%)"
+            send_alert "${COMPONENT}" "WARNING" "db_cache_hit_ratio" "Database cache hit ratio (${cache_hit_ratio}%) below threshold (${cache_hit_threshold}%)"
+        fi
+    fi
+    
+    # Check for slow queries
+    local slow_queries_query
+    slow_queries_query="SELECT metric_value FROM metrics 
+                        WHERE component = 'ingestion' 
+                          AND metric_name = 'db_slow_queries_count' 
+                        ORDER BY timestamp DESC 
+                        LIMIT 1;"
+    
+    local slow_queries_count
+    slow_queries_count=$(execute_sql_query "${slow_queries_query}" 2>/dev/null | tr -d '[:space:]' || echo "")
+    
+    if [[ -n "${slow_queries_count}" ]] && [[ "${slow_queries_count}" =~ ^[0-9]+$ ]]; then
+        if [[ ${slow_queries_count} -gt 0 ]]; then
+            log_warning "${COMPONENT}: ${slow_queries_count} slow queries detected"
+            send_alert "${COMPONENT}" "WARNING" "db_slow_queries" "${slow_queries_count} slow queries detected (>1s average execution time)"
+        fi
+    fi
+    
+    # Check connection usage
+    local conn_usage_query
+    conn_usage_query="SELECT metric_value FROM metrics 
+                      WHERE component = 'ingestion' 
+                        AND metric_name = 'db_connection_usage_percent' 
+                      ORDER BY timestamp DESC 
+                      LIMIT 1;"
+    
+    local conn_usage
+    conn_usage=$(execute_sql_query "${conn_usage_query}" 2>/dev/null | tr -d '[:space:]' || echo "")
+    
+    if [[ -n "${conn_usage}" ]] && [[ "${conn_usage}" =~ ^[0-9]+\.?[0-9]*$ ]]; then
+        local conn_usage_threshold="${INGESTION_DB_CONNECTION_USAGE_THRESHOLD:-80}"
+        local conn_usage_int
+        conn_usage_int=$(echo "${conn_usage}" | awk '{printf "%.0f", $1}')
+        local threshold_int=${conn_usage_threshold}
+        
+        if [[ ${conn_usage_int} -gt ${threshold_int} ]]; then
+            log_warning "${COMPONENT}: Connection usage (${conn_usage}%) exceeds threshold (${conn_usage_threshold}%)"
+            send_alert "${COMPONENT}" "WARNING" "db_connection_usage" "Database connection usage (${conn_usage}%) exceeds threshold (${conn_usage_threshold}%)"
+        fi
+    fi
+    
+    # Check for deadlocks
+    local deadlocks_query
+    deadlocks_query="SELECT metric_value FROM metrics 
+                      WHERE component = 'ingestion' 
+                        AND metric_name = 'db_deadlocks_count' 
+                      ORDER BY timestamp DESC 
+                      LIMIT 1;"
+    
+    local deadlocks_count
+    deadlocks_count=$(execute_sql_query "${deadlocks_query}" 2>/dev/null | tr -d '[:space:]' || echo "")
+    
+    if [[ -n "${deadlocks_count}" ]] && [[ "${deadlocks_count}" =~ ^[0-9]+$ ]]; then
+        if [[ ${deadlocks_count} -gt 0 ]]; then
+            log_error "${COMPONENT}: ${deadlocks_count} deadlocks detected"
+            send_alert "${COMPONENT}" "CRITICAL" "db_deadlocks" "${deadlocks_count} deadlocks detected in database"
+            return 1
+        fi
+    fi
+    
+    log_info "${COMPONENT}: Advanced database metrics check completed"
+    return 0
+}
+
+##
 # Check ingestion performance metrics using analyzeDatabasePerformance.sh
 ##
 check_ingestion_performance() {
@@ -733,6 +861,9 @@ check_ingestion_performance() {
     
     # Check table sizes
     check_database_table_sizes
+    
+    # Collect advanced database metrics
+    check_advanced_database_metrics
     
     # Run analyzeDatabasePerformance.sh if available
     if [[ ! -d "${INGESTION_REPO_PATH}" ]]; then

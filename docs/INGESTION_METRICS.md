@@ -157,6 +157,216 @@ Metrics related to database connectivity and performance.
 - **Alert Threshold:** > 1000ms (configurable via `PERFORMANCE_SLOW_QUERY_THRESHOLD`)
 - **Metadata:** `component=ingestion,query=count_notes`
 
+#### `db_table_size_bytes`
+- **Description:** Total size of a database table including indexes (in bytes)
+- **Type:** Gauge
+- **Unit:** `bytes`
+- **Collection:** Collected during `collect_table_sizes()`
+- **Frequency:** Every monitoring cycle
+- **Expected Range:** Varies by table
+- **Alert Threshold:** None (informational, monitor growth trends)
+- **Metadata:** `component=ingestion,table={table_name}`
+
+#### `db_table_data_size_bytes`
+- **Description:** Size of table data excluding indexes (in bytes)
+- **Type:** Gauge
+- **Unit:** `bytes`
+- **Collection:** Collected during `collect_table_sizes()`
+- **Frequency:** Every monitoring cycle
+- **Expected Range:** Varies by table
+- **Alert Threshold:** None (informational)
+- **Metadata:** `component=ingestion,table={table_name}`
+
+#### `db_index_size_bytes`
+- **Description:** Size of indexes for a table (in bytes)
+- **Type:** Gauge
+- **Unit:** `bytes`
+- **Collection:** Collected during `collect_table_sizes()`
+- **Frequency:** Every monitoring cycle
+- **Expected Range:** Varies by table
+- **Alert Threshold:** None (informational)
+- **Metadata:** `component=ingestion,table={table_name}`
+
+#### `db_table_bloat_ratio`
+- **Description:** Percentage of dead tuples in a table (bloat ratio)
+- **Type:** Gauge
+- **Unit:** `percent`
+- **Collection:** Collected during `collect_table_bloat()`
+- **Frequency:** Every monitoring cycle
+- **Expected Range:** 0-10%
+- **Alert Threshold:** > 20% (high bloat, may need VACUUM)
+- **Metadata:** `component=ingestion,table={table_name}`
+
+#### `db_index_scan_ratio`
+- **Description:** Percentage of index scans vs sequential scans for a table
+- **Type:** Gauge
+- **Unit:** `percent`
+- **Collection:** Collected during `collect_index_usage()`
+- **Frequency:** Every monitoring cycle
+- **Expected Range:** 80-100% (prefer index scans)
+- **Alert Threshold:** < 50% (too many sequential scans, may need indexes)
+- **Metadata:** `component=ingestion,table={table_name}`
+
+#### `db_unused_indexes_count`
+- **Description:** Number of indexes that have never been used (idx_scan = 0)
+- **Type:** Gauge
+- **Unit:** `count`
+- **Collection:** Collected during `collect_unused_indexes()`
+- **Frequency:** Every monitoring cycle
+- **Expected Range:** 0 (no unused indexes)
+- **Alert Threshold:** > 5 (may consider removing unused indexes)
+- **Metadata:** `component=ingestion`
+
+#### `db_unused_indexes_size_bytes`
+- **Description:** Total size of unused indexes (in bytes)
+- **Type:** Gauge
+- **Unit:** `bytes`
+- **Collection:** Collected during `collect_unused_indexes()`
+- **Frequency:** Every monitoring cycle
+- **Expected Range:** 0 bytes
+- **Alert Threshold:** > 1GB (significant space wasted)
+- **Metadata:** `component=ingestion`
+
+#### `db_slow_queries_count`
+- **Description:** Number of queries with average execution time > 1 second (requires pg_stat_statements)
+- **Type:** Gauge
+- **Unit:** `count`
+- **Collection:** Collected during `collect_slow_queries()`
+- **Frequency:** Every monitoring cycle
+- **Expected Range:** 0
+- **Alert Threshold:** > 0 (slow queries detected) - WARNING
+- **Metadata:** `component=ingestion`
+
+#### `db_cache_hit_ratio`
+- **Description:** Database cache hit ratio percentage
+- **Type:** Gauge
+- **Unit:** `percent`
+- **Collection:** Collected during `collect_cache_hit_ratio()`
+- **Frequency:** Every monitoring cycle
+- **Expected Range:** 95-100%
+- **Alert Threshold:** < 95% (configurable via `INGESTION_DB_CACHE_HIT_THRESHOLD`) - WARNING
+- **Metadata:** `component=ingestion`
+
+#### `db_connections_total`
+- **Description:** Total number of database connections
+- **Type:** Gauge
+- **Unit:** `count`
+- **Collection:** Collected during `collect_connection_stats()`
+- **Frequency:** Every monitoring cycle
+- **Expected Range:** Varies by application load
+- **Alert Threshold:** None (informational)
+- **Metadata:** `component=ingestion`
+
+#### `db_connections_active`
+- **Description:** Number of active database connections
+- **Type:** Gauge
+- **Unit:** `count`
+- **Collection:** Collected during `collect_connection_stats()`
+- **Frequency:** Every monitoring cycle
+- **Expected Range:** Varies by application load
+- **Alert Threshold:** None (informational)
+- **Metadata:** `component=ingestion`
+
+#### `db_connections_idle`
+- **Description:** Number of idle database connections
+- **Type:** Gauge
+- **Unit:** `count`
+- **Collection:** Collected during `collect_connection_stats()`
+- **Frequency:** Every monitoring cycle
+- **Expected Range:** Varies by connection pool settings
+- **Alert Threshold:** None (informational)
+- **Metadata:** `component=ingestion`
+
+#### `db_connections_idle_in_transaction`
+- **Description:** Number of connections idle in transaction
+- **Type:** Gauge
+- **Unit:** `count`
+- **Collection:** Collected during `collect_connection_stats()`
+- **Frequency:** Every monitoring cycle
+- **Expected Range:** 0 (should be avoided)
+- **Alert Threshold:** > 0 (may indicate application issues) - WARNING
+- **Metadata:** `component=ingestion`
+
+#### `db_connections_waiting`
+- **Description:** Number of connections waiting for locks
+- **Type:** Gauge
+- **Unit:** `count`
+- **Collection:** Collected during `collect_connection_stats()`
+- **Frequency:** Every monitoring cycle
+- **Expected Range:** 0
+- **Alert Threshold:** > 0 (lock contention) - WARNING
+- **Metadata:** `component=ingestion`
+
+#### `db_connections_active_by_app`
+- **Description:** Number of active connections by application name
+- **Type:** Gauge
+- **Unit:** `count`
+- **Collection:** Collected during `collect_connection_stats()`
+- **Frequency:** Every monitoring cycle
+- **Expected Range:** Varies by application
+- **Alert Threshold:** None (informational)
+- **Metadata:** `component=ingestion,application={app_name}`
+
+#### `db_connections_max`
+- **Description:** Maximum allowed database connections
+- **Type:** Gauge
+- **Unit:** `count`
+- **Collection:** Collected during `collect_connection_stats()`
+- **Frequency:** Every monitoring cycle
+- **Expected Range:** Varies by configuration
+- **Alert Threshold:** None (informational)
+- **Metadata:** `component=ingestion`
+
+#### `db_connection_usage_percent`
+- **Description:** Percentage of maximum connections currently in use
+- **Type:** Gauge
+- **Unit:** `percent`
+- **Collection:** Collected during `collect_connection_stats()`
+- **Frequency:** Every monitoring cycle
+- **Expected Range:** 0-80%
+- **Alert Threshold:** > 80% (configurable via `INGESTION_DB_CONNECTION_USAGE_THRESHOLD`) - WARNING
+- **Metadata:** `component=ingestion`
+
+#### `db_locks_total`
+- **Description:** Total number of active locks
+- **Type:** Gauge
+- **Unit:** `count`
+- **Collection:** Collected during `collect_lock_stats()`
+- **Frequency:** Every monitoring cycle
+- **Expected Range:** Varies by activity
+- **Alert Threshold:** None (informational)
+- **Metadata:** `component=ingestion`
+
+#### `db_locks_granted`
+- **Description:** Number of granted locks
+- **Type:** Gauge
+- **Unit:** `count`
+- **Collection:** Collected during `collect_lock_stats()`
+- **Frequency:** Every monitoring cycle
+- **Expected Range:** Varies by activity
+- **Alert Threshold:** None (informational)
+- **Metadata:** `component=ingestion`
+
+#### `db_locks_waiting`
+- **Description:** Number of locks waiting to be granted
+- **Type:** Gauge
+- **Unit:** `count`
+- **Collection:** Collected during `collect_lock_stats()`
+- **Frequency:** Every monitoring cycle
+- **Expected Range:** 0
+- **Alert Threshold:** > 0 (lock contention) - WARNING
+- **Metadata:** `component=ingestion`
+
+#### `db_deadlocks_count`
+- **Description:** Number of deadlocks detected since last reset
+- **Type:** Counter
+- **Unit:** `count`
+- **Collection:** Collected during `collect_lock_stats()`
+- **Frequency:** Every monitoring cycle
+- **Expected Range:** 0
+- **Alert Threshold:** > 0 (deadlocks detected) - CRITICAL
+- **Metadata:** `component=ingestion`
+
 ### 4. Performance Check Metrics
 
 Metrics from performance analysis scripts.
@@ -749,7 +959,7 @@ Metrics related to the daemon process (`processAPINotesDaemon.sh`).
 
 ---
 
-**Last Updated:** 2026-01-08  
-**Version:** 1.1.0  
+**Last Updated:** 2026-01-09  
+**Version:** 1.2.0  
 **Status:** Active
 

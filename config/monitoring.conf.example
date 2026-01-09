@@ -36,6 +36,8 @@ INGESTION_ERROR_SPIKE_MULTIPLIER=2  # multiplier for error spike detection (2x =
 # Database Performance Thresholds
 INGESTION_DB_CONNECTION_TIME_THRESHOLD=1000  # milliseconds - alert if connection takes longer
 INGESTION_DB_QUERY_TIME_THRESHOLD=1000  # milliseconds - uses PERFORMANCE_SLOW_QUERY_THRESHOLD
+INGESTION_DB_CACHE_HIT_THRESHOLD=95  # percentage - minimum acceptable cache hit ratio
+INGESTION_DB_CONNECTION_USAGE_THRESHOLD=80  # percentage - alert if connection usage exceeds this
 
 # Performance Check Thresholds
 INGESTION_PERFORMANCE_CHECK_DURATION_THRESHOLD=300  # seconds (5 minutes) - alert if check takes longer
