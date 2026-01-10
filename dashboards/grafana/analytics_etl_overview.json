@@ -1,0 +1,284 @@
+{
+  "id": null,
+  "uid": "osm-notes-analytics-etl",
+  "title": "Analytics ETL Overview",
+  "tags": ["osm", "monitoring", "analytics", "etl"],
+  "timezone": "browser",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "30s",
+  "editable": true,
+  "panels": [
+    {
+      "id": 1,
+      "title": "ETL Process Status",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
+      "targets": [{
+        "datasource": {
+          "type": "postgres",
+          "uid": "PostgreSQL"
+        },
+        "editorMode": "code",
+        "format": "table",
+        "rawQuery": true,
+        "rawSql": "SELECT CASE WHEN metric_value = 1 THEN 'Running' ELSE 'Not Running' END as status FROM metrics WHERE component = 'ANALYTICS' AND metric_name = 'etl_process_running' ORDER BY timestamp DESC LIMIT 1",
+        "refId": "A"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "Running": {"text": "Running", "color": "green"},
+                "Not Running": {"text": "Not Running", "color": "red"}
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"value": null, "color": "red"},
+              {"value": 1, "color": "green"}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "ETL Executions (Last 24h)",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 9, "x": 6, "y": 0},
+      "targets": [{
+        "datasource": {
+          "type": "postgres",
+          "uid": "PostgreSQL"
+        },
+        "editorMode": "code",
+        "format": "time_series",
+        "rawQuery": true,
+        "rawSql": "SELECT timestamp AS time, metric_value AS value FROM metrics WHERE component = 'ANALYTICS' AND metric_name = 'etl_total_executions' AND $__timeFilter(timestamp) ORDER BY timestamp",
+        "refId": "A"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "ETL Execution Duration (seconds)",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 9, "x": 15, "y": 0},
+      "targets": [{
+        "datasource": {
+          "type": "postgres",
+          "uid": "PostgreSQL"
+        },
+        "editorMode": "code",
+        "format": "time_series",
+        "rawQuery": true,
+        "rawSql": "SELECT timestamp AS time, metric_value AS value FROM metrics WHERE component = 'ANALYTICS' AND metric_name = 'etl_last_execution_duration_seconds' AND $__timeFilter(timestamp) ORDER BY timestamp",
+        "refId": "A"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 0
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "Facts Processed",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT timestamp AS time, metric_value AS value FROM metrics WHERE component = 'ANALYTICS' AND metric_name = 'etl_facts_processed_total' AND $__timeFilter(timestamp) ORDER BY timestamp",
+          "refId": "A",
+          "alias": "Total Facts"
+        },
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT timestamp AS time, metric_value AS value FROM metrics WHERE component = 'ANALYTICS' AND metric_name = 'etl_facts_new_total' AND $__timeFilter(timestamp) ORDER BY timestamp",
+          "refId": "B",
+          "alias": "New Facts"
+        },
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT timestamp AS time, metric_value AS value FROM metrics WHERE component = 'ANALYTICS' AND metric_name = 'etl_facts_updated_total' AND $__timeFilter(timestamp) ORDER BY timestamp",
+          "refId": "C",
+          "alias": "Updated Facts"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0
+        }
+      }
+    },
+    {
+      "id": 5,
+      "title": "ETL Success Rate (%)",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+      "targets": [{
+        "datasource": {
+          "type": "postgres",
+          "uid": "PostgreSQL"
+        },
+        "editorMode": "code",
+        "format": "time_series",
+        "rawQuery": true,
+        "rawSql": "SELECT timestamp AS time, metric_value AS value FROM metrics WHERE component = 'ANALYTICS' AND metric_name = 'etl_execution_success_rate_percent' AND $__timeFilter(timestamp) ORDER BY timestamp",
+        "refId": "A"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"value": null, "color": "red"},
+              {"value": 90, "color": "yellow"},
+              {"value": 95, "color": "green"}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 6,
+      "title": "ETL Execution Mode",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 16},
+      "targets": [{
+        "datasource": {
+          "type": "postgres",
+          "uid": "PostgreSQL"
+        },
+        "editorMode": "code",
+        "format": "table",
+        "rawQuery": true,
+        "rawSql": "SELECT labels->>'mode' as mode FROM metrics WHERE component = 'ANALYTICS' AND metric_name = 'etl_execution_mode' ORDER BY timestamp DESC LIMIT 1",
+        "refId": "A"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "initial_load": {"text": "Initial Load", "color": "blue"},
+                "incremental_update": {"text": "Incremental", "color": "green"}
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": 7,
+      "title": "ETL Errors and Warnings",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 6, "y": 16},
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT timestamp AS time, metric_value AS value FROM metrics WHERE component = 'ANALYTICS' AND metric_name = 'etl_error_count_total' AND $__timeFilter(timestamp) ORDER BY timestamp",
+          "refId": "A",
+          "alias": "Errors"
+        },
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT timestamp AS time, metric_value AS value FROM metrics WHERE component = 'ANALYTICS' AND metric_name = 'etl_warning_count_total' AND $__timeFilter(timestamp) ORDER BY timestamp",
+          "refId": "B",
+          "alias": "Warnings"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0
+        }
+      }
+    },
+    {
+      "id": 8,
+      "title": "ETL Stage Duration (seconds)",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 18, "y": 16},
+      "targets": [{
+        "datasource": {
+          "type": "postgres",
+          "uid": "PostgreSQL"
+        },
+        "editorMode": "code",
+        "format": "time_series",
+        "rawQuery": true,
+        "rawSql": "SELECT timestamp AS time, labels->>'stage' as stage, metric_value AS value FROM metrics WHERE component = 'ANALYTICS' AND metric_name = 'etl_stage_duration_seconds_avg' AND $__timeFilter(timestamp) ORDER BY timestamp, stage",
+        "refId": "A"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 0
+        }
+      },
+      "transformations": [
+        {
+          "id": "groupBy",
+          "options": {
+            "fields": {
+              "stage": {
+                "aggregations": [],
+                "operation": "groupby"
+              }
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "time": {"from": "now-24h", "to": "now"}
+}

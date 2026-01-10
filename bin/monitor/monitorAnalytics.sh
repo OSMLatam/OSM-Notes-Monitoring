@@ -66,6 +66,8 @@ Check Types:
     performance     Check performance metrics
     data-quality    Check data quality metrics
     etl-status      Check ETL job execution status
+    etl-log-analysis Check ETL log analysis and metrics
+    etl-frequency   Check ETL execution frequency and gaps
     data-freshness  Check data warehouse freshness
     storage         Check storage growth
     query-performance Check query performance
@@ -237,7 +239,225 @@ check_etl_job_execution_status() {
         fi
     fi
     
-    log_info "${COMPONENT}: ETL job execution status check completed - scripts found: ${scripts_found}, running: ${scripts_running}"
+    # Check ETL lock files
+    local lock_files_count=0
+    local concurrent_executions=0
+    local lock_files
+    lock_files=$(find /tmp -maxdepth 2 -type f -path "*/ETL_*/ETL.lock" 2>/dev/null || true)
+    
+    if [[ -n "${lock_files}" ]]; then
+        lock_files_count=$(echo "${lock_files}" | wc -l | tr -d '[:space:]')
+        lock_files_count=$((lock_files_count + 0))
+        
+        # Multiple lock files indicate concurrent executions
+        if [[ ${lock_files_count} -gt 1 ]]; then
+            concurrent_executions=1
+            log_warning "${COMPONENT}: Multiple ETL lock files detected (${lock_files_count}), possible concurrent executions"
+            send_alert "${COMPONENT}" "warning" "etl_concurrent_executions" "Multiple ETL lock files detected (${lock_files_count}), possible concurrent executions"
+        fi
+        
+        # Record metrics
+        record_metric "${COMPONENT}" "etl_lock_files_count" "${lock_files_count}" "component=analytics"
+        record_metric "${COMPONENT}" "etl_concurrent_executions" "${concurrent_executions}" "component=analytics"
+    else
+        record_metric "${COMPONENT}" "etl_lock_files_count" "0" "component=analytics"
+        record_metric "${COMPONENT}" "etl_concurrent_executions" "0" "component=analytics"
+    fi
+    
+    # Check ETL recovery files
+    local recovery_files_count=0
+    local recovery_enabled=0
+    local recovery_files
+    recovery_files=$(find /tmp -maxdepth 2 -type f -path "*/ETL_*/ETL_recovery.json" 2>/dev/null || true)
+    
+    if [[ -n "${recovery_files}" ]]; then
+        recovery_files_count=$(echo "${recovery_files}" | wc -l | tr -d '[:space:]')
+        recovery_files_count=$((recovery_files_count + 0))
+        recovery_enabled=1
+        
+        # Try to extract last step from recovery file if jq is available
+        local last_step=""
+        if command -v jq > /dev/null 2>&1; then
+            local recovery_file
+            recovery_file=$(echo "${recovery_files}" | head -1)
+            if [[ -f "${recovery_file}" ]] && [[ -r "${recovery_file}" ]]; then
+                last_step=$(jq -r '.last_step // empty' "${recovery_file}" 2>/dev/null || echo "")
+            fi
+        fi
+        
+        record_metric "${COMPONENT}" "etl_recovery_enabled" "${recovery_enabled}" "component=analytics"
+        record_metric "${COMPONENT}" "etl_recovery_files_count" "${recovery_files_count}" "component=analytics"
+        
+        if [[ -n "${last_step}" ]]; then
+            log_info "${COMPONENT}: ETL recovery enabled - Last step: ${last_step}"
+        else
+            log_info "${COMPONENT}: ETL recovery enabled - Files: ${recovery_files_count}"
+        fi
+    else
+        record_metric "${COMPONENT}" "etl_recovery_enabled" "0" "component=analytics"
+        record_metric "${COMPONENT}" "etl_recovery_files_count" "0" "component=analytics"
+    fi
+    
+    # Get detailed process information for running ETL
+    if [[ ${scripts_running} -gt 0 ]]; then
+        for script_name in "${etl_scripts[@]}"; do
+            local script_basename
+            script_basename=$(basename "${script_name}")
+            if pgrep -f "${script_basename}" > /dev/null 2>&1; then
+                local pid
+                pid=$(pgrep -f "${script_basename}" | head -1)
+                
+                # Get process uptime
+                local uptime_seconds=0
+                local etime
+                etime=$(ps -o etime= -p "${pid}" 2>/dev/null | tr -d '[:space:]' || echo "0:0")
+                
+                # Convert etime to seconds
+                if [[ "${etime}" =~ ^([0-9]+):([0-9]+):([0-9]+)$ ]]; then
+                    local hours="${BASH_REMATCH[1]}"
+                    local minutes="${BASH_REMATCH[2]}"
+                    local seconds="${BASH_REMATCH[3]}"
+                    uptime_seconds=$((hours * 3600 + minutes * 60 + seconds))
+                elif [[ "${etime}" =~ ^([0-9]+):([0-9]+)$ ]]; then
+                    local minutes="${BASH_REMATCH[1]}"
+                    local seconds="${BASH_REMATCH[2]}"
+                    uptime_seconds=$((minutes * 60 + seconds))
+                fi
+                
+                # Record detailed process metrics
+                record_metric "${COMPONENT}" "etl_process_pid" "${pid}" "component=analytics,script=${script_basename}"
+                record_metric "${COMPONENT}" "etl_process_uptime_seconds" "${uptime_seconds}" "component=analytics,script=${script_basename}"
+                
+                log_debug "${COMPONENT}: ETL process ${script_basename} - PID: ${pid}, Uptime: ${uptime_seconds}s"
+            fi
+        done
+    fi
+    
+    log_info "${COMPONENT}: ETL job execution status check completed - scripts found: ${scripts_found}, running: ${scripts_running}, lock files: ${lock_files_count}, concurrent: ${concurrent_executions}, recovery: ${recovery_enabled}"
+    
+    return 0
+}
+
+##
+# Check ETL log analysis
+# Parses ETL logs and extracts detailed metrics
+##
+check_etl_log_analysis() {
+    log_info "${COMPONENT}: Starting ETL log analysis"
+    
+    # Check if collect_etl_metrics script exists
+    local collect_script="${PROJECT_ROOT}/bin/monitor/collect_etl_metrics.sh"
+    
+    if [[ ! -f "${collect_script}" ]] || [[ ! -x "${collect_script}" ]]; then
+        log_debug "${COMPONENT}: ETL metrics collection script not found or not executable: ${collect_script}"
+        return 0
+    fi
+    
+    # Run ETL metrics collection script
+    if "${collect_script}" > /dev/null 2>&1; then
+        log_info "${COMPONENT}: ETL log analysis completed successfully"
+    else
+        log_warning "${COMPONENT}: ETL log analysis script returned non-zero exit code"
+        send_alert "${COMPONENT}" "warning" "etl_log_analysis_failed" "ETL log analysis script failed to execute"
+    fi
+    
+    return 0
+}
+
+##
+# Check ETL execution frequency and gaps
+# Detects gaps in ETL execution schedule
+##
+check_etl_execution_frequency() {
+    log_info "${COMPONENT}: Starting ETL execution frequency check"
+    
+    # Check if analytics repository path is configured
+    if [[ -z "${ANALYTICS_REPO_PATH:-}" ]]; then
+        log_debug "${COMPONENT}: ANALYTICS_REPO_PATH not configured, skipping frequency check"
+        return 0
+    fi
+    
+    # Find ETL log files
+    local etl_log_files
+    etl_log_files=$(find /tmp -maxdepth 2 -type f -path "*/ETL_*/ETL.log" 2>/dev/null | head -1 || echo "")
+    
+    if [[ -z "${etl_log_files}" ]]; then
+        log_debug "${COMPONENT}: No ETL log files found for frequency analysis"
+        return 0
+    fi
+    
+    # Extract execution timestamps from logs
+    local execution_timestamps=()
+    while IFS= read -r line; do
+        if [[ "${line}" =~ ([0-9]{4}-[0-9]{2}-[0-9]{2}[[:space:]]+[0-9]{2}:[0-9]{2}:[0-9]{2}) ]] && \
+           [[ "${line}" =~ completed[[:space:]]+successfully|finished[[:space:]]+successfully ]]; then
+            local timestamp
+            timestamp=$(date -d "${BASH_REMATCH[1]}" +%s 2>/dev/null || echo "0")
+            if [[ ${timestamp} -gt 0 ]]; then
+                execution_timestamps+=("${timestamp}")
+            fi
+        fi
+    done < "${etl_log_files}"
+    
+    if [[ ${#execution_timestamps[@]} -lt 2 ]]; then
+        log_debug "${COMPONENT}: Not enough execution timestamps found for frequency analysis"
+        return 0
+    fi
+    
+    # Calculate average time between executions
+    local total_gap=0
+    local gap_count=0
+    local min_gap=999999
+    local max_gap=0
+    
+    for ((i=1; i<${#execution_timestamps[@]}; i++)); do
+        local gap=$((execution_timestamps[i] - execution_timestamps[i-1]))
+        total_gap=$((total_gap + gap))
+        gap_count=$((gap_count + 1))
+        
+        if [[ ${gap} -lt ${min_gap} ]]; then
+            min_gap=${gap}
+        fi
+        if [[ ${gap} -gt ${max_gap} ]]; then
+            max_gap=${gap}
+        fi
+    done
+    
+    local avg_gap=0
+    if [[ ${gap_count} -gt 0 ]]; then
+        avg_gap=$((total_gap / gap_count))
+    fi
+    
+    # Calculate expected frequency (15 minutes = 900 seconds for incremental ETL)
+    local expected_frequency="${ANALYTICS_ETL_EXPECTED_FREQUENCY_SECONDS:-900}"
+    local frequency_variance=$((avg_gap - expected_frequency))
+    local frequency_variance_percent=0
+    if [[ ${expected_frequency} -gt 0 ]]; then
+        frequency_variance_percent=$((frequency_variance * 100 / expected_frequency))
+    fi
+    
+    # Check for gaps (executions missing)
+    local last_execution=${execution_timestamps[-1]}
+    local current_time
+    current_time=$(date +%s)
+    local time_since_last=$((current_time - last_execution))
+    
+    local gap_detected=0
+    if [[ ${time_since_last} -gt $((expected_frequency * 2)) ]]; then
+        gap_detected=1
+        log_warning "${COMPONENT}: ETL execution gap detected - last execution was ${time_since_last}s ago (expected: ${expected_frequency}s)"
+        send_alert "${COMPONENT}" "warning" "etl_execution_gap" "ETL execution gap detected - last execution was ${time_since_last}s ago (expected: ${expected_frequency}s)"
+    fi
+    
+    # Record metrics
+    record_metric "${COMPONENT}" "etl_execution_avg_gap_seconds" "${avg_gap}" "component=analytics"
+    record_metric "${COMPONENT}" "etl_execution_min_gap_seconds" "${min_gap}" "component=analytics"
+    record_metric "${COMPONENT}" "etl_execution_max_gap_seconds" "${max_gap}" "component=analytics"
+    record_metric "${COMPONENT}" "etl_execution_frequency_variance_percent" "${frequency_variance_percent}" "component=analytics"
+    record_metric "${COMPONENT}" "etl_execution_gap_detected" "${gap_detected}" "component=analytics"
+    record_metric "${COMPONENT}" "etl_time_since_last_execution_seconds" "${time_since_last}" "component=analytics"
+    
+    log_info "${COMPONENT}: ETL execution frequency - Avg gap: ${avg_gap}s, Min: ${min_gap}s, Max: ${max_gap}s, Variance: ${frequency_variance_percent}%, Gap detected: ${gap_detected}"
     
     return 0
 }
@@ -1307,6 +1527,8 @@ run_all_checks() {
     
     check_health_status
     check_etl_job_execution_status
+    check_etl_log_analysis
+    check_etl_execution_frequency
     check_data_warehouse_freshness
     check_etl_processing_duration
     check_data_mart_update_status
@@ -1390,6 +1612,12 @@ main() {
             ;;
         etl-status)
             check_etl_job_execution_status
+            ;;
+        etl-log-analysis)
+            check_etl_log_analysis
+            ;;
+        etl-frequency)
+            check_etl_execution_frequency
             ;;
         data-freshness)
             check_data_warehouse_freshness
