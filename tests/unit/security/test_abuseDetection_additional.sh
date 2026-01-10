@@ -472,6 +472,35 @@ teardown() {
 # Test: automatic_response handles unknown action
 ##
 @test "automatic_response handles unknown action" {
+    # Mock auto_block_ip (called by automatic_response)
+    # shellcheck disable=SC2317
+    function auto_block_ip() {
+        return 0
+    }
+    export -f auto_block_ip
+    
+    # Mock send_alert (called by automatic_response)
+    # shellcheck disable=SC2317
+    function send_alert() {
+        return 0
+    }
+    export -f send_alert
+    
+    # Mock record_metric (called by automatic_response)
+    # shellcheck disable=SC2317
+    function record_metric() {
+        return 0
+    }
+    export -f record_metric
+    
+    # Mock psql (automatic_response queries database for violation count)
+    # shellcheck disable=SC2317
+    function psql() {
+        echo "0"  # No previous violations
+        return 0
+    }
+    export -f psql
+    
     # shellcheck disable=SC2317
     record_security_event() {
         return 0
@@ -500,25 +529,47 @@ teardown() {
     }
     export -f init_alerting
     
+    # Mock log functions to prevent memory accumulation
+    # shellcheck disable=SC2317
+    function log_info() {
+        return 0
+    }
+    export -f log_info
+    
+    # shellcheck disable=SC2317
+    function log_warning() {
+        return 0
+    }
+    export -f log_warning
+    
+    # shellcheck disable=SC2317
+    function log_error() {
+        return 0
+    }
+    export -f log_error
+    
     # Mock analyze_all (called by main with "analyze" action without IP)
+    # This should be called instead of the real function
     # shellcheck disable=SC2317
     function analyze_all() {
         return 0
     }
     export -f analyze_all
     
-    # Mock psql (analyze_all queries database)
+    # Mock psql (analyze_all queries database, but analyze_all is mocked so this shouldn't be called)
     # shellcheck disable=SC2317
     function psql() {
         if [[ "${*}" =~ SELECT.*DISTINCT.*ip_address ]]; then
             echo ""  # No IPs found
             return 0
         fi
-        return 1
+        # Default: return empty to prevent infinite loops
+        echo ""
+        return 0
     }
     export -f psql
     
-    # Mock check_ip_for_abuse (called by analyze_all if IPs found)
+    # Mock check_ip_for_abuse (called by analyze_all if IPs found, but analyze_all is mocked)
     # shellcheck disable=SC2317
     function check_ip_for_abuse() {
         return 0
@@ -540,16 +591,12 @@ teardown() {
 @test "check_pattern_analysis uses custom window" {
     export ABUSE_PATTERN_ANALYSIS_WINDOW="7200"  # 2 hours
     
-    # Mock execute_sql_query
+    # Mock is_ip_whitelisted
     # shellcheck disable=SC2317
-    function execute_sql_query() {
-        if [[ "${*}" =~ INTERVAL.*7200 ]]; then
-            echo "10|192.168.1.1|/api/endpoint"
-            return 0
-        fi
-        return 1
+    function is_ip_whitelisted() {
+        return 1  # Not whitelisted
     }
-    export -f execute_sql_query
+    export -f is_ip_whitelisted
     
     # shellcheck disable=SC2317
     record_metric() {
@@ -558,33 +605,37 @@ teardown() {
     export -f record_metric
     
     # shellcheck disable=SC2317
-    send_alert() {
+    record_security_event() {
         return 0
     }
-    export -f send_alert
+    export -f record_security_event
     
-    # Mock is_ip_whitelisted
-    # shellcheck disable=SC2317
-    function is_ip_whitelisted() {
-        return 1  # Not whitelisted
-    }
-    export -f is_ip_whitelisted
-    
-    # Mock psql (analyze_patterns calls psql directly)
+    # Mock psql (analyze_patterns calls psql directly, and record_security_event also uses psql)
+    # Need to handle all three SELECT queries: rapid (10 seconds), error rate (7200 seconds), excessive (1 hour)
+    # Also need to handle INSERT queries from record_security_event
     # shellcheck disable=SC2317
     function psql() {
         local query="${*}"
+        # Rapid requests query: INTERVAL '10 seconds'
         if [[ "${query}" =~ SELECT.*COUNT.*FROM.*security_events ]] && [[ "${query}" =~ INTERVAL.*10.*seconds ]]; then
             echo "15"  # Rapid requests (above threshold)
             return 0
-        elif [[ "${query}" =~ SELECT.*COUNT.*FILTER.*WHERE.*metadata ]]; then
+        # Error rate query: INTERVAL '7200 seconds' (uses ABUSE_PATTERN_ANALYSIS_WINDOW)
+        # Match both the pattern with FILTER and the 7200 seconds interval
+        elif [[ "${query}" =~ SELECT.*COUNT.*FILTER.*WHERE.*metadata ]] && [[ "${query}" =~ 7200 ]]; then
             echo "60|100"  # High error rate (60%)
             return 0
+        # Excessive requests query: INTERVAL '1 hour'
         elif [[ "${query}" =~ SELECT.*COUNT.*FROM.*security_events ]] && [[ "${query}" =~ INTERVAL.*1.*hour ]]; then
             echo "1500"  # Excessive requests (above threshold)
             return 0
+        # INSERT queries from record_security_event
+        elif [[ "${query}" =~ INSERT.*INTO.*security_events ]]; then
+            return 0  # Success, no output needed
         fi
-        return 1
+        # Default: return 0 with empty output for any other query to prevent infinite loops
+        echo "0"
+        return 0
     }
     export -f psql
     
