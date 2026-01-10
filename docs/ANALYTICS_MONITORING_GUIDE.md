@@ -1,8 +1,8 @@
 # Analytics Monitoring Guide
 
 > **Purpose:** Comprehensive guide for monitoring the OSM-Notes-Analytics component  
-> **Version:** 1.0.0  
-> **Date:** 2025-12-27  
+> **Version:** 2.0.0  
+> **Date:** 2026-01-10  
 > **Status:** Active
 
 ## Table of Contents
@@ -25,9 +25,15 @@
 The Analytics Monitoring system provides comprehensive monitoring for the OSM-Notes-Analytics component, tracking:
 
 - **ETL Job Execution**: Verifies that ETL scripts are present, executable, and running correctly
+- **ETL Log Analysis**: Parses structured ETL logs to extract detailed execution metrics
+- **Data Warehouse Performance**: Monitors database performance (cache hit ratio, connections, slow queries, locks, bloat)
+- **Data Warehouse Sizes**: Tracks database and table sizes, partition sizes, and growth trends
+- **Data Mart Status**: Monitors datamart update frequency, staleness, and execution metrics
+- **Data Quality Validation**: Executes MON-001 and MON-002 validations, tracks data quality scores
+- **System Resources**: Monitors CPU, memory, disk I/O, and load for ETL and PostgreSQL processes
+- **Export Processes**: Tracks JSON/CSV exports, file sizes, validation status, and GitHub push status
+- **Cron Job Monitoring**: Verifies scheduled job executions (ETL, datamarts, exports) and detects gaps
 - **Data Warehouse Freshness**: Monitors data freshness and recent update activity
-- **ETL Processing Duration**: Tracks ETL job execution times and identifies long-running jobs
-- **Data Mart Status**: Monitors data mart update frequency and staleness
 - **Query Performance**: Tracks slow queries and query execution times
 - **Storage Growth**: Monitors database size, table sizes, and disk usage
 
@@ -217,6 +223,64 @@ ANALYTICS_LARGEST_TABLE_SIZE_THRESHOLD=10737418240  # 10GB
 ANALYTICS_DISK_USAGE_THRESHOLD=85
 ```
 
+#### System Resources Thresholds
+
+```bash
+# ETL CPU usage threshold (percentage)
+ANALYTICS_ETL_CPU_THRESHOLD=80
+
+# ETL memory usage threshold (MB)
+ANALYTICS_ETL_MEMORY_THRESHOLD=2048  # 2GB
+
+# PostgreSQL CPU usage threshold (percentage)
+ANALYTICS_POSTGRESQL_CPU_THRESHOLD=80
+
+# PostgreSQL memory usage threshold (MB)
+ANALYTICS_POSTGRESQL_MEMORY_THRESHOLD=4096  # 4GB
+
+# System load average threshold
+ANALYTICS_LOAD_AVERAGE_THRESHOLD=5.0
+
+# ETL log disk usage threshold (bytes)
+ANALYTICS_ETL_LOG_DISK_USAGE_THRESHOLD=5368709120  # 5GB
+```
+
+#### Export Thresholds
+
+```bash
+# Export file staleness threshold (seconds)
+ANALYTICS_EXPORT_STALENESS_THRESHOLD=86400  # 24 hours
+
+# Export file count threshold
+ANALYTICS_EXPORT_FILES_MIN_THRESHOLD=1
+```
+
+#### Cron Job Thresholds
+
+```bash
+# ETL cron execution gap threshold (seconds)
+ANALYTICS_ETL_CRON_GAP_THRESHOLD=1800  # 30 minutes
+
+# Datamart cron execution gap threshold (seconds)
+ANALYTICS_DATAMART_CRON_GAP_THRESHOLD=90000  # 25 hours
+
+# Export cron execution gap threshold (seconds)
+ANALYTICS_EXPORT_CRON_GAP_THRESHOLD=90000  # 25 hours
+```
+
+#### Validation Thresholds
+
+```bash
+# Data quality score threshold (percentage)
+ANALYTICS_DATA_QUALITY_SCORE_THRESHOLD=70
+
+# Validation issues threshold
+ANALYTICS_VALIDATION_ISSUES_THRESHOLD=10
+
+# Orphaned facts threshold
+ANALYTICS_ORPHANED_FACTS_THRESHOLD=0
+```
+
 ### Configuration File Example
 
 See `config/monitoring.conf.example` for a complete configuration example.
@@ -228,11 +292,27 @@ See `config/monitoring.conf.example` for a complete configuration example.
 ### Manual Execution
 
 ```bash
-# Run analytics monitoring
+# Run all analytics monitoring checks
 ./bin/monitor/monitorAnalytics.sh
+
+# Run specific check
+./bin/monitor/monitorAnalytics.sh --check etl-status
+./bin/monitor/monitorAnalytics.sh --check etl-log-analysis
+./bin/monitor/monitorAnalytics.sh --check database-performance
+./bin/monitor/monitorAnalytics.sh --check datamart-status
+./bin/monitor/monitorAnalytics.sh --check validation-status
+./bin/monitor/monitorAnalytics.sh --check system-resources
+./bin/monitor/monitorAnalytics.sh --check export-status
+./bin/monitor/monitorAnalytics.sh --check cron-jobs
+./bin/monitor/monitorAnalytics.sh --check data-quality
+./bin/monitor/monitorAnalytics.sh --check query-performance
+./bin/monitor/monitorAnalytics.sh --check storage
 
 # Run with debug logging
 LOG_LEVEL=DEBUG ./bin/monitor/monitorAnalytics.sh
+
+# Run with verbose output
+./bin/monitor/monitorAnalytics.sh --verbose
 ```
 
 ### Scheduled Execution (Cron)
@@ -296,39 +376,117 @@ sudo systemctl start analytics-monitoring.timer
 - **`etl_scripts_running`**: Number of currently running ETL scripts
 - **`etl_last_execution_age_seconds`**: Age of last ETL execution
 
-#### 2. ETL Processing Duration Metrics
+#### 2. ETL Log Analysis Metrics (Phase 1)
 
-- **`etl_processing_duration_avg_seconds`**: Average ETL processing duration
-- **`etl_processing_duration_max_seconds`**: Maximum ETL processing duration
-- **`etl_processing_duration_min_seconds`**: Minimum ETL processing duration
-- **`etl_running_jobs_duration_seconds`**: Duration of currently running jobs
-- **`etl_long_running_jobs_count`**: Number of long-running jobs
+- **`etl_execution_time_seconds`**: Total execution time from logs
+- **`etl_facts_processed_total`**: Total facts processed (new + updated)
+- **`etl_facts_new_total`**: New facts processed
+- **`etl_facts_updated_total`**: Updated facts processed
+- **`etl_dimensions_updated_total`**: Dimensions updated
+- **`etl_processing_rate_facts_per_sec`**: Facts processing rate
+- **`etl_stage_duration_seconds`**: Duration per stage (copy_base_tables, load_facts, etc.)
+- **`etl_validation_status`**: Validation status (PASS/FAIL)
+- **`etl_errors_total`**: Total errors detected
+- **`etl_execution_mode`**: Execution mode (initial/incremental)
+- **`etl_success_rate`**: Success rate of executions
 
-#### 3. Data Warehouse Metrics
+#### 3. Database Performance Metrics (Phase 2)
+
+- **`database_cache_hit_ratio`**: Cache hit ratio percentage
+- **`database_active_connections`**: Number of active connections
+- **`database_slow_queries_count`**: Number of slow queries
+- **`database_active_locks_count`**: Number of active locks
+- **`database_table_bloat_bytes`**: Table bloat size
+- **`database_schema_size_bytes`**: Total schema size
+- **`database_facts_partition_size_bytes`**: Facts partition sizes
+- **`database_total_size_bytes`**: Total database size
+
+#### 4. Database Size Metrics (Phase 2)
+
+- **`database_size_bytes`**: Total database size
+- **`total_table_size_bytes`**: Total size of all tables
+- **`largest_table_size_bytes`**: Size of largest table
+- **`table_size_bytes`**: Size of individual tables
+- **`facts_partition_size_bytes`**: Size of facts partitions
+
+#### 5. Datamart Metrics (Phase 3)
+
+- **`datamart_last_update_seconds`**: Time since last update per datamart
+- **`datamart_execution_duration_seconds`**: Execution duration per datamart
+- **`datamart_records_total`**: Record count per datamart
+- **`datamart_countries_processed_total`**: Countries processed (datamart countries)
+- **`datamart_users_processed_total`**: Users processed (datamart users)
+- **`datamart_countries_parallel_workers`**: Parallel workers used
+- **`datamart_process_running`**: Process running status
+- **`datamart_execution_status`**: Execution status (SUCCESS/FAIL)
+- **`datamart_staleness_detected`**: Staleness detection flag
+
+#### 6. Validation Metrics (Phase 4)
+
+- **`data_validation_status`**: Validation status (PASS/FAIL) for MON-001, MON-002
+- **`data_validation_issues`**: Number of issues found per validation
+- **`data_validation_duration_seconds`**: Validation execution time
+- **`data_orphaned_facts_count`**: Count of orphaned facts
+- **`data_quality_score`**: Overall data quality score (0-100)
+
+#### 7. System Resources Metrics (Phase 5)
+
+- **`etl_cpu_usage_percent`**: ETL process CPU usage
+- **`etl_memory_usage_mb`**: ETL process memory usage
+- **`etl_disk_read_bytes_total`**: ETL disk read bytes
+- **`etl_disk_write_bytes_total`**: ETL disk write bytes
+- **`etl_log_disk_usage_bytes`**: ETL log directory disk usage
+- **`postgresql_cpu_usage_percent`**: PostgreSQL CPU usage
+- **`postgresql_memory_usage_mb`**: PostgreSQL memory usage
+- **`system_load_average_1min`**: 1-minute load average
+- **`system_load_average_5min`**: 5-minute load average
+- **`system_load_average_15min`**: 15-minute load average
+- **`system_disk_usage_percent`**: Root filesystem disk usage
+- **`system_disk_total_bytes`**: Total disk space
+- **`system_disk_used_bytes`**: Used disk space
+- **`system_disk_available_bytes`**: Available disk space
+
+#### 8. Export Metrics (Phase 6)
+
+- **`export_files_total`**: Total export files (JSON/CSV)
+- **`export_files_size_bytes`**: Total export file sizes
+- **`export_last_successful_timestamp`**: Last successful export timestamp
+- **`export_validation_status`**: JSON schema validation status
+- **`export_github_push_status`**: GitHub push status
+- **`export_duration_seconds`**: Export execution duration
+- **`export_status`**: Export status (SUCCESS/FAIL)
+
+#### 9. Cron Job Metrics (Phase 7)
+
+- **`cron_etl_last_execution_seconds`**: Time since last ETL cron execution
+- **`cron_etl_execution_count_24h`**: ETL executions in last 24 hours
+- **`cron_etl_execution_gap`**: Missing executions count
+- **`cron_datamart_last_execution_seconds`**: Time since last datamart cron execution
+- **`cron_datamart_execution_count_24h`**: Datamart executions in last 24 hours
+- **`cron_export_last_execution_seconds`**: Time since last export cron execution
+- **`cron_export_execution_count_24h`**: Export executions in last 24 hours
+- **`cron_lock_files_total`**: Total lock files found
+- **`cron_etl_lock_exists`**: ETL lock file exists
+- **`cron_datamart_lock_exists`**: Datamart lock file exists
+- **`cron_export_lock_exists`**: Export lock file exists
+- **`cron_etl_gap_detected`**: ETL execution gap detected
+- **`cron_datamart_gap_detected`**: Datamart execution gap detected
+- **`cron_export_gap_detected`**: Export execution gap detected
+
+#### 10. Data Warehouse Freshness Metrics
 
 - **`data_warehouse_freshness_seconds`**: Data freshness (time since last update)
 - **`data_warehouse_recent_updates_count`**: Number of recent updates (last hour)
 
-#### 4. Data Mart Metrics
-
-- **`data_mart_update_age_seconds`**: Age of data mart updates
-- **`data_mart_avg_update_age_seconds`**: Average update age across all marts
-- **`data_mart_stale_count`**: Number of stale data marts
-- **`data_mart_failure_count`**: Number of data marts with update failures
-
-#### 5. Query Performance Metrics
+#### 11. Query Performance Metrics
 
 - **`slow_query_count`**: Number of slow queries detected
 - **`query_avg_time_ms`**: Average query execution time
 - **`query_max_time_ms`**: Maximum query execution time
 - **`query_total_calls`**: Total number of query calls
 
-#### 6. Storage Metrics
+#### 12. Storage Metrics
 
-- **`database_size_bytes`**: Total database size
-- **`total_table_size_bytes`**: Total size of all tables
-- **`largest_table_size_bytes`**: Size of largest table
-- **`table_size_bytes`**: Size of individual tables
 - **`disk_usage_percent`**: Disk usage percentage
 
 ### Querying Metrics
@@ -388,19 +546,66 @@ For complete metric definitions, see **[ANALYTICS_METRICS.md](./ANALYTICS_METRIC
 - **`etl_duration`**: Long-running ETL job detected
 - **`etl_avg_duration`**: Average ETL processing duration exceeded
 - **`etl_max_duration`**: Maximum ETL processing duration exceeded
+- **`etl_validation_failed`**: ETL validation failed
+- **`etl_log_unavailable`**: ETL log files unavailable
+
+#### Database Performance Alerts
+
+- **`database_cache_hit_ratio_low`**: Cache hit ratio below threshold
+- **`database_slow_queries`**: Slow queries detected
+- **`database_high_connections`**: High number of active connections
+- **`database_deadlocks`**: Deadlocks detected
+- **`database_table_bloat`**: Table bloat detected
+- **`database_connection_failure`**: Database connection failed (CRITICAL)
 
 #### Data Warehouse Alerts
 
 - **`data_warehouse_freshness`**: Data warehouse freshness exceeded
 - **`data_warehouse_recent_updates`**: No recent updates in data warehouse
 
-#### Data Mart Alerts
+#### Datamart Alerts
 
-- **`data_mart_update_age`**: Data mart update age exceeded
-- **`data_mart_recent_updates`**: No recent updates in data mart
-- **`data_mart_stale_count`**: Stale data marts detected
-- **`data_mart_failure`**: Data mart update failures detected
-- **`data_mart_avg_update_age`**: Average data mart update age exceeded
+- **`datamart_stale`**: Datamart is stale (last update > 24 hours)
+- **`datamart_failed_execution`**: Datamart execution failed
+- **`datamart_long_execution`**: Datamart execution taking too long
+- **`datamart_no_recent_executions`**: No recent executions detected
+- **`datamart_record_count_stagnant`**: Record count not changing
+
+#### Validation Alerts
+
+- **`validation_mon001_failed`**: MON-001 validation failed
+- **`validation_mon002_failed`**: MON-002 validation failed
+- **`validation_high_issues`**: High number of validation issues
+- **`orphaned_facts_detected`**: Orphaned facts detected
+- **`data_quality_score_low`**: Data quality score below threshold
+
+#### System Resources Alerts
+
+- **`etl_high_cpu_usage`**: ETL process high CPU usage
+- **`etl_high_memory_usage`**: ETL process high memory usage
+- **`postgresql_high_cpu_usage`**: PostgreSQL high CPU usage
+- **`postgresql_high_memory_usage`**: PostgreSQL high memory usage
+- **`system_load_average_high`**: System load average high
+- **`disk_usage_warning`**: Disk usage warning (85%)
+- **`disk_usage_critical`**: Disk usage critical (95%)
+- **`etl_log_disk_usage_high`**: ETL log directory disk usage high
+
+#### Export Alerts
+
+- **`export_failed`**: Export process failed
+- **`export_files_stale`**: Export files are stale
+- **`export_github_push_failed`**: GitHub push failed
+- **`export_validation_failed`**: JSON schema validation failed
+- **`export_no_recent_files`**: No recent export files
+
+#### Cron Job Alerts
+
+- **`cron_etl_not_running`**: ETL cron job not running according to schedule
+- **`cron_datamart_not_running`**: Datamart cron job not running
+- **`cron_export_not_running`**: Export cron job not running
+- **`cron_execution_gap`**: Execution gap detected
+- **`cron_lock_files_stale`**: Stale lock files detected
+- **`cron_log_unavailable`**: Cron log files unavailable
 
 #### Query Performance Alerts
 
@@ -414,7 +619,6 @@ For complete metric definitions, see **[ANALYTICS_METRICS.md](./ANALYTICS_METRIC
 - **`database_size`**: Database size exceeded
 - **`table_size`**: Largest table size exceeded
 - **`disk_usage`**: Disk usage exceeded (WARNING at 85%, CRITICAL at 90%)
-- **`database_connection`**: Database connection failed (CRITICAL)
 
 #### Optimization Alerts
 
@@ -632,16 +836,56 @@ For complete alert threshold definitions, see **[ANALYTICS_ALERT_THRESHOLDS.md](
 ### Scripts
 
 - **`bin/monitor/monitorAnalytics.sh`**: Main analytics monitoring script
+- **`bin/monitor/collect_etl_metrics.sh`**: ETL metrics collection (Phase 1)
+- **`bin/monitor/collect_database_metrics.sh`**: Database performance metrics (Phase 2)
+- **`bin/monitor/collect_datamart_metrics.sh`**: Datamart metrics (Phase 3)
+- **`bin/monitor/collect_validation_metrics.sh`**: Validation metrics (Phase 4)
+- **`bin/monitor/collect_analytics_system_metrics.sh`**: System resources metrics (Phase 5)
+- **`bin/monitor/collect_export_metrics.sh`**: Export metrics (Phase 6)
+- **`bin/monitor/collect_cron_metrics.sh`**: Cron job metrics (Phase 7)
+- **`bin/lib/etlLogParser.sh`**: ETL log parsing library (Phase 1)
+- **`bin/lib/datamartLogParser.sh`**: Datamart log parsing library (Phase 3)
 - **`bin/lib/monitoringFunctions.sh`**: Core monitoring functions
 - **`bin/lib/metricsFunctions.sh`**: Metrics collection functions
 - **`bin/lib/alertFunctions.sh`**: Alerting functions
 
+### Dashboards
+
+- **`dashboards/grafana/analytics_etl_overview.json`**: ETL monitoring dashboard (Phase 1)
+- **`dashboards/grafana/analytics_dwh_performance.json`**: Database performance dashboard (Phase 2)
+- **`dashboards/grafana/analytics_datamarts_overview.json`**: Datamarts dashboard (Phase 3)
+- **`dashboards/grafana/analytics_data_quality.json`**: Data quality dashboard (Phase 4)
+- **`dashboards/grafana/analytics_system_resources.json`**: System resources dashboard (Phase 5)
+- **`dashboards/grafana/analytics_export_status.json`**: Export status dashboard (Phase 6)
+
+### Alert Rules
+
+- **`config/alerts/analytics_etl_alerts.yml`**: ETL alert rules (Phase 1)
+- **`config/alerts/analytics_db_alerts.yml`**: Database alert rules (Phase 2)
+- **`config/alerts/analytics_datamart_alerts.yml`**: Datamart alert rules (Phase 3)
+- **`config/alerts/analytics_quality_alerts.yml`**: Data quality alert rules (Phase 4)
+- **`config/alerts/analytics_system_alerts.yml`**: System resources alert rules (Phase 5)
+- **`config/alerts/analytics_export_alerts.yml`**: Export alert rules (Phase 6)
+- **`config/alerts/analytics_cron_alerts.yml`**: Cron job alert rules (Phase 7)
+
 ### Testing
 
-- **`tests/unit/monitor/test_monitorAnalytics.sh`**: Unit tests
-- **`tests/integration/test_monitorAnalytics_integration.sh`**: Integration tests
-- **`tests/integration/test_analytics_alert_delivery.sh`**: Alert delivery tests
-- **`tests/performance/test_analytics_query_performance.sh`**: Performance tests
+- **`tests/unit/monitor/test_collect_etl_metrics.sh`**: ETL metrics unit tests
+- **`tests/unit/lib/test_etlLogParser.sh`**: ETL parser unit tests
+- **`tests/unit/monitor/test_collect_database_metrics.sh`**: Database metrics unit tests
+- **`tests/unit/monitor/test_collect_datamart_metrics.sh`**: Datamart metrics unit tests
+- **`tests/unit/lib/test_datamartLogParser.sh`**: Datamart parser unit tests
+- **`tests/unit/monitor/test_collect_validation_metrics.sh`**: Validation metrics unit tests
+- **`tests/unit/monitor/test_collect_analytics_system_metrics.sh`**: System metrics unit tests
+- **`tests/unit/monitor/test_collect_export_metrics.sh`**: Export metrics unit tests
+- **`tests/unit/monitor/test_collect_cron_metrics.sh`**: Cron metrics unit tests
+- **`tests/integration/test_etl_monitoring.sh`**: ETL monitoring integration tests
+- **`tests/integration/test_database_monitoring.sh`**: Database monitoring integration tests
+- **`tests/integration/test_datamart_monitoring.sh`**: Datamart monitoring integration tests
+- **`tests/integration/test_validation_monitoring.sh`**: Validation monitoring integration tests
+- **`tests/integration/test_system_resources.sh`**: System resources integration tests
+- **`tests/integration/test_export_monitoring.sh`**: Export monitoring integration tests
+- **`tests/integration/test_cron_monitoring.sh`**: Cron monitoring integration tests
 
 ---
 

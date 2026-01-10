@@ -19,6 +19,152 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Optimize queries based on usage
 - Add new dashboards as needed
 
+## [1.2.0] - 2026-01-10
+
+### Added
+
+#### Complete Analytics Monitoring Implementation (7 Phases)
+
+##### Phase 1: ETL Metrics Collection
+- **ETL metrics collection** (`bin/monitor/collect_etl_metrics.sh`)
+  - ETL log parsing from `/tmp/ETL_*/ETL.log`
+  - Execution time tracking
+  - Facts processed (new vs updated)
+  - Stage timing metrics
+  - Validation status
+  - Error detection and classification
+  - Execution mode detection (initial/incremental)
+- **ETL log parser library** (`bin/lib/etlLogParser.sh`)
+  - Structured log parsing functions
+  - Metrics extraction from ETL logs
+- **SQL queries** (`sql/analytics/etl_execution_metrics.sql`)
+- **Grafana dashboard** (`dashboards/grafana/analytics_etl_overview.json`) - 8 panels
+- **Alert rules** (`config/alerts/analytics_etl_alerts.yml`) - 12 rules
+- **Unit tests** (`tests/unit/monitor/test_collect_etl_metrics.sh`, `tests/unit/lib/test_etlLogParser.sh`)
+- **Integration tests** (`tests/integration/test_etl_monitoring.sh`)
+
+##### Phase 2: Database Performance Metrics
+- **Database metrics collection** (`bin/monitor/collect_database_metrics.sh`)
+  - Cache hit ratio monitoring
+  - Active connections tracking
+  - Slow queries detection
+  - Active locks monitoring
+  - Table bloat analysis
+  - Schema size tracking
+  - Facts partition sizes
+- **SQL queries** (`sql/analytics/database_performance.sql`, `sql/analytics/database_sizes.sql`)
+- **Grafana dashboard** (`dashboards/grafana/analytics_dwh_performance.json`) - 7 panels
+- **Alert rules** (`config/alerts/analytics_db_alerts.yml`) - 12 rules
+- **Unit tests** (`tests/unit/monitor/test_collect_database_metrics.sh`)
+- **Integration tests** (`tests/integration/test_database_monitoring.sh`)
+
+##### Phase 3: Datamart Metrics
+- **Datamart metrics collection** (`bin/monitor/collect_datamart_metrics.sh`)
+  - Last successful execution tracking
+  - Execution duration monitoring
+  - Execution frequency analysis
+  - Countries processed (datamart countries)
+  - Parallel processing metrics
+  - Users processed (datamart users)
+  - Global duration tracking
+  - Last update time monitoring
+  - Record counts and growth
+  - Staleness detection
+- **Datamart log parser library** (`bin/lib/datamartLogParser.sh`)
+- **SQL queries** (`sql/analytics/datamart_metrics.sql`)
+- **Grafana dashboard** (`dashboards/grafana/analytics_datamarts_overview.json`) - 6 panels
+- **Alert rules** (`config/alerts/analytics_datamart_alerts.yml`) - 10 rules
+- **Unit tests** (`tests/unit/monitor/test_collect_datamart_metrics.sh`, `tests/unit/lib/test_datamartLogParser.sh`)
+- **Integration tests** (`tests/integration/test_datamart_monitoring.sh`)
+
+##### Phase 4: Validation Metrics
+- **Validation metrics collection** (`bin/monitor/collect_validation_metrics.sh`)
+  - MON-001 validation (validate_note_current_status)
+  - MON-002 validation (validate_comment_counts)
+  - Orphaned facts detection
+  - Overall data quality score calculation
+  - Validation execution time tracking
+- **SQL queries** (uses existing validation functions)
+- **Grafana dashboard** (`dashboards/grafana/analytics_data_quality.json`) - 7 panels
+- **Alert rules** (`config/alerts/analytics_quality_alerts.yml`) - 10 rules
+- **Unit tests** (`tests/unit/monitor/test_collect_validation_metrics.sh`)
+- **Integration tests** (`tests/integration/test_validation_monitoring.sh`)
+
+##### Phase 5: System Resources
+- **System metrics collection** (`bin/monitor/collect_analytics_system_metrics.sh`)
+  - ETL CPU usage monitoring
+  - ETL memory usage tracking
+  - ETL disk I/O statistics
+  - ETL log disk usage
+  - PostgreSQL CPU usage
+  - PostgreSQL memory usage
+  - System load average (1min, 5min, 15min)
+  - Root filesystem disk usage
+- **Grafana dashboard** (`dashboards/grafana/analytics_system_resources.json`) - 8 panels
+- **Alert rules** (`config/alerts/analytics_system_alerts.yml`) - 10 rules
+- **Unit tests** (`tests/unit/monitor/test_collect_analytics_system_metrics.sh`)
+- **Integration tests** (`tests/integration/test_system_resources.sh`)
+
+##### Phase 6: Export Metrics
+- **Export metrics collection** (`bin/monitor/collect_export_metrics.sh`)
+  - JSON export file tracking
+  - CSV export file tracking
+  - Export file sizes monitoring
+  - Last successful export timestamp
+  - JSON schema validation
+  - GitHub push status verification
+  - Export log parsing
+  - Export duration tracking
+- **Grafana dashboard** (`dashboards/grafana/analytics_export_status.json`) - 9 panels
+- **Alert rules** (`config/alerts/analytics_export_alerts.yml`) - 10 rules
+- **Unit tests** (`tests/unit/monitor/test_collect_export_metrics.sh`)
+- **Integration tests** (`tests/integration/test_export_monitoring.sh`)
+
+##### Phase 7: Cron Job Monitoring
+- **Cron metrics collection** (`bin/monitor/collect_cron_metrics.sh`)
+  - ETL cron execution monitoring (every 15 minutes)
+  - Datamart cron execution monitoring (daily)
+  - Export cron execution monitoring (daily)
+  - Lock files detection
+  - Execution gaps detection
+  - Execution count tracking (24h)
+  - Last execution timestamp tracking
+- **Grafana dashboard** (metrics available in existing dashboards)
+- **Alert rules** (`config/alerts/analytics_cron_alerts.yml`) - 10 rules
+- **Unit tests** (`tests/unit/monitor/test_collect_cron_metrics.sh`)
+- **Integration tests** (`tests/integration/test_cron_monitoring.sh`)
+
+### Changed
+
+- **Enhanced `monitorAnalytics.sh`** with new check functions:
+  - `check_etl_log_analysis()` - Phase 1
+  - `check_database_performance()` - Phase 2
+  - `check_datamart_status()` - Phase 3
+  - `check_validation_status()` - Phase 4
+  - `check_system_resources()` - Phase 5
+  - `check_export_status()` - Phase 6
+  - `check_cron_jobs()` - Phase 7
+- **Updated `ANALYTICS_MONITORING_GUIDE.md`** with comprehensive documentation for all 7 phases
+- **Removed obsolete documentation**:
+  - `docs/ANALYTICS_MONITORING_REPORT.md` (implementation complete)
+  - `docs/ANALYTICS_IMPLEMENTATION_PLAN.md` (implementation complete)
+  - `docs/ANALYTICS_TODO_LIST.md` (all tasks completed)
+
+### Technical Details
+
+- **Total new metrics**: 100+ metrics across 7 phases
+- **New scripts**: 7 collection scripts, 2 parser libraries
+- **New dashboards**: 6 Grafana dashboards
+- **New SQL queries**: 4 SQL files with 40+ queries
+- **Test coverage**: 50+ new unit and integration tests, all passing
+- **Alert rules**: 70+ alert rules across 7 alert files
+
+### Notes
+
+- All 7 phases of the Analytics monitoring implementation plan have been successfully completed
+- Complete monitoring coverage for ETL, database, datamarts, validations, system resources, exports, and cron jobs
+- See `docs/ANALYTICS_MONITORING_GUIDE.md` for complete operational guidance
+
 ## [1.1.0] - 2026-01-09
 
 ### Added
