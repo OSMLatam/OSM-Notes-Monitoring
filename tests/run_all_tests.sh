@@ -396,6 +396,7 @@ Executes all test suites: unit, integration, e2e, SQL queries, and script tests.
 Usage: $0 [OPTIONS]
 
 Options:
+    -a, --all                Run all test suites (default behavior)
     -u, --unit-only          Run only unit tests
     -i, --integration-only  Run only integration tests
     -e, --e2e-only          Run only e2e tests
@@ -407,6 +408,7 @@ Options:
 Examples:
     # Run all tests
     $0
+    $0 --all
 
     # Run only unit tests
     $0 --unit-only
@@ -421,6 +423,7 @@ EOF
 # Main
 ##
 main() {
+    local run_all=false
     local unit_only=false
     local integration_only=false
     local e2e_only=false
@@ -431,6 +434,10 @@ main() {
     # Parse arguments
     while [[ $# -gt 0 ]]; do
         case "${1}" in
+            -a|--all)
+                run_all=true
+                shift
+                ;;
             -u|--unit-only)
                 unit_only=true
                 shift
@@ -486,8 +493,8 @@ main() {
         run_script_tests || overall_result=1
     elif [[ "${performance_only}" == "true" ]]; then
         run_performance_tests || overall_result=1
-    else
-        # Run all tests
+    elif [[ "${run_all}" == "true" ]] || [[ $# -eq 0 ]]; then
+        # Run all tests (explicit --all or default behavior)
         run_unit_tests || overall_result=1
         run_integration_tests || overall_result=1
         run_e2e_tests || overall_result=1
