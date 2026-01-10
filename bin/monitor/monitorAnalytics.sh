@@ -73,6 +73,7 @@ Check Types:
     query-performance Check query performance
     database-performance Check database performance metrics
     datamart-status  Check datamart status and metrics
+    validation-status Check validation status and data quality metrics
     all             Run all checks (default)
 
 Examples:
@@ -1516,16 +1517,49 @@ check_storage_growth() {
 check_data_quality() {
 	log_info "${COMPONENT}: Starting data quality check"
 
-	# TODO: Implement data quality check
-	# This should check:
-	# - Data completeness
-	# - Data consistency
-	# - Data validation results
-	# - Data quality scores
+	# Call validation metrics collection script
+	local collect_script="${PROJECT_ROOT}/bin/monitor/collect_validation_metrics.sh"
 
-	log_debug "${COMPONENT}: Data quality check not yet implemented"
+	if [[ ! -f "${collect_script}" ]] || [[ ! -x "${collect_script}" ]]; then
+		log_debug "${COMPONENT}: Validation metrics collection script not found or not executable: ${collect_script}"
+		return 0
+	fi
 
-	return 0
+	if bash "${collect_script}" 2>&1 | while IFS= read -r line; do
+		log_debug "${COMPONENT}: ${line}"
+	done; then
+		log_info "${COMPONENT}: Data quality check completed"
+		return 0
+	else
+		log_warning "${COMPONENT}: Data quality check failed"
+		return 1
+	fi
+}
+
+##
+# Check validation status
+##
+check_validation_status() {
+	log_info "${COMPONENT}: Starting validation status check"
+
+	# Check if collect_validation_metrics script exists
+	local collect_script="${PROJECT_ROOT}/bin/monitor/collect_validation_metrics.sh"
+
+	if [[ ! -f "${collect_script}" ]] || [[ ! -x "${collect_script}" ]]; then
+		log_debug "${COMPONENT}: Validation metrics collection script not found or not executable: ${collect_script}"
+		return 0
+	fi
+
+	# Execute the collection script
+	if bash "${collect_script}" 2>&1 | while IFS= read -r line; do
+		log_debug "${COMPONENT}: ${line}"
+	done; then
+		log_info "${COMPONENT}: Validation status check completed"
+		return 0
+	else
+		log_warning "${COMPONENT}: Validation status check failed"
+		return 1
+	fi
 }
 
 ##
@@ -1585,6 +1619,7 @@ run_all_checks() {
 	check_etl_execution_frequency
 	check_database_performance
 	check_datamart_status
+	check_validation_status
 	check_data_warehouse_freshness
 	check_etl_processing_duration
 	check_data_mart_update_status
@@ -1689,6 +1724,9 @@ main() {
 		;;
 	datamart-status)
 		check_datamart_status
+		;;
+	validation-status)
+		check_validation_status
 		;;
 	all)
 		run_all_checks

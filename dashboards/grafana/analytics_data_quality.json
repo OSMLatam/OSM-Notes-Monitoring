@@ -1,0 +1,210 @@
+{
+  "id": null,
+  "uid": "osm-notes-analytics-data-quality",
+  "title": "Analytics Data Quality",
+  "tags": ["osm", "monitoring", "analytics", "data-quality", "validation"],
+  "timezone": "browser",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "30s",
+  "editable": true,
+  "panels": [
+    {
+      "id": 1,
+      "title": "Data Quality Score",
+      "type": "gauge",
+      "gridPos": {"h": 6, "w": 6, "x": 0, "y": 0},
+      "targets": [{
+        "datasource": {
+          "type": "postgres",
+          "uid": "PostgreSQL"
+        },
+        "editorMode": "code",
+        "format": "table",
+        "rawQuery": true,
+        "rawSql": "SELECT metric_value AS value FROM metrics WHERE component = 'ANALYTICS' AND metric_name = 'data_quality_score' ORDER BY timestamp DESC LIMIT 1",
+        "refId": "A"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "max": 100,
+          "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"value": null, "color": "red"},
+              {"value": 70, "color": "yellow"},
+              {"value": 85, "color": "green"}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "Validation Results",
+      "type": "table",
+      "gridPos": {"h": 6, "w": 6, "x": 6, "y": 0},
+      "targets": [{
+        "datasource": {
+          "type": "postgres",
+          "uid": "PostgreSQL"
+        },
+        "editorMode": "code",
+        "format": "table",
+        "rawQuery": true,
+        "rawSql": "SELECT metadata->>'validation' AS validation, CASE WHEN metric_value = 1 THEN 'PASS' ELSE 'FAIL' END AS status, (SELECT metric_value FROM metrics m2 WHERE m2.component = 'ANALYTICS' AND m2.metric_name = 'validation_issues_count' AND m2.metadata->>'validation' = m1.metadata->>'validation' ORDER BY m2.timestamp DESC LIMIT 1) AS issues FROM metrics m1 WHERE component = 'ANALYTICS' AND metric_name = 'validation_status' AND timestamp >= NOW() - INTERVAL '1 hour' ORDER BY timestamp DESC LIMIT 2",
+        "refId": "A"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "PASS": {"text": "PASS", "color": "green"},
+                "FAIL": {"text": "FAIL", "color": "red"}
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "Issues by Type",
+      "type": "piechart",
+      "gridPos": {"h": 6, "w": 6, "x": 12, "y": 0},
+      "targets": [{
+        "datasource": {
+          "type": "postgres",
+          "uid": "PostgreSQL"
+        },
+        "editorMode": "code",
+        "format": "table",
+        "rawQuery": true,
+        "rawSql": "SELECT metadata->>'validation' AS type, metric_value AS value FROM metrics WHERE component = 'ANALYTICS' AND metric_name = 'validation_issues_count' AND timestamp >= NOW() - INTERVAL '1 hour' ORDER BY timestamp DESC LIMIT 2",
+        "refId": "A"
+      }]
+    },
+    {
+      "id": 4,
+      "title": "Orphaned Facts Count",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 6},
+      "targets": [{
+        "datasource": {
+          "type": "postgres",
+          "uid": "PostgreSQL"
+        },
+        "editorMode": "code",
+        "format": "table",
+        "rawQuery": true,
+        "rawSql": "SELECT metric_value AS value FROM metrics WHERE component = 'ANALYTICS' AND metric_name = 'orphaned_facts_count' ORDER BY timestamp DESC LIMIT 1",
+        "refId": "A"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"value": null, "color": "green"},
+              {"value": 1, "color": "yellow"},
+              {"value": 10, "color": "red"}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 5,
+      "title": "Data Freshness",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 6, "x": 6, "y": 6},
+      "targets": [{
+        "datasource": {
+          "type": "postgres",
+          "uid": "PostgreSQL"
+        },
+        "editorMode": "code",
+        "format": "table",
+        "rawQuery": true,
+        "rawSql": "SELECT metric_value AS value FROM metrics WHERE component = 'ANALYTICS' AND metric_name = 'dwh_freshness_seconds' ORDER BY timestamp DESC LIMIT 1",
+        "refId": "A"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"value": null, "color": "green"},
+              {"value": 3600, "color": "yellow"},
+              {"value": 7200, "color": "red"}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 6,
+      "title": "Validation Duration",
+      "type": "timeseries",
+      "gridPos": {"h": 6, "w": 12, "x": 0, "y": 10},
+      "targets": [{
+        "datasource": {
+          "type": "postgres",
+          "uid": "PostgreSQL"
+        },
+        "editorMode": "code",
+        "format": "time_series",
+        "rawQuery": true,
+        "rawSql": "SELECT timestamp AS time, metric_value AS value, metadata->>'validation' AS validation FROM metrics WHERE component = 'ANALYTICS' AND metric_name = 'validation_duration_seconds' AND $__timeFilter(timestamp) ORDER BY timestamp",
+        "refId": "A"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 0
+        }
+      }
+    },
+    {
+      "id": 7,
+      "title": "Data Quality Score Over Time",
+      "type": "timeseries",
+      "gridPos": {"h": 6, "w": 12, "x": 0, "y": 16},
+      "targets": [{
+        "datasource": {
+          "type": "postgres",
+          "uid": "PostgreSQL"
+        },
+        "editorMode": "code",
+        "format": "time_series",
+        "rawQuery": true,
+        "rawSql": "SELECT timestamp AS time, metric_value AS value FROM metrics WHERE component = 'ANALYTICS' AND metric_name = 'data_quality_score' AND $__timeFilter(timestamp) ORDER BY timestamp",
+        "refId": "A"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "max": 100,
+          "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"value": null, "color": "red"},
+              {"value": 70, "color": "yellow"},
+              {"value": 85, "color": "green"}
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "time": {"from": "now-24h", "to": "now"}
+}

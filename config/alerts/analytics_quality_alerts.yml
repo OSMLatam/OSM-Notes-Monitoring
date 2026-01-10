@@ -1,0 +1,150 @@
+# Analytics Data Quality Alert Rules
+# Version: 1.0.0
+# Date: 2026-01-09
+# Purpose: Alert rules for data quality monitoring in OSM-Notes-Analytics
+#
+# These alert rules are designed to work with Prometheus/Grafana alerting
+# or can be adapted for use with the monitoring system's alert functions
+
+groups:
+  - name: analytics_quality_alerts
+    interval: 30s
+    rules:
+      # Validation Failed Alert
+      - alert: AnalyticsValidationFailed
+        expr: analytics_validation_status{validation="MON-001"} == 0 OR analytics_validation_status{validation="MON-002"} == 0
+        for: 5m
+        labels:
+          severity: warning
+          component: analytics
+          alert_type: validation
+        annotations:
+          summary: "Data validation failed ({{ $labels.validation }})"
+          description: "Validation {{ $labels.validation }} has failed. Component: {{ $labels.component }}"
+          runbook_url: "https://github.com/OSM-Notes-Monitoring/docs/ANALYTICS_MONITORING_GUIDE.md"
+
+      # Critical Validation Failed Alert
+      - alert: AnalyticsValidationCriticallyFailed
+        expr: (analytics_validation_status{validation="MON-001"} == 0 AND analytics_validation_status{validation="MON-002"} == 0)
+        for: 2m
+        labels:
+          severity: critical
+          component: analytics
+          alert_type: validation
+        annotations:
+          summary: "Both data validations failed"
+          description: "Both MON-001 and MON-002 validations have failed. Immediate action required. Component: {{ $labels.component }}"
+          runbook_url: "https://github.com/OSM-Notes-Monitoring/docs/ANALYTICS_MONITORING_GUIDE.md"
+
+      # Low Data Quality Score Alert
+      - alert: AnalyticsLowDataQualityScore
+        expr: analytics_data_quality_score < 85
+        for: 10m
+        labels:
+          severity: warning
+          component: analytics
+          alert_type: data_quality
+        annotations:
+          summary: "Data quality score is low ({{ $value }}%)"
+          description: "Data quality score is {{ $value }}%, which is below the 85% threshold. Component: {{ $labels.component }}"
+          runbook_url: "https://github.com/OSM-Notes-Monitoring/docs/ANALYTICS_MONITORING_GUIDE.md"
+
+      # Critical Low Data Quality Score Alert
+      - alert: AnalyticsCriticallyLowDataQualityScore
+        expr: analytics_data_quality_score < 70
+        for: 5m
+        labels:
+          severity: critical
+          component: analytics
+          alert_type: data_quality
+        annotations:
+          summary: "Data quality score is critically low ({{ $value }}%)"
+          description: "Data quality score is {{ $value }}%, which is below the 70% critical threshold. Immediate action required. Component: {{ $labels.component }}"
+          runbook_url: "https://github.com/OSM-Notes-Monitoring/docs/ANALYTICS_MONITORING_GUIDE.md"
+
+      # Orphaned Facts Detected Alert
+      - alert: AnalyticsOrphanedFactsDetected
+        expr: analytics_orphaned_facts_count > 0
+        for: 5m
+        labels:
+          severity: warning
+          component: analytics
+          alert_type: data_integrity
+        annotations:
+          summary: "Orphaned facts detected ({{ $value }} facts)"
+          description: "{{ $value }} orphaned facts (facts without valid dimension) detected in the data warehouse. Component: {{ $labels.component }}"
+          runbook_url: "https://github.com/OSM-Notes-Monitoring/docs/ANALYTICS_MONITORING_GUIDE.md"
+
+      # High Orphaned Facts Count Alert
+      - alert: AnalyticsHighOrphanedFactsCount
+        expr: analytics_orphaned_facts_count > 10
+        for: 5m
+        labels:
+          severity: critical
+          component: analytics
+          alert_type: data_integrity
+        annotations:
+          summary: "High number of orphaned facts ({{ $value }} facts)"
+          description: "{{ $value }} orphaned facts detected, which exceeds the 10 facts threshold. This indicates serious data integrity issues. Component: {{ $labels.component }}"
+          runbook_url: "https://github.com/OSM-Notes-Monitoring/docs/ANALYTICS_MONITORING_GUIDE.md"
+
+      # Validation Issues Count High Alert
+      - alert: AnalyticsHighValidationIssuesCount
+        expr: analytics_validation_issues_count > 5
+        for: 5m
+        labels:
+          severity: warning
+          component: analytics
+          alert_type: validation
+        annotations:
+          summary: "High number of validation issues ({{ $value }} issues for {{ $labels.validation }})"
+          description: "Validation {{ $labels.validation }} detected {{ $value }} issues, which exceeds the 5 issues threshold. Component: {{ $labels.component }}"
+          runbook_url: "https://github.com/OSM-Notes-Monitoring/docs/ANALYTICS_MONITORING_GUIDE.md"
+
+      # Long Validation Duration Alert
+      - alert: AnalyticsLongValidationDuration
+        expr: analytics_validation_duration_seconds > 300
+        for: 5m
+        labels:
+          severity: warning
+          component: analytics
+          alert_type: validation_performance
+        annotations:
+          summary: "Validation is taking too long ({{ $value | humanizeDuration }} for {{ $labels.validation }})"
+          description: "Validation {{ $labels.validation }} duration is {{ $value | humanizeDuration }}, which exceeds the 5 minute threshold. Component: {{ $labels.component }}"
+          runbook_url: "https://github.com/OSM-Notes-Monitoring/docs/ANALYTICS_MONITORING_GUIDE.md"
+
+      # Data Staleness Alert
+      - alert: AnalyticsDataStaleness
+        expr: analytics_dwh_freshness_seconds > 7200
+        for: 10m
+        labels:
+          severity: warning
+          component: analytics
+          alert_type: data_freshness
+        annotations:
+          summary: "Data warehouse is stale ({{ $value | humanizeDuration }} since last update)"
+          description: "Data warehouse has not been updated in {{ $value | humanizeDuration }}. Last update was more than 2 hours ago. Component: {{ $labels.component }}"
+          runbook_url: "https://github.com/OSM-Notes-Monitoring/docs/ANALYTICS_MONITORING_GUIDE.md"
+
+      # Critical Data Staleness Alert
+      - alert: AnalyticsCriticalDataStaleness
+        expr: analytics_dwh_freshness_seconds > 14400
+        for: 5m
+        labels:
+          severity: critical
+          component: analytics
+          alert_type: data_freshness
+        annotations:
+          summary: "Data warehouse is critically stale ({{ $value | humanizeDuration }} since last update)"
+          description: "Data warehouse has not been updated in {{ $value | humanizeDuration }}. Last update was more than 4 hours ago. Immediate action required. Component: {{ $labels.component }}"
+          runbook_url: "https://github.com/OSM-Notes-Monitoring/docs/ANALYTICS_MONITORING_GUIDE.md"
+
+# Note: These alert rules use Prometheus query syntax
+# For use with the monitoring system's alert functions, adapt the expressions
+# to match the metric names and formats used by record_metric() calls
+#
+# Example adaptation for shell-based alerting:
+#   if [[ "${validation_status}" == "FAIL" ]]; then
+#     send_alert "ANALYTICS" "warning" "validation" "Validation ${validation_name} failed"
+#   fi
