@@ -63,6 +63,17 @@ jobs:
           psql -d osm_notes_monitoring_test -f sql/init.sql
       
       - name: Run unit tests
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: postgres
+          PGDATABASE: osm_notes_monitoring_test
+          DBHOST: localhost
+          DBPORT: 5432
+          DBUSER: postgres
+          DBPASSWORD: postgres
+          DBNAME: osm_notes_monitoring_test
         run: |
           if [ -f tests/run_unit_tests.sh ]; then
             ./tests/run_unit_tests.sh
