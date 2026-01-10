@@ -106,7 +106,7 @@ CREATE TABLE IF NOT EXISTS component_health (
     last_success TIMESTAMP WITH TIME ZONE,
     error_count INTEGER DEFAULT 0,
     metadata JSONB,
-    CONSTRAINT component_health_component_check CHECK (component IN ('ingestion', 'analytics', 'wms', 'api', 'data', 'infrastructure')),
+    CONSTRAINT component_health_component_check CHECK (component IN ('ingestion', 'analytics', 'wms', 'api', 'data', 'infrastructure', 'daemon')),
     CONSTRAINT component_health_status_check CHECK (status IN ('healthy', 'degraded', 'down', 'unknown'))
 );
 

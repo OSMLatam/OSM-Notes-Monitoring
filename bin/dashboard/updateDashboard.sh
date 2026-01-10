@@ -353,6 +353,62 @@ update_component_health() {
         -d "${dbname}" \
         -c "${query}" > /dev/null 2>&1 || log_warning "Failed to update component health"
     fi
+    
+    # Update daemon health separately (daemon metrics are under 'ingestion' component)
+    local daemon_query="
+        UPDATE component_health 
+        SET status = CASE 
+            WHEN EXISTS (
+                SELECT 1 FROM metrics 
+                WHERE component = 'ingestion' 
+                AND metric_name LIKE 'daemon%' 
+                AND timestamp > CURRENT_TIMESTAMP - INTERVAL '5 minutes'
+            ) THEN 'healthy'
+            WHEN EXISTS (
+                SELECT 1 FROM metrics 
+                WHERE component = 'ingestion' 
+                AND metric_name LIKE 'daemon%' 
+                AND timestamp > CURRENT_TIMESTAMP - INTERVAL '1 hour'
+            ) THEN 'degraded'
+            ELSE 'down'
+        END,
+        last_check = CURRENT_TIMESTAMP,
+        last_success = CASE 
+            WHEN EXISTS (
+                SELECT 1 FROM metrics 
+                WHERE component = 'ingestion' 
+                AND metric_name LIKE 'daemon%' 
+                AND timestamp > CURRENT_TIMESTAMP - INTERVAL '5 minutes'
+            ) THEN CURRENT_TIMESTAMP
+            ELSE last_success
+        END,
+        error_count = CASE 
+            WHEN EXISTS (
+                SELECT 1 FROM metrics 
+                WHERE component = 'ingestion' 
+                AND metric_name LIKE 'daemon%' 
+                AND timestamp > CURRENT_TIMESTAMP - INTERVAL '5 minutes'
+            ) THEN 0
+            ELSE error_count + 1
+        END
+        WHERE component = 'daemon';
+    "
+    
+    if [[ -n "${PGPASSWORD:-}" ]]; then
+        PGPASSWORD="${PGPASSWORD}" psql \
+            -h "${dbhost}" \
+            -p "${dbport}" \
+            -U "${dbuser}" \
+            -d "${dbname}" \
+            -c "${daemon_query}" > /dev/null 2>&1 || log_warning "Failed to update daemon health"
+    else
+        psql \
+        -h "${dbhost}" \
+        -p "${dbport}" \
+        -U "${dbuser}" \
+        -d "${dbname}" \
+        -c "${daemon_query}" > /dev/null 2>&1 || log_warning "Failed to update daemon health"
+    fi
 }
 
 ##
