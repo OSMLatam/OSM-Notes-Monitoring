@@ -22,7 +22,7 @@
         "editorMode": "code",
         "format": "table",
         "rawQuery": true,
-        "rawSql": "SELECT COUNT(*) as value FROM metrics WHERE component = 'ingestion' AND metric_name = 'scripts_executable'",
+        "rawSql": "SELECT metric_value as value FROM metrics WHERE component = 'ingestion' AND metric_name = 'scripts_executable' ORDER BY timestamp DESC LIMIT 1",
         "refId": "A"
       }]
     },
