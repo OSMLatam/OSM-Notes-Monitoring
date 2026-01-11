@@ -591,6 +591,38 @@ main() {
         fi
     fi
     
+    # Update component health status based on check results
+    local health_status="healthy"
+    if [[ ${overall_result} -ne 0 ]]; then
+        # Determine health status based on recent metrics
+        if check_database_connection 2>/dev/null; then
+            local availability_query="SELECT metric_value FROM metrics WHERE component = 'wms' AND metric_name = 'service_availability' ORDER BY timestamp DESC LIMIT 1;"
+            local availability
+            availability=$(execute_sql_query "${availability_query}" 2>/dev/null | tr -d '[:space:]' || echo "")
+            
+            if [[ -n "${availability}" ]] && [[ "${availability}" =~ ^[01]$ ]]; then
+                if [[ ${availability} -eq 0 ]]; then
+                    health_status="down"
+                else
+                    health_status="degraded"
+                fi
+            else
+                health_status="unknown"
+            fi
+        else
+            health_status="unknown"
+        fi
+    fi
+    
+    # Update component_health table
+    if check_database_connection 2>/dev/null; then
+        if update_component_health "wms" "${health_status}" 0; then
+            log_debug "${COMPONENT}: Updated component health status to: ${health_status}"
+        else
+            log_warning "${COMPONENT}: Failed to update component health status"
+        fi
+    fi
+    
     if [[ ${overall_result} -eq 0 ]]; then
         log_info "${COMPONENT}: All WMS checks passed"
     else

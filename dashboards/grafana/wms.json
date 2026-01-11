@@ -22,9 +22,30 @@
         "editorMode": "code",
         "format": "table",
         "rawQuery": true,
-        "rawSql": "SELECT status FROM component_health WHERE component = 'wms'",
+        "rawSql": "SELECT COALESCE(status, 'unknown') as status, COALESCE(last_check, '1970-01-01'::timestamp) as last_check FROM component_health WHERE component = 'wms'",
         "refId": "A"
-      }]
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "healthy": {"text": "Healthy", "color": "green"},
+                "degraded": {"text": "Degraded", "color": "yellow"},
+                "down": {"text": "Down", "color": "red"},
+                "unknown": {"text": "Unknown", "color": "gray"}
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"value": null, "color": "gray"}
+            ]
+          }
+        }
+      }
     },
     {
       "id": 2,
@@ -39,7 +60,7 @@
         "editorMode": "code",
         "format": "time_series",
         "rawQuery": true,
-        "rawSql": "SELECT timestamp AS time, metric_value AS value, metric_name FROM metrics WHERE component = 'wms' AND metric_name IN ('error_rate_percent', 'response_time_ms', 'service_availability') AND timestamp > NOW() - INTERVAL '24 hours' ORDER BY timestamp",
+        "rawSql": "SELECT timestamp AS time, metric_value AS value, metric_name FROM metrics WHERE component = 'wms' AND metric_name IN ('error_rate_percent', 'response_time_ms', 'service_availability') AND timestamp > NOW() - INTERVAL '24 hours' ORDER BY timestamp, metric_name",
         "refId": "A"
       }]
     }
