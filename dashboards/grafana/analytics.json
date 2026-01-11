@@ -12,7 +12,7 @@
     {
       "id": 1,
       "title": "Analytics Health Status",
-      "type": "table",
+      "type": "stat",
       "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
       "targets": [{
         "datasource": {
@@ -22,15 +22,45 @@
         "editorMode": "code",
         "format": "table",
         "rawQuery": true,
-        "rawSql": "SELECT status FROM component_health WHERE component = 'analytics'",
+        "rawSql": "SELECT CASE status WHEN 'healthy' THEN 1 WHEN 'degraded' THEN 0.5 WHEN 'down' THEN 0 ELSE 0.25 END as value, status FROM component_health WHERE component = 'analytics'",
         "refId": "A"
       }],
       "options": {
-        "showHeader": true,
-        "sortBy": []
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "values": false,
+          "calcs": ["lastNotNull"],
+          "fields": ""
+        },
+        "textMode": "auto"
       },
       "fieldConfig": {
-        "defaults": {},
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {"text": "Down", "color": "red"},
+                "0.25": {"text": "Unknown", "color": "gray"},
+                "0.5": {"text": "Degraded", "color": "yellow"},
+                "1": {"text": "Healthy", "color": "green"}
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"value": null, "color": "gray"},
+              {"value": 0.25, "color": "gray"},
+              {"value": 0.5, "color": "yellow"},
+              {"value": 1, "color": "green"}
+            ]
+          },
+          "unit": "short"
+        },
         "overrides": [
           {
             "matcher": {
@@ -39,28 +69,20 @@
             },
             "properties": [
               {
+                "id": "custom.displayMode",
+                "value": "color-text"
+              },
+              {
                 "id": "mappings",
                 "value": [
                   {
+                    "type": "value",
                     "options": {
-                      "healthy": {
-                        "color": "green",
-                        "text": "Healthy"
-                      },
-                      "degraded": {
-                        "color": "yellow",
-                        "text": "Degraded"
-                      },
-                      "down": {
-                        "color": "red",
-                        "text": "Down"
-                      },
-                      "unknown": {
-                        "color": "gray",
-                        "text": "Unknown"
-                      }
-                    },
-                    "type": "value"
+                      "healthy": {"text": "Healthy", "color": "green"},
+                      "degraded": {"text": "Degraded", "color": "yellow"},
+                      "down": {"text": "Down", "color": "red"},
+                      "unknown": {"text": "Unknown", "color": "gray"}
+                    }
                   }
                 ]
               }
@@ -74,30 +96,92 @@
       "title": "Key Metrics",
       "type": "timeseries",
       "gridPos": {"h": 8, "w": 18, "x": 6, "y": 0},
-      "targets": [{
-        "datasource": {
-          "type": "postgres",
-          "uid": "PostgreSQL"
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT timestamp AS time, metric_value::numeric AS value FROM metrics WHERE component = 'analytics' AND metric_name = 'etl_scripts_executable' AND $__timeFilter(timestamp) ORDER BY timestamp",
+          "refId": "A"
         },
-        "editorMode": "code",
-        "format": "time_series",
-        "rawQuery": true,
-        "rawSql": "SELECT timestamp AS time, metric_value::numeric AS value, metric_name FROM metrics WHERE component = 'analytics' AND metric_name IN ('etl_scripts_executable', 'etl_scripts_running', 'etl_scripts_found') AND timestamp > NOW() - INTERVAL '24 hours' ORDER BY timestamp",
-        "refId": "A"
-      }],
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT timestamp AS time, metric_value::numeric AS value FROM metrics WHERE component = 'analytics' AND metric_name = 'etl_scripts_running' AND $__timeFilter(timestamp) ORDER BY timestamp",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "PostgreSQL"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT timestamp AS time, metric_value::numeric AS value FROM metrics WHERE component = 'analytics' AND metric_name = 'etl_scripts_found' AND $__timeFilter(timestamp) ORDER BY timestamp",
+          "refId": "C"
+        }
+      ],
       "fieldConfig": {
         "defaults": {
           "unit": "short",
           "decimals": 0,
           "custom": {
             "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "fillOpacity": 0,
-            "pointSize": 5,
-            "showPoints": "auto"
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "pointSize": 0,
+            "showPoints": "never"
           }
-        }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "value"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "etl_scripts_executable"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "B"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "etl_scripts_running"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "C"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "etl_scripts_found"
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "legend": {
