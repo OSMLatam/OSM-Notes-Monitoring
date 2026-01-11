@@ -1920,20 +1920,28 @@ check_daemon_metrics() {
         return 0
     fi
     
+    # Ensure PATH includes standard binary directories for systemctl and other tools
+    # This is critical when script runs from cron or with limited PATH
+    local saved_path="${PATH:-}"
+    export PATH="/usr/local/bin:/usr/bin:/bin:/sbin:/usr/sbin:${PATH:-}"
+    
     # Run daemon metrics collection
     local output
     local exit_code=0
     
     if [[ "${TEST_MODE:-false}" == "true" ]]; then
         # In test mode, capture output for debugging
-        output=$(bash "${daemon_metrics_script}" 2>&1) || exit_code=$?
+        output=$(env PATH="${PATH}" bash "${daemon_metrics_script}" 2>&1) || exit_code=$?
         if [[ ${exit_code} -ne 0 ]]; then
             log_debug "${COMPONENT}: Daemon metrics collection output: ${output}"
         fi
     else
         # In production, run silently and log errors
-        bash "${daemon_metrics_script}" > /dev/null 2>&1 || exit_code=$?
+        env PATH="${PATH}" bash "${daemon_metrics_script}" > /dev/null 2>&1 || exit_code=$?
     fi
+    
+    # Restore original PATH
+    export PATH="${saved_path}"
     
     if [[ ${exit_code} -ne 0 ]]; then
         log_warning "${COMPONENT}: Daemon metrics collection failed (exit code: ${exit_code})"

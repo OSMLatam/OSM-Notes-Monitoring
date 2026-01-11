@@ -52,12 +52,33 @@ check_daemon_service_status() {
     local service_active=0
     local service_enabled=0
     
+    # Ensure PATH includes standard binary directories for systemctl
+    # This is critical when script runs from cron or with limited PATH
+    local saved_path="${PATH:-}"
+    export PATH="/usr/local/bin:/usr/bin:/bin:/sbin:/usr/sbin:${PATH:-}"
+    
+    # Find systemctl command (may be in /usr/bin or /bin)
+    local systemctl_cmd
     if command -v systemctl > /dev/null 2>&1; then
-        # Check if service exists
-        if systemctl list-unit-files | grep -q "^${DAEMON_SERVICE_NAME}"; then
-            # Get service status
-            local status_output
-            status_output=$(systemctl is-active "${DAEMON_SERVICE_NAME}" 2>/dev/null || echo "inactive")
+        systemctl_cmd="systemctl"
+    elif [[ -x /usr/bin/systemctl ]]; then
+        systemctl_cmd="/usr/bin/systemctl"
+    elif [[ -x /bin/systemctl ]]; then
+        systemctl_cmd="/bin/systemctl"
+    else
+        log_debug "${COMPONENT}: systemctl not available, skipping service status check"
+        export PATH="${saved_path}"
+        return 0
+    fi
+    
+    if [[ -n "${systemctl_cmd}" ]]; then
+        # Get service status directly (most reliable method)
+        # This works even if list-unit-files fails or has formatting issues
+        local status_output
+        status_output=$("${systemctl_cmd}" is-active "${DAEMON_SERVICE_NAME}" 2>/dev/null || echo "unknown")
+        
+        # If we got a valid status (active, inactive, failed, etc.), service exists
+        if [[ "${status_output}" != "unknown" ]]; then
             
             if [[ "${status_output}" == "active" ]]; then
                 service_status="active"
@@ -72,7 +93,7 @@ check_daemon_service_status() {
             
             # Check if service is enabled
             local enabled_output
-            enabled_output=$(systemctl is-enabled "${DAEMON_SERVICE_NAME}" 2>/dev/null || echo "disabled")
+            enabled_output=$("${systemctl_cmd}" is-enabled "${DAEMON_SERVICE_NAME}" 2>/dev/null || echo "disabled")
             if [[ "${enabled_output}" == "enabled" ]]; then
                 service_enabled=1
             fi
@@ -80,9 +101,10 @@ check_daemon_service_status() {
             service_status="not-found"
             log_debug "${COMPONENT}: Daemon service not found: ${DAEMON_SERVICE_NAME}"
         fi
-    else
-        log_debug "${COMPONENT}: systemctl not available, skipping service status check"
     fi
+    
+    # Restore original PATH
+    export PATH="${saved_path}"
     
     # Record metrics
     record_metric "${COMPONENT}" "daemon_status" "${service_active}" "component=ingestion,status=${service_status}"
@@ -151,13 +173,28 @@ get_daemon_process_info() {
     fi
     
     # Try to get restart count from systemd (if available)
+    # Ensure PATH includes systemctl location
+    local saved_path_restarts="${PATH:-}"
+    export PATH="/usr/local/bin:/usr/bin:/bin:/sbin:/usr/sbin:${PATH:-}"
+    
+    local systemctl_cmd_restarts
     if command -v systemctl > /dev/null 2>&1; then
+        systemctl_cmd_restarts="systemctl"
+    elif [[ -x /usr/bin/systemctl ]]; then
+        systemctl_cmd_restarts="/usr/bin/systemctl"
+    elif [[ -x /bin/systemctl ]]; then
+        systemctl_cmd_restarts="/bin/systemctl"
+    fi
+    
+    if [[ -n "${systemctl_cmd_restarts}" ]]; then
         local restart_count_output
-        restart_count_output=$(systemctl show "${DAEMON_SERVICE_NAME}" -p NRestarts 2>/dev/null | cut -d= -f2 || echo "")
+        restart_count_output=$("${systemctl_cmd_restarts}" show "${DAEMON_SERVICE_NAME}" -p NRestarts 2>/dev/null | cut -d= -f2 || echo "")
         if [[ -n "${restart_count_output}" ]] && [[ "${restart_count_output}" =~ ^[0-9]+$ ]]; then
             daemon_restarts=${restart_count_output}
         fi
     fi
+    
+    export PATH="${saved_path_restarts}"
     
     # Record metrics
     record_metric "${COMPONENT}" "daemon_pid" "${daemon_pid}" "component=ingestion"
