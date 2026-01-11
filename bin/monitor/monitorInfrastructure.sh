@@ -103,18 +103,68 @@ check_server_resources() {
         return 0
     fi
     
+    # Get CPU count to adjust threshold if needed
+    # For servers with many cores, a higher threshold may be more appropriate
+    local cpu_count=1
+    if command -v nproc > /dev/null 2>&1; then
+        cpu_count=$(nproc 2>/dev/null || echo "1")
+    elif [[ -f /proc/cpuinfo ]]; then
+        cpu_count=$(grep -c "^processor" /proc/cpuinfo 2>/dev/null || echo "1")
+    fi
+    
+    # Adjust CPU threshold based on number of cores if threshold seems too low
+    # For servers with 4+ cores, we can be more lenient as brief spikes are normal
     local cpu_threshold="${INFRASTRUCTURE_CPU_THRESHOLD}"
+    if [[ ${cpu_count} -ge 4 ]] && [[ ${cpu_threshold} -lt 85 ]]; then
+        # For servers with 4+ cores, suggest a higher threshold (but respect user override)
+        # Only adjust if threshold is still at default (80) or very low
+        if [[ ${cpu_threshold} -le 80 ]]; then
+            log_debug "${COMPONENT}: Server has ${cpu_count} cores, consider increasing INFRASTRUCTURE_CPU_THRESHOLD above 80% to reduce false positives"
+        fi
+    fi
+    
     local memory_threshold="${INFRASTRUCTURE_MEMORY_THRESHOLD}"
     local disk_threshold="${INFRASTRUCTURE_DISK_THRESHOLD}"
     
     # Check CPU usage
+    # Use multiple samples and average them to avoid false positives from momentary spikes
     local cpu_usage=0
     if command -v top > /dev/null 2>&1; then
-        # Get CPU usage from top (1 second sample)
-        cpu_usage=$(top -bn1 | grep "Cpu(s)" | sed "s/.*, *\([0-9.]*\)%* id.*/\1/" | awk '{print 100 - $1}' || echo "0")
+        # Get CPU usage from top (3 samples of 1 second each, then average)
+        # This provides a more stable reading and reduces false alerts from brief spikes
+        local cpu_samples=()
+        local sample_count=3
+        for i in $(seq 1 ${sample_count}); do
+            local sample
+            sample=$(top -bn1 | grep "Cpu(s)" | sed "s/.*, *\([0-9.]*\)%* id.*/\1/" | awk '{print 100 - $1}' 2>/dev/null || echo "0")
+            if [[ -n "${sample}" ]] && [[ "${sample}" =~ ^[0-9]+\.?[0-9]*$ ]]; then
+                cpu_samples+=("${sample}")
+            fi
+            # Small delay between samples (except for last one)
+            if [[ ${i} -lt ${sample_count} ]]; then
+                sleep 0.5
+            fi
+        done
+        
+        # Calculate average if we have samples
+        if [[ ${#cpu_samples[@]} -gt 0 ]]; then
+            local sum=0
+            local count=0
+            for sample in "${cpu_samples[@]}"; do
+                sum=$(awk "BEGIN {printf \"%.2f\", ${sum} + ${sample}}")
+                count=$((count + 1))
+            done
+            if [[ ${count} -gt 0 ]]; then
+                cpu_usage=$(awk "BEGIN {printf \"%.2f\", ${sum} / ${count}}")
+            fi
+        fi
     elif command -v vmstat > /dev/null 2>&1; then
-        # Alternative: use vmstat
-        cpu_usage=$(vmstat 1 2 | tail -1 | awk '{print 100 - $15}' || echo "0")
+        # Alternative: use vmstat (2 samples, 1 second apart)
+        local vmstat_samples=()
+        IFS=' ' read -ra vmstat_samples <<< "$(vmstat 1 2 | tail -1 | awk '{print 100 - $15}' 2>/dev/null || echo "0")"
+        if [[ ${#vmstat_samples[@]} -gt 0 ]]; then
+            cpu_usage="${vmstat_samples[0]}"
+        fi
     fi
     
     # Check memory usage
