@@ -119,8 +119,8 @@ All thresholds are configurable via `config/monitoring.conf`. Default values are
 - **Default:** `80`
 - **Unit:** Percent
 - **Metric:** `cache_hit_rate_percent`
-- **Alert Condition:** `cache_hit_rate_percent < threshold`
-- **Description:** Minimum acceptable cache hit rate percentage
+- **Alert Condition:** `cache_hit_rate_percent < threshold AND total_requests > 0`
+- **Description:** Minimum acceptable cache hit rate percentage. **Note:** Alerts are only generated when there is actual cache activity (hits + misses > 0). No alert is generated when there's no activity, as this is normal during periods of low or no traffic.
 - **Severity:** WARNING
 - **Action:**
   - Check cache configuration

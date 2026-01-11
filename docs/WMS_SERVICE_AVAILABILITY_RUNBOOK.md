@@ -321,6 +321,7 @@ This runbook provides detailed information about each WMS monitoring alert type,
 **What it means:**
 - Cache hit rate is below threshold
 - Cache may not be effective
+- **Note:** This alert only triggers when there is actual cache activity (hits + misses > 0). If you see 0% with 0 hits and 0 misses, there's no recent activity, which is normal and won't trigger an alert.
 
 **Common Causes:**
 - Cache size too small
@@ -328,6 +329,7 @@ This runbook provides detailed information about each WMS monitoring alert type,
 - Cache invalidation issues
 - Poor cache key strategy
 - Cache not configured properly
+- GeoServer cache statistics not being collected (check `WMS_LOG_DIR` configuration)
 
 **Investigation Steps:**
 1. Check cache configuration

@@ -450,12 +450,16 @@ For complete alert threshold definitions, see **[WMS_ALERT_THRESHOLDS.md](./WMS_
 
 **Symptoms**: Cache hit rate alerts
 
+**Note**: Cache hit rate alerts are only generated when there is actual cache activity (requests with hits or misses). If you see 0% hit rate with 0 hits and 0 misses, this indicates no recent activity, which is normal during low-traffic periods and will not trigger an alert.
+
 **Solutions**:
 1. Check cache configuration
 2. Review cache size and eviction policies
 3. Check for cache invalidation issues
 4. Optimize cache key strategy
 5. Monitor cache memory usage
+6. Verify that `WMS_LOG_DIR` is configured correctly if using log-based cache monitoring
+7. Check that GeoServer cache statistics are being collected (may require GeoWebCache integration)
 
 ---
 
