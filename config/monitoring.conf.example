@@ -120,11 +120,12 @@ DATA_REPO_SYNC_CHECK_ENABLED=true
 # Infrastructure Monitoring
 INFRASTRUCTURE_ENABLED=true
 INFRASTRUCTURE_CHECK_TIMEOUT=30   # seconds
-INFRASTRUCTURE_CPU_THRESHOLD=80   # percentage
+INFRASTRUCTURE_CPU_THRESHOLD=80   # percentage (consider increasing to 85-90% for servers with 4+ cores)
 INFRASTRUCTURE_MEMORY_THRESHOLD=85  # percentage
 INFRASTRUCTURE_DISK_THRESHOLD=90   # percentage
 INFRASTRUCTURE_SWAP_THRESHOLD=50  # percentage - alert if swap usage exceeds this
 INFRASTRUCTURE_LOAD_THRESHOLD_MULTIPLIER=2  # multiplier - alert if load average > multiplier x CPU count
+INFRASTRUCTURE_SERVICE_DEPENDENCIES="postgresql,geoserver"  # comma-separated list of systemd services to monitor
 
 # Metrics Collection
 METRICS_RETENTION_DAYS=90
