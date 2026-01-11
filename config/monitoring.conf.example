@@ -36,7 +36,12 @@ INGESTION_ERROR_SPIKE_MULTIPLIER=2  # multiplier for error spike detection (2x =
 # Database Performance Thresholds
 INGESTION_DB_CONNECTION_TIME_THRESHOLD=1000  # milliseconds - alert if connection takes longer
 INGESTION_DB_QUERY_TIME_THRESHOLD=1000  # milliseconds - uses PERFORMANCE_SLOW_QUERY_THRESHOLD
-INGESTION_DB_CACHE_HIT_THRESHOLD=95  # percentage - minimum acceptable cache hit ratio
+INGESTION_DB_CACHE_HIT_THRESHOLD=80  # percentage - minimum acceptable cache hit ratio
+# Note: Adjust based on workload and database size:
+# - 95%: Ideal for read-heavy workloads with data fitting in shared_buffers
+# - 80-90%: Good for mixed workloads
+# - 70-80%: Acceptable for write-heavy workloads or databases larger than shared_buffers
+# - 50-70%: May indicate need for more shared_buffers or optimization, but can be normal for very large DBs
 INGESTION_DB_CONNECTION_USAGE_THRESHOLD=80  # percentage - alert if connection usage exceeds this
 
 # Performance Check Thresholds
