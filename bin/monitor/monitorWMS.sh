@@ -515,11 +515,14 @@ check_cache_hit_rate() {
     
     log_info "${COMPONENT}: Cache hit rate: ${hit_rate}% (${cache_hits} hits / ${total_requests} requests, threshold: ${threshold}%)"
     
-    # Alert if hit rate is below threshold
-    if [[ ${hit_rate} -lt ${threshold} ]]; then
+    # Only alert if there is actual activity and hit rate is below threshold
+    # Don't alert when there's no data (0 requests) - this is normal when there's no recent activity
+    if [[ ${total_requests} -gt 0 ]] && [[ ${hit_rate} -lt ${threshold} ]]; then
         log_warning "${COMPONENT}: Cache hit rate (${hit_rate}%) is below threshold (${threshold}%)"
         send_alert "${COMPONENT}" "WARNING" "cache_hit_rate_low" "WMS cache hit rate (${hit_rate}%) is below threshold (${threshold}%, hits: ${cache_hits}, misses: ${cache_misses})"
         return 1
+    elif [[ ${total_requests} -eq 0 ]]; then
+        log_debug "${COMPONENT}: No cache activity detected in the last hour (no hits or misses). Skipping cache hit rate alert."
     fi
     
     return 0
