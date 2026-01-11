@@ -151,7 +151,7 @@ INGESTION_LOG_DIR="/path/to/OSM-Notes-Ingestion/logs"
 
 ```bash
 # Script execution thresholds
-INGESTION_SCRIPTS_FOUND_THRESHOLD=3
+INGESTION_SCRIPTS_FOUND_THRESHOLD=7
 INGESTION_LAST_LOG_AGE_THRESHOLD=24
 
 # Error rate thresholds

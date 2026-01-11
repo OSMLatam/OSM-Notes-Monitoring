@@ -23,7 +23,7 @@ INGESTION_ENABLED=true
 INGESTION_CHECK_TIMEOUT=300  # seconds
 
 # Script Execution Thresholds
-INGESTION_SCRIPTS_FOUND_THRESHOLD=3  # minimum number of scripts that should be found
+INGESTION_SCRIPTS_FOUND_THRESHOLD=7  # exact number of scripts that must be found and executable
 INGESTION_LAST_LOG_AGE_THRESHOLD=24  # hours - alert if no log activity for this long
 
 # Error and Logging Thresholds
