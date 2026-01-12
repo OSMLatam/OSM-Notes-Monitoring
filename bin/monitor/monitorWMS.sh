@@ -462,12 +462,16 @@ check_cache_hit_rate() {
         
         if [[ -n "${log_files}" ]]; then
             # Count cache hit patterns (adjust based on actual log format)
+            # Patterns: "cache hit", "hit cache", "HIT", "cache.*hit", etc.
             # Use grep -c and sum counts across multiple files
             cache_hits=0
             for log_file in "${wms_log_dir}"/*.log; do
                 if [[ -f "${log_file}" ]]; then
                     local count
-                    count=$(grep -iE "(cache.*hit|hit.*cache)" "${log_file}" 2>/dev/null | grep -c . || echo "0")
+                    # Search for common GeoWebCache cache hit patterns
+                    # Pattern 1: "HIT" (standalone, common in GWC logs)
+                    # Pattern 2: "cache.*hit" or "hit.*cache" (descriptive)
+                    count=$(grep -iE "(^.*HIT.*$|cache.*hit|hit.*cache)" "${log_file}" 2>/dev/null | grep -v -iE "(miss|error)" | grep -c . || echo "0")
                     cache_hits=$((cache_hits + count))
                 fi
             done
@@ -475,7 +479,10 @@ check_cache_hit_rate() {
             for log_file in "${wms_log_dir}"/*.log; do
                 if [[ -f "${log_file}" ]]; then
                     local count
-                    count=$(grep -iE "(cache.*miss|miss.*cache)" "${log_file}" 2>/dev/null | grep -c . || echo "0")
+                    # Search for common GeoWebCache cache miss patterns
+                    # Pattern 1: "MISS" (standalone, common in GWC logs)
+                    # Pattern 2: "cache.*miss" or "miss.*cache" (descriptive)
+                    count=$(grep -iE "(^.*MISS.*$|cache.*miss|miss.*cache)" "${log_file}" 2>/dev/null | grep -v -iE "(hit|error)" | grep -c . || echo "0")
                     cache_misses=$((cache_misses + count))
                 fi
             done

@@ -107,14 +107,20 @@ WMS_ENABLED=true
 WMS_CHECK_TIMEOUT=30   # seconds
 WMS_RESPONSE_TIME_THRESHOLD=2000  # milliseconds
 WMS_ERROR_RATE_THRESHOLD=5  # percentage
+WMS_CACHE_HIT_RATE_THRESHOLD=80  # percentage - minimum acceptable cache hit rate
 WMS_HEALTH_CHECK_URL="http://localhost:8080/health"
+# GeoServer logs directory (for GeoWebCache cache statistics)
+# Set this to your GeoServer logs directory if using GeoWebCache
+# Example: /home/geoserver/data/geoserver/logs
+WMS_LOG_DIR=""  # Leave empty if not using log-based cache monitoring
 
 # API Monitoring
 API_ENABLED=true
 API_CHECK_TIMEOUT=10   # seconds
 API_RESPONSE_TIME_THRESHOLD=500   # milliseconds
 API_ERROR_RATE_THRESHOLD=1   # percentage
-API_HEALTH_CHECK_URL="http://localhost:8081/health"
+API_URL="http://localhost:8081/health"  # OSM-Notes-API health check URL
+API_HEALTH_CHECK_URL="${API_URL}"  # Alias for compatibility
 
 # Data Freshness Monitoring
 DATA_ENABLED=true

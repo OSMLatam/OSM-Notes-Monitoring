@@ -94,8 +94,8 @@ load_config() {
 check_api_availability() {
     log_info "Checking API availability..."
     
-    # Get API URL from config or use default
-    local api_url="${API_URL:-http://localhost:8080/api/health}"
+    # Get API URL from config (try API_HEALTH_CHECK_URL first, then API_URL, then default)
+    local api_url="${API_HEALTH_CHECK_URL:-${API_URL:-http://localhost:8080/api/health}}"
     
     if command -v curl > /dev/null 2>&1; then
         local http_code
@@ -112,7 +112,16 @@ check_api_availability() {
         else
             log_warn "API is not available (HTTP ${http_code})"
             record_metric "${COMPONENT}" "api_availability" "0" "API is not available"
-            send_alert "${COMPONENT}" "WARNING" "api_unavailable" "API returned HTTP ${http_code}"
+            
+            # Provide more descriptive message based on error code
+            local alert_message
+            if [[ "${http_code}" == "000" ]]; then
+                alert_message="API connection failed - unable to connect to ${api_url}. Service may be down, unreachable, or network issues."
+            else
+                alert_message="API returned HTTP ${http_code} (URL: ${api_url})"
+            fi
+            
+            send_alert "${COMPONENT}" "WARNING" "api_unavailable" "${alert_message}"
             return 1
         fi
     else
