@@ -470,18 +470,41 @@ This runbook provides detailed information about each alert type for the OSM-Not
 - Missing indexes
 - Table bloat
 - Resource constraints
+- **Command not found (exit code 127)**: `psql` or other tools not in PATH when script runs from cron
+- **Missing dependencies**: Required tools not installed or not accessible
 
 **Investigation Steps:**
-1. Review performance check output
-2. Identify specific failures
-3. Check database statistics
-4. Review system resources
+1. Review performance check output:
+   ```bash
+   # Check latest performance check output
+   ls -lt logs/performance_output/analyzeDatabasePerformance_*.txt | head -1 | awk '{print $NF}' | xargs cat
+   ```
+2. Check for exit code 127 (command not found):
+   ```bash
+   # If you see "exit code: 127", check if psql is in PATH
+   which psql
+   # Or check the error details in the output file
+   ```
+3. Verify analyzeDatabasePerformance.sh can find psql:
+   ```bash
+   cd /path/to/OSM-Notes-Ingestion
+   ./bin/monitor/analyzeDatabasePerformance.sh --verbose
+   ```
+4. Check database connection variables are set correctly
+5. Identify specific failures from output
+6. Check database statistics
+7. Review system resources
 
 **Resolution:**
-1. Address specific failures identified
-2. Optimize database
-3. Add missing indexes
-4. Clean up table bloat
+1. **If exit code 127 (command not found)**:
+   - Ensure `psql` is in PATH: `export PATH="/usr/bin:/usr/local/bin:$PATH"`
+   - Or set full path to psql in analyzeDatabasePerformance.sh configuration
+   - Check that INGESTION_REPO_PATH points to correct OSM-Notes-Ingestion directory
+   - Verify analyzeDatabasePerformance.sh has execute permissions
+2. Address specific failures identified
+3. Optimize database
+4. Add missing indexes
+5. Clean up table bloat
 
 **Prevention:**
 - Regular performance checks

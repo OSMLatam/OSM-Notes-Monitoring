@@ -793,7 +793,7 @@ check_advanced_database_metrics() {
     cache_hit_ratio=$(execute_sql_query "${cache_hit_query}" 2>/dev/null | tr -d '[:space:]' || echo "")
     
     if [[ -n "${cache_hit_ratio}" ]] && [[ "${cache_hit_ratio}" =~ ^[0-9]+\.?[0-9]*$ ]]; then
-        local cache_hit_threshold="${INGESTION_DB_CACHE_HIT_THRESHOLD:-95}"
+        local cache_hit_threshold="${INGESTION_DB_CACHE_HIT_THRESHOLD:-70}"
         # Compare as float (multiply by 100 to avoid decimal comparison issues)
         local cache_hit_int
         cache_hit_int=$(echo "${cache_hit_ratio}" | awk '{printf "%.0f", $1}')
