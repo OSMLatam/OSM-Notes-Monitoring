@@ -59,7 +59,7 @@ run_tests() {
         return 0
     fi
     
-    test_files=$(find "${TEST_DIR}" -name "test_*.sh" -type f)
+    test_files=$(find "${TEST_DIR}" -name "test_*.sh" -type f | sort)
     
     if [[ -z "${test_files}" ]]; then
         print_message "${YELLOW}" "No unit tests found in ${TEST_DIR}"
@@ -70,23 +70,52 @@ run_tests() {
     local start_time
     start_time=$(date +%s)
     
-    while IFS= read -r test_file; do
+    # Check if bc is available for precise time calculations
+    local has_bc=false
+    if command -v bc >/dev/null 2>&1; then
+        has_bc=true
+    fi
+    
+    while IFS= read -r test_file || [[ -n "${test_file}" ]]; do
+        [[ -z "${test_file}" ]] && continue
+        
         local test_start
-        test_start=$(date +%s.%N 2>/dev/null || date +%s)
+        local test_start_sec
+        
+        if [[ "${has_bc}" == "true" ]] && date +%s.%N >/dev/null 2>&1; then
+            test_start=$(date +%s.%N 2>/dev/null || echo "0")
+            test_start_sec=$(echo "${test_start}" | cut -d. -f1 2>/dev/null || echo "0")
+        else
+            test_start_sec=$(date +%s 2>/dev/null || echo "0")
+            test_start="${test_start_sec}"
+        fi
+        
         print_message "${GREEN}" "Running: $(basename "${test_file}")"
         
         # Capture exit code explicitly to avoid set -e terminating the script
         local bats_exit_code=0
-        bats "${test_file}" || bats_exit_code=$?
+        bats "${test_file}" 2>&1 || bats_exit_code=$?
         
         local test_end
-        test_end=$(date +%s.%N 2>/dev/null || date +%s)
-        local test_duration
-        if command -v bc >/dev/null 2>&1; then
-            test_duration=$(echo "${test_end} - ${test_start}" | bc 2>/dev/null || echo "0")
-            test_duration=$(printf "%.2f" "${test_duration}" 2>/dev/null || echo "0")
+        local test_end_sec
+        local test_duration=0
+        
+        if [[ "${has_bc}" == "true" ]] && date +%s.%N >/dev/null 2>&1; then
+            test_end=$(date +%s.%N 2>/dev/null || echo "0")
+            test_duration=$(echo "scale=2; ${test_end} - ${test_start}" | bc 2>/dev/null || echo "0")
         else
-            test_duration=$((test_end - test_start))
+            test_end_sec=$(date +%s 2>/dev/null || echo "0")
+            # Use arithmetic expansion with fallback to 0 if calculation fails
+            if [[ "${test_end_sec}" =~ ^[0-9]+$ ]] && [[ "${test_start_sec}" =~ ^[0-9]+$ ]]; then
+                test_duration=$((test_end_sec - test_start_sec))
+            else
+                test_duration=0
+            fi
+        fi
+        
+        # Ensure test_duration is a valid number
+        if [[ ! "${test_duration}" =~ ^[0-9]+\.?[0-9]*$ ]]; then
+            test_duration="0"
         fi
         
         if [[ ${bats_exit_code} -ne 0 ]]; then
@@ -105,8 +134,10 @@ run_tests() {
     
     # Summary
     echo
-    local total_tests
-    total_tests=$(echo "${test_files}" | wc -l)
+    local total_tests=0
+    if [[ -n "${test_files}" ]]; then
+        total_tests=$(echo "${test_files}" | wc -l | tr -d ' ')
+    fi
     local passed_tests=$((total_tests - failed_tests))
     
     print_message "${BLUE}" "Summary:"
