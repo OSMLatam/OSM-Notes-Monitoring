@@ -917,9 +917,20 @@ check_ingestion_performance() {
             log_warning "${COMPONENT}: Script may not have valid bash shebang: ${perf_script}"
         fi
         
-        # Check for common dependencies before running
+        # Ensure PATH includes standard binary directories for psql, timeout, and other tools
+        # This is critical when script runs from cron or with limited PATH
+        # The script itself also uses timeout and psql, so PATH must be set
+        local saved_path="${PATH:-}"
+        # Include common PostgreSQL installation paths and standard system paths
+        export PATH="/usr/local/bin:/usr/bin:/bin:/usr/local/pgsql/bin:/usr/lib/postgresql/15/bin:/usr/lib/postgresql/14/bin:/usr/lib/postgresql/13/bin:${PATH:-}"
+        
+        # Also export PATH in the environment for the script and its subprocesses
+        # This ensures timeout, psql, and other commands are found
+        export PATH
+        
+        # Check for common dependencies AFTER setting PATH (so we check with correct PATH)
         local missing_deps=()
-        for cmd in bash psql; do
+        for cmd in bash psql timeout; do
             if ! command -v "${cmd}" >/dev/null 2>&1; then
                 missing_deps+=("${cmd}")
             fi
@@ -927,22 +938,20 @@ check_ingestion_performance() {
         
         if [[ ${#missing_deps[@]} -gt 0 ]]; then
             log_error "${COMPONENT}: Missing dependencies: ${missing_deps[*]}"
+            log_error "${COMPONENT}: Current PATH: ${PATH}"
             send_alert "${COMPONENT}" "ERROR" "performance_check_failed" "Performance analysis failed: Missing dependencies (${missing_deps[*]}). Check PATH and install missing tools."
+            export PATH="${saved_path}"  # Restore PATH before returning
             return 1
         fi
         
-        # Ensure PATH includes standard binary directories for psql, timeout, and other tools
-        # This is critical when script runs from cron or with limited PATH
-        # The script itself also uses timeout and psql, so PATH must be set
-        local saved_path="${PATH:-}"
-        export PATH="/usr/local/bin:/usr/bin:/bin:/usr/local/pgsql/bin:${PATH:-}"
-        
-        # Also export PATH in the environment for the script and its subprocesses
-        # This ensures timeout, psql, and other commands are found
-        export PATH
+        # Export database connection variables that analyzeDatabasePerformance.sh might need
+        export DBHOST="${INGESTION_DBHOST:-${DBHOST:-localhost}}"
+        export DBPORT="${INGESTION_DBPORT:-${DBPORT:-5432}}"
+        export DBUSER="${INGESTION_DBUSER:-${DBUSER:-postgres}}"
+        export DBNAME="${INGESTION_DBNAME:-notes}"
         
         # Run the performance analysis script
-        # Use env to ensure PATH is passed to all subprocesses
+        # Use env to ensure PATH and environment variables are passed to all subprocesses
         local start_time
         start_time=$(date +%s)
         
@@ -952,9 +961,21 @@ check_ingestion_performance() {
         output_file="${LOG_DIR}/performance_output/analyzeDatabasePerformance_$(date +%Y%m%d_%H%M%S).txt"
         mkdir -p "$(dirname "${output_file}")"
         
-        # Use env to explicitly set PATH for the script and all its subprocesses
+        # Use env to explicitly set PATH and environment variables for the script and all its subprocesses
         # Capture both stdout and stderr, and save to file
-        if ! output=$(cd "${INGESTION_REPO_PATH}" && env PATH="${PATH}" bash "${perf_script}" 2>&1 | tee "${output_file}"); then
+        # Note: analyzeDatabasePerformance.sh will execute SQL scripts that need psql and timeout in PATH
+        # Ensure PATH is exported in the environment so subprocesses can find commands
+        # Also export PGPASSWORD if set (for database authentication)
+        local env_vars="PATH=${PATH}"
+        env_vars="${env_vars} DBHOST=${DBHOST}"
+        env_vars="${env_vars} DBPORT=${DBPORT}"
+        env_vars="${env_vars} DBUSER=${DBUSER}"
+        env_vars="${env_vars} DBNAME=${DBNAME}"
+        if [[ -n "${PGPASSWORD:-}" ]]; then
+            env_vars="${env_vars} PGPASSWORD=${PGPASSWORD}"
+        fi
+        
+        if ! output=$(cd "${INGESTION_REPO_PATH}" && env "${env_vars}" bash "${perf_script}" 2>&1 | tee "${output_file}"); then
             exit_code=$?
         fi
         
@@ -1195,90 +1216,58 @@ check_ingestion_data_quality() {
     local quality_score=100
     local issues_found=0
     
-    # Run notesCheckVerifier.sh if available
+    # Check notesCheckVerifier.sh status (script runs once daily via cron at 6 AM)
+    # We don't execute it here, just check if it's running or completed successfully
     local verifier_script="${INGESTION_REPO_PATH}/bin/monitor/notesCheckVerifier.sh"
     
     if [[ -f "${verifier_script}" ]]; then
-        log_info "${COMPONENT}: Running notesCheckVerifier.sh"
+        log_info "${COMPONENT}: Checking notesCheckVerifier.sh status"
         
-        # Ensure PATH includes standard binary directories for psql and other tools
-        # This is important when script runs from cron or with limited PATH
-        local saved_path="${PATH:-}"
-        export PATH="/usr/local/bin:/usr/bin:/bin:${PATH:-}"
-        
-        # Run the verifier script
-        local start_time
-        start_time=$(date +%s)
-        
-        local exit_code=0
-        local output
-        output=$(cd "${INGESTION_REPO_PATH}" && bash "${verifier_script}" 2>&1) || exit_code=$?
-        
-        # Restore original PATH
-        export PATH="${saved_path}"
-        
-        local end_time
-        end_time=$(date +%s)
-        local duration=$((end_time - start_time))
-        
-        # Log the output (truncate if too long)
-        local output_preview
-        output_preview=$(echo "${output}" | head -50)
-        log_debug "${COMPONENT}: notesCheckVerifier.sh output (first 50 lines):\n${output_preview}"
-        
-        # Save full output to file for analysis (if output is not empty)
-        if [[ -n "${output}" ]]; then
-            local output_dir="${LOG_DIR}/verifier_output"
-            mkdir -p "${output_dir}"
-            local output_file
-            output_file="${output_dir}/notesCheckVerifier_$(date +%Y%m%d_%H%M%S).txt"
-            echo "${output}" > "${output_file}"
-            log_debug "${COMPONENT}: Full verifier output saved to: ${output_file}"
-            
-            # Keep only last 10 output files
-            find "${output_dir}" -name "notesCheckVerifier_*.txt" -type f -mtime +7 -delete 2>/dev/null || true
-        fi
-        
-        # Check exit code
-        if [[ ${exit_code} -eq 0 ]]; then
-            log_info "${COMPONENT}: notesCheckVerifier check passed (duration: ${duration}s)"
-            record_metric "${COMPONENT}" "data_quality_check_status" "1" "component=ingestion,check=notesCheckVerifier"
-            record_metric "${COMPONENT}" "data_quality_check_duration" "${duration}" "component=ingestion,check=notesCheckVerifier"
-            
-            # Check data quality check duration threshold
-            local quality_duration_threshold="${INGESTION_DATA_QUALITY_CHECK_DURATION_THRESHOLD:-600}"
-            if [[ ${duration} -gt ${quality_duration_threshold} ]]; then
-                log_warning "${COMPONENT}: Data quality check duration (${duration}s) exceeds threshold (${quality_duration_threshold}s)"
-                send_alert "${COMPONENT}" "WARNING" "data_quality" "Data quality check took too long: ${duration}s (threshold: ${quality_duration_threshold}s)"
-            fi
+        # Check if script is currently running
+        if pgrep -f "notesCheckVerifier.sh" > /dev/null 2>&1; then
+            log_info "${COMPONENT}: notesCheckVerifier.sh is currently running (expected - runs daily at 6 AM)"
+            record_metric "${COMPONENT}" "data_quality_check_status" "2" "component=ingestion,check=notesCheckVerifier,status=running"
+            # Don't penalize quality score if script is running (it's normal)
         else
-            log_error "${COMPONENT}: notesCheckVerifier check failed (exit_code: ${exit_code}, duration: ${duration}s)"
-            record_metric "${COMPONENT}" "data_quality_check_status" "0" "component=ingestion,check=notesCheckVerifier"
-            record_metric "${COMPONENT}" "data_quality_check_duration" "${duration}" "component=ingestion,check=notesCheckVerifier"
-            issues_found=$((issues_found + 1))
-            quality_score=$((quality_score - 10))
+            # Script is not running - check if it ran successfully today
+            # Look for recent execution in logs or check last successful run
+            local today_date
+            today_date=$(date +%Y-%m-%d)
+            local recent_run=0
             
-            if [[ "${TEST_MODE:-false}" == "true" ]]; then
-                echo "DEBUG: Verifier failed, quality_score after -10: ${quality_score}" >&2
-            fi
+            # Check for recent temporary directories created by notesCheckVerifier
+            local latest_verifier_dir
+            latest_verifier_dir=$(find /tmp -maxdepth 1 -type d -name "notesCheckVerifier_*" -printf "%T@ %p\n" 2>/dev/null | sort -n | tail -1 | cut -d' ' -f2-)
             
-            # Parse output for error details
-            local error_count
-            error_count=$(echo "${output}" | grep -c "error\|failed\|discrepancy" || echo "0")
-            # Ensure numeric value (remove any whitespace and non-numeric characters)
-            error_count=$(echo "${error_count}" | tr -d '[:space:]' | grep -E '^[0-9]+$' || echo "0")
-            error_count=$((error_count + 0))
-            
-            if [[ "${TEST_MODE:-false}" == "true" ]]; then
-                echo "DEBUG: Error count from output: ${error_count}" >&2
-            fi
-            
-            if [[ ${error_count} -gt 0 ]]; then
-                log_warning "${COMPONENT}: Found ${error_count} potential issues in notesCheckVerifier"
-                quality_score=$((quality_score - (error_count * 5)))
-                if [[ "${TEST_MODE:-false}" == "true" ]]; then
-                    echo "DEBUG: quality_score after subtracting ${error_count}*5: ${quality_score}" >&2
+            if [[ -n "${latest_verifier_dir}" ]] && [[ -d "${latest_verifier_dir}" ]]; then
+                # Check if there's a log file from today
+                local verifier_log="${latest_verifier_dir}/notesCheckVerifier.log"
+                if [[ -f "${verifier_log}" ]]; then
+                    local log_date
+                    log_date=$(stat -c %y "${verifier_log}" 2>/dev/null | cut -d' ' -f1 || echo "")
+                    if [[ "${log_date}" == "${today_date}" ]]; then
+                        # Check if log indicates success
+                        if grep -qiE "completed|success|no discrepancies|finished" "${verifier_log}" 2>/dev/null; then
+                            recent_run=1
+                            log_info "${COMPONENT}: notesCheckVerifier.sh completed successfully today"
+                            record_metric "${COMPONENT}" "data_quality_check_status" "1" "component=ingestion,check=notesCheckVerifier"
+                        elif grep -qiE "error|failed|discrepancy" "${verifier_log}" 2>/dev/null; then
+                            log_warning "${COMPONENT}: notesCheckVerifier.sh found issues today (check log: ${verifier_log})"
+                            record_metric "${COMPONENT}" "data_quality_check_status" "0" "component=ingestion,check=notesCheckVerifier"
+                            issues_found=$((issues_found + 1))
+                            quality_score=$((quality_score - 10))
+                        fi
+                    fi
                 fi
+            fi
+            
+            # If no recent run found and it's after 7 AM, note that it should have run
+            local current_hour
+            current_hour=$(date +%H)
+            if [[ ${recent_run} -eq 0 ]] && [[ ${current_hour} -ge 7 ]]; then
+                log_debug "${COMPONENT}: notesCheckVerifier.sh should have run today (scheduled at 6 AM)"
+                # Don't penalize if it's early in the day or script might still be running
+                # Only log for information
             fi
         fi
     else
