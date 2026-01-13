@@ -1008,8 +1008,34 @@ check_ingestion_performance() {
             env_vars="${env_vars} PGPASSWORD=${PGPASSWORD}"
         fi
         
-        if ! output=$(cd "${INGESTION_REPO_PATH}" && env "${env_vars}" bash "${perf_script}" 2>&1 | tee "${output_file}"); then
-            exit_code=$?
+        # Set timeout for analyzeDatabasePerformance.sh execution
+        # Default: 10 minutes (600 seconds), configurable via INGESTION_PERFORMANCE_CHECK_DURATION_THRESHOLD
+        # Add 60 seconds buffer to the threshold to allow script to complete if it's close to threshold
+        local perf_timeout="${INGESTION_PERFORMANCE_CHECK_DURATION_THRESHOLD:-300}"
+        local script_timeout=$((perf_timeout + 60))  # Add buffer
+        
+        log_info "${COMPONENT}: Running analyzeDatabasePerformance.sh with timeout of ${script_timeout}s"
+        
+        # Execute with timeout to prevent script from hanging indefinitely
+        # timeout returns 124 if timeout occurred, 125 if timeout command failed, 126 if command not found
+        if command -v timeout >/dev/null 2>&1; then
+            if ! output=$(cd "${INGESTION_REPO_PATH}" && timeout "${script_timeout}" env "${env_vars}" bash "${perf_script}" 2>&1 | tee "${output_file}"); then
+                exit_code=$?
+                # Check if it was a timeout
+                if [[ ${exit_code} -eq 124 ]]; then
+                    log_error "${COMPONENT}: analyzeDatabasePerformance.sh timed out after ${script_timeout}s"
+                    log_error "${COMPONENT}: This may indicate the script is stuck or taking too long"
+                    log_error "${COMPONENT}: Consider increasing INGESTION_PERFORMANCE_CHECK_DURATION_THRESHOLD or investigating script performance"
+                    # Add timeout message to output
+                    echo "ERROR: Script execution timed out after ${script_timeout} seconds" >> "${output_file}"
+                fi
+            fi
+        else
+            # Fallback if timeout command is not available (should not happen as we check for it above)
+            log_warning "${COMPONENT}: timeout command not available, running without timeout (risky)"
+            if ! output=$(cd "${INGESTION_REPO_PATH}" && env "${env_vars}" bash "${perf_script}" 2>&1 | tee "${output_file}"); then
+                exit_code=$?
+            fi
         fi
         
         # If output is empty but file exists, read from file
@@ -1080,6 +1106,11 @@ check_ingestion_performance() {
                 send_alert "${COMPONENT}" "WARNING" "performance_check" "Performance check took too long: ${duration}s (threshold: ${perf_duration_threshold}s)"
             fi
             
+            # Log if script took a long time (for monitoring purposes)
+            if [[ ${duration} -gt 600 ]]; then
+                log_warning "${COMPONENT}: Performance check took ${duration}s (> 10 minutes) - consider optimizing or running less frequently"
+            fi
+            
             # Check performance check failures (only alert on real performance failures, not technical issues)
             if [[ ${fail_count} -gt 0 ]]; then
                 log_warning "${COMPONENT}: Performance check found ${fail_count} performance failures"
@@ -1115,6 +1146,10 @@ check_ingestion_performance() {
             local error_type="unknown"
             local error_hint=""
             case ${exit_code} in
+                124)
+                    error_type="timeout"
+                    error_hint="Script execution timed out after ${script_timeout}s. The script may be stuck or taking too long. Consider increasing INGESTION_PERFORMANCE_CHECK_DURATION_THRESHOLD or investigating why the script is slow."
+                    ;;
                 255)
                     error_type="script_execution_failed"
                     error_hint="Exit code 255 usually indicates: script syntax error, command not found, or bash execution failure. Check script syntax and dependencies."
@@ -1164,13 +1199,23 @@ check_ingestion_performance() {
             fi
             
             send_alert "${COMPONENT}" "CRITICAL" "performance_check_failed" "${alert_message}"
+            
+            # Remove lock file on error (including timeout)
+            if [[ -f "${lock_file}" ]]; then
+                local lock_pid
+                lock_pid=$(cat "${lock_file}" 2>/dev/null || echo "")
+                if [[ "${lock_pid}" == "$$" ]]; then
+                    rm -f "${lock_file}"
+                    log_debug "${COMPONENT}: Removed lock file after error/timeout"
+                fi
+            fi
         fi
     else
         log_warning "${COMPONENT}: analyzeDatabasePerformance.sh not found: ${perf_script}"
         log_info "${COMPONENT}: Skipping script-based performance check (script not available)"
     fi
     
-    # Remove lock file if it exists (cleanup)
+    # Remove lock file if it exists (cleanup) - ensure we always clean up
     local lock_file="${TMP_DIR}/analyzeDatabasePerformance.lock"
     if [[ -f "${lock_file}" ]]; then
         local lock_pid
@@ -1178,6 +1223,7 @@ check_ingestion_performance() {
         # Only remove if it's our lock (our PID)
         if [[ "${lock_pid}" == "$$" ]]; then
             rm -f "${lock_file}"
+            log_debug "${COMPONENT}: Cleaned up lock file"
         fi
     fi
     

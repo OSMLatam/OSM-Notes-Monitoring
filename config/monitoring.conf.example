@@ -46,6 +46,8 @@ INGESTION_DB_CONNECTION_USAGE_THRESHOLD=80  # percentage - alert if connection u
 
 # Performance Check Thresholds
 INGESTION_PERFORMANCE_CHECK_DURATION_THRESHOLD=300  # seconds (5 minutes) - alert if check takes longer
+# Note: Script execution timeout is set to (threshold + 60 seconds) to prevent hanging
+# If analyzeDatabasePerformance.sh frequently times out, consider increasing this threshold
 INGESTION_PERFORMANCE_CHECK_WARNINGS_THRESHOLD=10  # maximum warnings in performance check
 
 # Data Quality Thresholds
