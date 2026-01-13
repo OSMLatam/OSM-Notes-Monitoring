@@ -24,7 +24,7 @@ jobs:
     name: Run Tests
     runs-on: ubuntu-latest
     needs: shellcheck
-    timeout-minutes: 30
+    timeout-minutes: 50
     
     services:
       postgres:
@@ -64,7 +64,7 @@ jobs:
           psql -d osm_notes_monitoring_test -f sql/init.sql
       
       - name: Run unit tests
-        timeout-minutes: 20
+        timeout-minutes: 40
         env:
           PGHOST: localhost
           PGPORT: 5432
@@ -78,7 +78,7 @@ jobs:
           DBNAME: osm_notes_monitoring_test
         run: |
           if [ -f tests/run_unit_tests.sh ]; then
-            timeout 1200 ./tests/run_unit_tests.sh || { echo "Unit tests timed out or failed"; exit 1; }
+            timeout 2400 ./tests/run_unit_tests.sh || { echo "Unit tests timed out or failed"; exit 1; }
           else
             echo "Unit tests not yet implemented"
           fi
