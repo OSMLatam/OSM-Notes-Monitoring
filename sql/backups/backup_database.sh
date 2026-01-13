@@ -9,6 +9,10 @@
 
 set -euo pipefail
 
+# Ensure PATH includes standard binary directories for pg_dump, gzip, etc.
+# This is important when script runs from cron or with limited PATH
+export PATH="/usr/local/bin:/usr/bin:/bin:/sbin:/usr/sbin:${PATH:-}"
+
 SCRIPT_DIR=""
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly SCRIPT_DIR
