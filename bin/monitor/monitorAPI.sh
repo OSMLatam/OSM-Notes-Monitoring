@@ -94,6 +94,12 @@ load_config() {
 check_api_availability() {
     log_info "Checking API availability..."
     
+    # Check if API monitoring is enabled
+    if [[ "${API_ENABLED:-true}" != "true" ]]; then
+        log_info "API monitoring is disabled"
+        return 0
+    fi
+    
     # Get API URL from config (try API_HEALTH_CHECK_URL first, then API_URL, then default)
     local api_url="${API_HEALTH_CHECK_URL:-${API_URL:-http://localhost:8080/api/health}}"
     
