@@ -24,7 +24,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT component, status, last_check, error_count FROM component_health ORDER BY component",
+          "rawSql": "SELECT component, status, last_check, last_success, error_count FROM component_health ORDER BY component",
           "refId": "A"
         }
       ],
@@ -41,7 +41,33 @@
       "transformations": [],
       "fieldConfig": {
         "defaults": {},
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {"id": "byName", "options": "status"},
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "healthy": {"text": "Healthy", "color": "green"},
+                      "degraded": {"text": "Degraded", "color": "yellow"},
+                      "down": {"text": "Down", "color": "red"},
+                      "unknown": {"text": "Unknown", "color": "gray"}
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
       }
     },
     {
@@ -65,11 +91,30 @@
       "fieldConfig": {
         "defaults": {
           "unit": "ms",
-          "decimals": 0
+          "decimals": 0,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"value": null, "color": "green"},
+              {"value": 100, "color": "yellow"},
+              {"value": 1000, "color": "red"}
+            ]
+          }
+        }
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi"
         }
       },
       "yaxes": [
-        {"format": "ms", "label": "Time (ms)"},
+        {"format": "ms", "label": "Time (ms)", "min": 0},
         {"format": "short"}
       ]
     },
@@ -93,7 +138,42 @@
       ],
       "options": {
         "showHeader": true,
-        "sortBy": []
+        "sortBy": [
+          {
+            "displayName": "created_at",
+            "desc": true
+          }
+        ],
+        "cellHeight": "sm"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {"id": "byName", "options": "alert_level"},
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "critical": {"text": "Critical", "color": "red"},
+                      "warning": {"text": "Warning", "color": "yellow"},
+                      "info": {"text": "Info", "color": "blue"}
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
       }
     }
   ],
