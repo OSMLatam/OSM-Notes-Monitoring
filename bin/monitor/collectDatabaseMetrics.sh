@@ -103,7 +103,16 @@ collect_table_bloat() {
     "
     
     local result
-    result=$(execute_sql_query "${query}" "${INGESTION_DBNAME}" 2>/dev/null || echo "")
+    local error_output
+    error_output=$(execute_sql_query "${query}" "${INGESTION_DBNAME}" 2>&1)
+    local exit_code=$?
+    
+    if [[ ${exit_code} -ne 0 ]]; then
+        log_warning "${COMPONENT}: Failed to collect bloat data: ${error_output}"
+        return 0
+    fi
+    
+    result="${error_output}"
     
     if [[ -z "${result}" ]]; then
         log_debug "${COMPONENT}: No bloat data available"
@@ -111,6 +120,7 @@ collect_table_bloat() {
     fi
     
     # Parse results and record metrics
+    local metrics_recorded=0
     while IFS='|' read -r tablename _live_tuples _dead_tuples bloat_ratio; do
         tablename=$(echo "${tablename}" | tr -d '[:space:]')
         bloat_ratio=$(echo "${bloat_ratio}" | tr -d '[:space:]')
@@ -118,8 +128,15 @@ collect_table_bloat() {
         if [[ -n "${tablename}" ]] && [[ -n "${bloat_ratio}" ]] && [[ "${bloat_ratio}" =~ ^[0-9]+\.?[0-9]*$ ]]; then
             record_metric "${COMPONENT}" "db_table_bloat_ratio" "${bloat_ratio}" "component=ingestion,table=${tablename}"
             log_debug "${COMPONENT}: Table ${tablename} - Bloat ratio: ${bloat_ratio}%"
+            metrics_recorded=$((metrics_recorded + 1))
+        else
+            log_debug "${COMPONENT}: Skipping invalid bloat data: tablename='${tablename}', bloat_ratio='${bloat_ratio}'"
         fi
     done <<< "${result}"
+    
+    if [[ ${metrics_recorded} -eq 0 ]]; then
+        log_debug "${COMPONENT}: No valid bloat metrics recorded (result: '${result}')"
+    fi
     
     return 0
 }
@@ -149,7 +166,16 @@ collect_index_usage() {
     "
     
     local result
-    result=$(execute_sql_query "${query}" "${INGESTION_DBNAME}" 2>/dev/null || echo "")
+    local error_output
+    error_output=$(execute_sql_query "${query}" "${INGESTION_DBNAME}" 2>&1)
+    local exit_code=$?
+    
+    if [[ ${exit_code} -ne 0 ]]; then
+        log_warning "${COMPONENT}: Failed to collect index usage data: ${error_output}"
+        return 0
+    fi
+    
+    result="${error_output}"
     
     if [[ -z "${result}" ]]; then
         log_debug "${COMPONENT}: No index usage data available"
@@ -157,6 +183,7 @@ collect_index_usage() {
     fi
     
     # Parse results and record metrics
+    local metrics_recorded=0
     while IFS='|' read -r tablename _index_scans _seq_scans index_ratio; do
         tablename=$(echo "${tablename}" | tr -d '[:space:]')
         index_ratio=$(echo "${index_ratio}" | tr -d '[:space:]')
@@ -164,8 +191,15 @@ collect_index_usage() {
         if [[ -n "${tablename}" ]] && [[ -n "${index_ratio}" ]] && [[ "${index_ratio}" =~ ^[0-9]+\.?[0-9]*$ ]]; then
             record_metric "${COMPONENT}" "db_index_scan_ratio" "${index_ratio}" "component=ingestion,table=${tablename}"
             log_debug "${COMPONENT}: Table ${tablename} - Index scan ratio: ${index_ratio}%"
+            metrics_recorded=$((metrics_recorded + 1))
+        else
+            log_debug "${COMPONENT}: Skipping invalid index usage data: tablename='${tablename}', index_ratio='${index_ratio}'"
         fi
     done <<< "${result}"
+    
+    if [[ ${metrics_recorded} -eq 0 ]]; then
+        log_debug "${COMPONENT}: No valid index usage metrics recorded (result: '${result}')"
+    fi
     
     return 0
 }

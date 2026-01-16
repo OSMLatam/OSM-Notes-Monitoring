@@ -2147,18 +2147,40 @@ check_structured_log_metrics() {
 check_api_download_success_rate() {
     log_info "${COMPONENT}: Starting API download success rate check"
     
-    # Check if ingestion repository exists
-    if [[ ! -d "${INGESTION_REPO_PATH}" ]]; then
-        log_warning "${COMPONENT}: Ingestion repository not found: ${INGESTION_REPO_PATH}"
-        return 0
-    fi
-    
-    local ingestion_log_dir="${INGESTION_REPO_PATH}/logs"
     local total_downloads=0
     local successful_downloads=0
     
-    # Analyze log files for download attempts
-    if [[ -d "${ingestion_log_dir}" ]]; then
+    # Check daemon log file first (primary source)
+    local daemon_log_file="${DAEMON_LOG_FILE:-/var/log/osm-notes-ingestion/daemon/processAPINotesDaemon.log}"
+    
+    if [[ -f "${daemon_log_file}" ]]; then
+        # Count API download attempts in last 24 hours - look for "__getNewNotesFromApi" function calls
+        # Each cycle calls this function once to download from API
+        # Use tail to get recent entries (last ~10000 lines should cover 24 hours for 1 cycle/minute)
+        local downloads
+        downloads=$(tail -10000 "${daemon_log_file}" 2>/dev/null | grep -cE "__getNewNotesFromApi|getNewNotesFromApi" 2>/dev/null || echo "0")
+        downloads=$(echo "${downloads}" | tr -d '[:space:]' | grep -E '^[0-9]+$' || echo "0")
+        downloads=$((downloads + 0))
+        
+        # Count successful downloads in last 24 hours - look for "Successfully downloaded notes from API"
+        # Also count "SEQUENTIAL API XML PROCESSING COMPLETED SUCCESSFULLY" as success indicator
+        local successes
+        successes=$(tail -10000 "${daemon_log_file}" 2>/dev/null | grep -cE "Successfully downloaded notes from API|SEQUENTIAL API XML PROCESSING COMPLETED SUCCESSFULLY" 2>/dev/null || echo "0")
+        successes=$(echo "${successes}" | tr -d '[:space:]' | grep -E '^[0-9]+$' || echo "0")
+        successes=$((successes + 0))
+        
+        total_downloads=${downloads}
+        successful_downloads=${successes}
+        
+        if [[ "${TEST_MODE:-false}" == "true" ]]; then
+            echo "DEBUG: ${daemon_log_file}: downloads=${total_downloads}, successes=${successful_downloads}" >&2
+        fi
+    fi
+    
+    # Also check ingestion repository logs if available (fallback)
+    if [[ -d "${INGESTION_REPO_PATH:-}" ]] && [[ -d "${INGESTION_REPO_PATH}/logs" ]]; then
+        local ingestion_log_dir="${INGESTION_REPO_PATH}/logs"
+        
         # Find API-related log files from last 24 hours
         local api_logs
         if [[ "${TEST_MODE:-false}" == "true" ]]; then
@@ -2170,16 +2192,14 @@ check_api_download_success_rate() {
         for log_file in "${api_logs[@]}"; do
             # Count download attempts
             local downloads
-            downloads=$(grep -cE "download|fetch|GET|POST" "${log_file}" 2>/dev/null || echo "0")
-            # Ensure numeric value (remove any whitespace and non-numeric characters)
+            downloads=$(grep -cE "__getNewNotesFromApi|getNewNotesFromApi|download|fetch|GET|POST" "${log_file}" 2>/dev/null || echo "0")
             downloads=$(echo "${downloads}" | tr -d '[:space:]' | grep -E '^[0-9]+$' || echo "0")
             downloads=$((downloads + 0))
             total_downloads=$((total_downloads + downloads))
             
             # Count successful downloads
             local successes
-            successes=$(grep -cE "success|completed|200 OK|downloaded" "${log_file}" 2>/dev/null || echo "0")
-            # Ensure numeric value (remove any whitespace and non-numeric characters)
+            successes=$(grep -cE "Successfully downloaded notes from API|SEQUENTIAL API XML PROCESSING COMPLETED SUCCESSFULLY|success|completed|200 OK" "${log_file}" 2>/dev/null || echo "0")
             successes=$(echo "${successes}" | tr -d '[:space:]' | grep -E '^[0-9]+$' || echo "0")
             successes=$((successes + 0))
             successful_downloads=$((successful_downloads + successes))
@@ -2188,10 +2208,10 @@ check_api_download_success_rate() {
                 echo "DEBUG: ${log_file}: downloads=${downloads}, successes=${successes}" >&2
             fi
         done
-        
-        if [[ "${TEST_MODE:-false}" == "true" ]]; then
-            echo "DEBUG: Total: downloads=${total_downloads}, successes=${successful_downloads}" >&2
-        fi
+    fi
+    
+    if [[ "${TEST_MODE:-false}" == "true" ]]; then
+        echo "DEBUG: Total: downloads=${total_downloads}, successes=${successful_downloads}" >&2
     fi
     
     # Calculate success rate
