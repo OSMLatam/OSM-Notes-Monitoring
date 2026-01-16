@@ -461,7 +461,16 @@
               {"value": 95, "color": "green"}
             ]
           }
-        }
+        },
+        "overrides": [
+          {
+            "matcher": {"id": "byFrameRefID", "options": "A"},
+            "properties": [
+              {"id": "displayName", "value": "Success Rate (%)"},
+              {"id": "color", "value": {"mode": "fixed", "fixedColor": "green"}}
+            ]
+          }
+        ]
       },
       "options": {
         "legend": {"displayMode": "table", "placement": "bottom"},
@@ -617,7 +626,16 @@
               {"value": 95, "color": "green"}
             ]
           }
-        }
+        },
+        "overrides": [
+          {
+            "matcher": {"id": "byFrameRefID", "options": "A"},
+            "properties": [
+              {"id": "displayName", "value": "Cycle Success Rate (%)"},
+              {"id": "color", "value": {"mode": "fixed", "fixedColor": "blue"}}
+            ]
+          }
+        ]
       },
       "options": {
         "legend": {"displayMode": "table", "placement": "bottom"},

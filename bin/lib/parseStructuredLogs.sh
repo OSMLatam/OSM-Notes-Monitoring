@@ -178,7 +178,7 @@ parse_processing_metrics() {
     local cycle_context
     cycle_context=$(grep -B 100 "Cycle ${cycle_num} completed successfully" "${log_file}" 2>/dev/null | tail -100 || echo "")
     
-    # Extract notes processed
+    # Extract notes processed (try old format first)
     local notes_processed=0
     if [[ "${cycle_context}" =~ ([0-9]+)[[:space:]]+notes[[:space:]]+processed ]]; then
         notes_processed="${BASH_REMATCH[1]}"
@@ -186,24 +186,73 @@ parse_processing_metrics() {
         notes_processed="${BASH_REMATCH[1]}"
     fi
     
-    # Extract new notes
+    # Extract new notes (try old format first)
     local notes_new=0
     if [[ "${cycle_context}" =~ ([0-9]+)[[:space:]]+new[[:space:]]+notes ]]; then
         notes_new="${BASH_REMATCH[1]}"
     fi
     
-    # Extract updated notes
+    # Extract updated notes (try old format first)
     local notes_updated=0
     if [[ "${cycle_context}" =~ ([0-9]+)[[:space:]]+updated[[:space:]]+notes ]]; then
         notes_updated="${BASH_REMATCH[1]}"
     fi
     
-    # Extract comments processed
+    # Extract comments processed (try old format first)
     local comments_processed=0
     if [[ "${cycle_context}" =~ ([0-9]+)[[:space:]]+comments[[:space:]]+processed ]]; then
         comments_processed="${BASH_REMATCH[1]}"
     elif [[ "${cycle_context}" =~ Processed[[:space:]]+([0-9]+)[[:space:]]+comments ]]; then
         comments_processed="${BASH_REMATCH[1]}"
+    fi
+    
+    # Try new format: "current notes - before" and "current notes - after"
+    # Format: "2026-01-15 23:08:08.235559+00 | 4985251 | current notes - before"
+    local notes_before=0
+    local notes_after=0
+    
+    while IFS= read -r line; do
+        # Match format: "| NUMBER | current notes - before" or "| NUMBER | current notes - after"
+        if [[ "${line}" =~ \|[[:space:]]+([0-9]+)[[:space:]]+\|[[:space:]]+current[[:space:]]+notes[[:space:]]+-[[:space:]]+before ]]; then
+            notes_before="${BASH_REMATCH[1]}"
+        elif [[ "${line}" =~ \|[[:space:]]+([0-9]+)[[:space:]]+\|[[:space:]]+current[[:space:]]+notes[[:space:]]+-[[:space:]]+after ]]; then
+            notes_after="${BASH_REMATCH[1]}"
+        fi
+    done <<< "${cycle_context}"
+    
+    # Calculate notes processed from before/after counts
+    if [[ ${notes_before} -gt 0 ]] && [[ ${notes_after} -ge ${notes_before} ]]; then
+        local notes_diff=$((notes_after - notes_before))
+        # Use the difference as notes processed if we haven't found it yet
+        if [[ ${notes_processed} -eq 0 ]]; then
+            notes_processed=${notes_diff}
+        fi
+        # If difference is positive, assume they are new notes
+        if [[ ${notes_diff} -gt 0 ]] && [[ ${notes_new} -eq 0 ]]; then
+            notes_new=${notes_diff}
+        fi
+    fi
+    
+    # Extract comments count before and after
+    local comments_before=0
+    local comments_after=0
+    
+    while IFS= read -r line; do
+        # Match format: "| NUMBER | current comments - before" or "| NUMBER | current comments - after"
+        if [[ "${line}" =~ \|[[:space:]]+([0-9]+)[[:space:]]+\|[[:space:]]+current[[:space:]]+comments[[:space:]]+-[[:space:]]+before ]]; then
+            comments_before="${BASH_REMATCH[1]}"
+        elif [[ "${line}" =~ \|[[:space:]]+([0-9]+)[[:space:]]+\|[[:space:]]+current[[:space:]]+comments[[:space:]]+-[[:space:]]+after ]]; then
+            comments_after="${BASH_REMATCH[1]}"
+        fi
+    done <<< "${cycle_context}"
+    
+    # Calculate comments processed from before/after counts
+    if [[ ${comments_before} -gt 0 ]] && [[ ${comments_after} -ge ${comments_before} ]]; then
+        local comments_diff=$((comments_after - comments_before))
+        # Use the difference as comments processed if we haven't found it yet
+        if [[ ${comments_processed} -eq 0 ]]; then
+            comments_processed=${comments_diff}
+        fi
     fi
     
     # Calculate processing rate

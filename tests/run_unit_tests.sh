@@ -161,8 +161,15 @@ run_tests() {
 # Main
 ##
 main() {
+    local exit_code=0
     check_bats
+    # Temporarily disable set -e to capture exit code properly
+    # This ensures all tests run even if some fail
+    set +e
     run_tests
+    exit_code=$?
+    set -e
+    exit "${exit_code}"
 }
 
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
