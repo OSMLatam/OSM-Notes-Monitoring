@@ -492,6 +492,60 @@ parse_optimization_metrics() {
         done <<< "${analyze_logs}"
     fi
     
+    # First, calculate average validation time when validations are ACTIVE (not SKIPPED)
+    # When validations are SKIPPED, the time is 0h:0m:0s
+    # When validations are ACTIVE, the time is > 0
+    # This allows us to estimate time saved when validations are SKIPPED
+    local validation_times_active=()
+    local validation_finished_took_pairs
+    validation_finished_took_pairs=$(tail -10000 "${log_file}" 2>/dev/null | awk '
+        /FINISHED __VALIDATEAPINOTESFILE/ {finished=$0; getline; if (/Took:/) print finished " | " $0}
+    ' | tail -500 || echo "")
+    
+    if [[ -n "${validation_finished_took_pairs}" ]]; then
+        while IFS= read -r pair; do
+            local finished_line="${pair%% | *}"
+            local took_line="${pair#* | }"
+            
+            # Extract timestamp
+            local log_timestamp=0
+            if [[ "${finished_line}" =~ ([0-9]{4}-[0-9]{2}-[0-9]{2}[[:space:]]+[0-9]{2}:[0-9]{2}:[0-9]{2}) ]]; then
+                log_timestamp=$(date -d "${BASH_REMATCH[1]}" +%s 2>/dev/null || echo "0")
+            fi
+            
+            # Skip if too old
+            if [[ ${log_timestamp} -lt ${threshold_timestamp} ]] && [[ ${log_timestamp} -gt 0 ]]; then
+                continue
+            fi
+            
+            # Extract duration
+            local duration_int=0
+            if [[ "${took_line}" =~ Took:[[:space:]]+([0-9]+)h:([0-9]+)m:([0-9]+)s ]]; then
+                local hours="${BASH_REMATCH[1]}"
+                local minutes="${BASH_REMATCH[2]}"
+                local seconds="${BASH_REMATCH[3]}"
+                duration_int=$((hours * 3600 + minutes * 60 + seconds))
+            fi
+            
+            # If duration > 0, validation was ACTIVE (not skipped)
+            # If duration == 0, validation was SKIPPED
+            if [[ ${duration_int} -gt 0 ]]; then
+                validation_times_active+=("${duration_int}")
+            fi
+        done <<< "${validation_finished_took_pairs}"
+    fi
+    
+    # Calculate average validation time when active
+    local avg_validation_time_seconds=0
+    local total_active_time=0
+    local active_count=${#validation_times_active[@]}
+    if [[ ${active_count} -gt 0 ]]; then
+        for time_val in "${validation_times_active[@]}"; do
+            total_active_time=$((total_active_time + time_val))
+        done
+        avg_validation_time_seconds=$((total_active_time / active_count))
+    fi
+    
     # Parse integrity optimization logs
     # Look for SKIPPED messages which indicate optimizations (validation skipped)
     local integrity_logs
@@ -511,13 +565,19 @@ parse_optimization_metrics() {
             # Count SKIPPED operations as integrity optimizations
             if [[ "${line}" =~ SKIPPED ]]; then
                 integrity_optimizations=$((integrity_optimizations + 1))
+                
+                # Calculate time saved: if we have average active validation time, use it
+                # Otherwise, if we have explicit "saved X seconds" in logs, use that
+                if [[ ${avg_validation_time_seconds} -gt 0 ]]; then
+                    optimization_time_saved=$((optimization_time_saved + avg_validation_time_seconds))
+                fi
             fi
             
             # Look for other optimization indicators
             if [[ "${line}" =~ optimized\|saved ]]; then
                 integrity_optimizations=$((integrity_optimizations + 1))
                 
-                # Try to extract time saved
+                # Try to extract time saved from explicit log messages
                 if [[ "${line}" =~ saved[[:space:]]+([0-9]+)[[:space:]]+seconds ]]; then
                     local saved="${BASH_REMATCH[1]}"
                     optimization_time_saved=$((optimization_time_saved + saved))
