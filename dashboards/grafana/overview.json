@@ -101,7 +101,16 @@
               {"value": 1000, "color": "red"}
             ]
           }
-        }
+        },
+        "overrides": [
+          {
+            "matcher": {"id": "byFrameRefID", "options": "A"},
+            "properties": [
+              {"id": "displayName", "value": "Connection Time (ms)"},
+              {"id": "color", "value": {"mode": "fixed", "fixedColor": "blue"}}
+            ]
+          }
+        ]
       },
       "options": {
         "legend": {
