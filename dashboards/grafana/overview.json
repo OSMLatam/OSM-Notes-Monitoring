@@ -1,7 +1,7 @@
 {
   "id": null,
   "uid": "osm-notes-overview-v3",
-  "title": "OSM Notes Monitoring - Overview (v3)",
+  "title": "OSM Notes Monitoring - Overview",
   "tags": ["osm", "monitoring", "overview"],
   "timezone": "browser",
   "schemaVersion": 38,

@@ -1,7 +1,7 @@
 {
   "id": null,
   "uid": "osm-notes-ingestion",
-  "title": "Ingestion Monitoring v5",
+  "title": "Ingestion Monitoring",
   "tags": ["osm", "monitoring", "ingestion"],
   "timezone": "browser",
   "schemaVersion": 38,
