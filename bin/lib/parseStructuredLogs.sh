@@ -298,13 +298,9 @@ parse_stage_timing_metrics() {
     local log_file="${1}"
     local threshold_timestamp="${2}"
     
-    # Get [TIMING] log entries
+    # Try to get [TIMING] log entries first (old format)
     local timing_logs
     timing_logs=$(grep "\[TIMING\]" "${log_file}" 2>/dev/null | tail -200 || echo "")
-    
-    if [[ -z "${timing_logs}" ]]; then
-        return 0
-    fi
     
     # Parse stage durations
     declare -A stage_durations
@@ -312,50 +308,119 @@ parse_stage_timing_metrics() {
     local slowest_stage=""
     local slowest_duration=0
     
-    while IFS= read -r line; do
-        # Extract timestamp
-        local log_timestamp=0
-        if [[ "${line}" =~ ([0-9]{4}-[0-9]{2}-[0-9]{2}[[:space:]]+[0-9]{2}:[0-9]{2}:[0-9]{2}) ]]; then
-            log_timestamp=$(date -d "${BASH_REMATCH[1]}" +%s 2>/dev/null || echo "0")
-        fi
-        
-        # Skip if too old
-        if [[ ${log_timestamp} -lt ${threshold_timestamp} ]] && [[ ${log_timestamp} -gt 0 ]]; then
-            continue
-        fi
-        
-        # Extract stage name and duration
-        # Format: [TIMING] Stage: <stage_name> - Duration: <duration> seconds
-        if [[ "${line}" =~ Stage:[[:space:]]+([^-]+)[[:space:]]+-[[:space:]]+Duration:[[:space:]]+([0-9.]+)[[:space:]]+seconds ]]; then
-            local stage_name="${BASH_REMATCH[1]}"
-            stage_name=$(echo "${stage_name}" | xargs)  # Trim whitespace
-            local duration="${BASH_REMATCH[2]}"
-            
-            # Convert to integer (seconds)
-            local duration_int
-            duration_int=$(echo "${duration}" | awk '{printf "%.0f", $1}')
-            
-            # Accumulate durations
-            if [[ -n "${stage_durations[${stage_name}]:-}" ]]; then
-                stage_durations["${stage_name}"]=$((stage_durations["${stage_name}"] + duration_int))
-            else
-                stage_durations["${stage_name}"]=${duration_int}
+    # Parse old format: [TIMING] Stage: <stage_name> - Duration: <duration> seconds
+    if [[ -n "${timing_logs}" ]]; then
+        while IFS= read -r line; do
+            # Extract timestamp
+            local log_timestamp=0
+            if [[ "${line}" =~ ([0-9]{4}-[0-9]{2}-[0-9]{2}[[:space:]]+[0-9]{2}:[0-9]{2}:[0-9]{2}) ]]; then
+                log_timestamp=$(date -d "${BASH_REMATCH[1]}" +%s 2>/dev/null || echo "0")
             fi
             
-            # Count occurrences
-            if [[ -n "${stage_counts[${stage_name}]:-}" ]]; then
-                stage_counts["${stage_name}"]=$((stage_counts["${stage_name}"] + 1))
-            else
-                stage_counts["${stage_name}"]=1
+            # Skip if too old
+            if [[ ${log_timestamp} -lt ${threshold_timestamp} ]] && [[ ${log_timestamp} -gt 0 ]]; then
+                continue
             fi
             
-            # Track slowest stage
-            if [[ ${duration_int} -gt ${slowest_duration} ]]; then
-                slowest_duration=${duration_int}
-                slowest_stage="${stage_name}"
+            # Extract stage name and duration
+            if [[ "${line}" =~ Stage:[[:space:]]+([^-]+)[[:space:]]+-[[:space:]]+Duration:[[:space:]]+([0-9.]+)[[:space:]]+seconds ]]; then
+                local stage_name="${BASH_REMATCH[1]}"
+                stage_name=$(echo "${stage_name}" | xargs)  # Trim whitespace
+                local duration="${BASH_REMATCH[2]}"
+                
+                # Convert to integer (seconds)
+                local duration_int
+                duration_int=$(echo "${duration}" | awk '{printf "%.0f", $1}')
+                
+                # Accumulate durations
+                if [[ -n "${stage_durations[${stage_name}]:-}" ]]; then
+                    stage_durations["${stage_name}"]=$((stage_durations["${stage_name}"] + duration_int))
+                else
+                    stage_durations["${stage_name}"]=${duration_int}
+                fi
+                
+                # Count occurrences
+                if [[ -n "${stage_counts[${stage_name}]:-}" ]]; then
+                    stage_counts["${stage_name}"]=$((stage_counts["${stage_name}"] + 1))
+                else
+                    stage_counts["${stage_name}"]=1
+                fi
+                
+                # Track slowest stage
+                if [[ ${duration_int} -gt ${slowest_duration} ]]; then
+                    slowest_duration=${duration_int}
+                    slowest_stage="${stage_name}"
+                fi
             fi
-        fi
-    done <<< "${timing_logs}"
+        done <<< "${timing_logs}"
+    fi
+    
+    # Parse new format: FINISHED FUNCTION_NAME followed by Took: Xh:Ym:Zs
+    # Use awk to pair FINISHED lines with their Took lines
+    local finished_took_pairs
+    finished_took_pairs=$(tail -5000 "${log_file}" 2>/dev/null | awk '
+        /FINISHED/ {finished=$0; getline; if (/Took:/) print finished " | " $0}
+    ' | tail -200 || echo "")
+    
+    if [[ -n "${finished_took_pairs}" ]]; then
+        while IFS= read -r pair; do
+            # Split pair into finished line and took line
+            local finished_line="${pair%% | *}"
+            local took_line="${pair#* | }"
+            
+            # Extract timestamp from finished line
+            local log_timestamp=0
+            if [[ "${finished_line}" =~ ([0-9]{4}-[0-9]{2}-[0-9]{2}[[:space:]]+[0-9]{2}:[0-9]{2}:[0-9]{2}) ]]; then
+                log_timestamp=$(date -d "${BASH_REMATCH[1]}" +%s 2>/dev/null || echo "0")
+            fi
+            
+            # Skip if too old
+            if [[ ${log_timestamp} -lt ${threshold_timestamp} ]] && [[ ${log_timestamp} -gt 0 ]]; then
+                continue
+            fi
+            
+            # Extract stage name from FINISHED line
+            # Format: "timestamp - path:function:line - |-- FINISHED __FUNCTION_NAME IN PATH"
+            local stage_name=""
+            if [[ "${finished_line}" =~ FINISHED[[:space:]]+__?([A-Z_]+)[[:space:]]+IN ]]; then
+                stage_name="${BASH_REMATCH[1]}"
+                # Clean up stage name (remove common prefixes/suffixes, convert underscores to spaces)
+                stage_name=$(echo "${stage_name}" | sed 's/^__//;s/__$//' | tr '_' ' ' | xargs)
+            fi
+            
+            # Extract duration from Took line
+            # Format: "|-- Took: Xh:Ym:Zs"
+            local duration_int=0
+            if [[ "${took_line}" =~ Took:[[:space:]]+([0-9]+)h:([0-9]+)m:([0-9]+)s ]]; then
+                local hours="${BASH_REMATCH[1]}"
+                local minutes="${BASH_REMATCH[2]}"
+                local seconds="${BASH_REMATCH[3]}"
+                duration_int=$((hours * 3600 + minutes * 60 + seconds))
+            fi
+            
+            if [[ -n "${stage_name}" ]] && [[ ${duration_int} -ge 0 ]]; then
+                # Accumulate durations
+                if [[ -n "${stage_durations[${stage_name}]:-}" ]]; then
+                    stage_durations["${stage_name}"]=$((stage_durations["${stage_name}"] + duration_int))
+                else
+                    stage_durations["${stage_name}"]=${duration_int}
+                fi
+                
+                # Count occurrences
+                if [[ -n "${stage_counts[${stage_name}]:-}" ]]; then
+                    stage_counts["${stage_name}"]=$((stage_counts["${stage_name}"] + 1))
+                else
+                    stage_counts["${stage_name}"]=1
+                fi
+                
+                # Track slowest stage (only if duration > 0)
+                if [[ ${duration_int} -gt ${slowest_duration} ]]; then
+                    slowest_duration=${duration_int}
+                    slowest_stage="${stage_name}"
+                fi
+            fi
+        done <<< "${finished_took_pairs}"
+    fi
     
     # Record metrics for each stage
     for stage_name in "${!stage_durations[@]}"; do
@@ -393,10 +458,14 @@ parse_optimization_metrics() {
     local optimization_time_saved=0
     
     # Parse ANALYZE cache effectiveness
+    # Note: ANALYZE commands in logs don't explicitly show cache hit/miss
+    # We count ANALYZE operations as potential cache operations
+    # If ANALYZE appears frequently, it suggests cache is being used
     local analyze_logs
-    analyze_logs=$(grep -i "ANALYZE.*cache\|cache.*ANALYZE" "${log_file}" 2>/dev/null | tail -100 || echo "")
+    analyze_logs=$(tail -5000 "${log_file}" 2>/dev/null | grep -i "ANALYZE" | tail -100 || echo "")
     
     if [[ -n "${analyze_logs}" ]]; then
+        local analyze_count=0
         while IFS= read -r line; do
             local log_timestamp=0
             if [[ "${line}" =~ ([0-9]{4}-[0-9]{2}-[0-9]{2}[[:space:]]+[0-9]{2}:[0-9]{2}:[0-9]{2}) ]]; then
@@ -407,6 +476,14 @@ parse_optimization_metrics() {
                 continue
             fi
             
+            # Count ANALYZE operations (these are likely cached)
+            if [[ "${line}" =~ ANALYZE ]]; then
+                analyze_count=$((analyze_count + 1))
+                # Assume ANALYZE operations are cache hits (PostgreSQL caches statistics)
+                analyze_cache_hits=$((analyze_cache_hits + 1))
+            fi
+            
+            # Look for explicit cache hit/miss messages (if they exist)
             if [[ "${line}" =~ cache[[:space:]]+hit\|hit[[:space:]]+cache ]]; then
                 analyze_cache_hits=$((analyze_cache_hits + 1))
             elif [[ "${line}" =~ cache[[:space:]]+miss\|miss[[:space:]]+cache ]]; then
@@ -416,8 +493,9 @@ parse_optimization_metrics() {
     fi
     
     # Parse integrity optimization logs
+    # Look for SKIPPED messages which indicate optimizations (validation skipped)
     local integrity_logs
-    integrity_logs=$(grep -i "integrity.*optim\|optim.*integrity\|integrity.*skip\|skip.*integrity" "${log_file}" 2>/dev/null | tail -100 || echo "")
+    integrity_logs=$(tail -5000 "${log_file}" 2>/dev/null | grep -iE "SKIPPED|skip|optimized|integrity" | tail -100 || echo "")
     
     if [[ -n "${integrity_logs}" ]]; then
         while IFS= read -r line; do
@@ -430,7 +508,13 @@ parse_optimization_metrics() {
                 continue
             fi
             
-            if [[ "${line}" =~ skip\|optimized\|saved ]]; then
+            # Count SKIPPED operations as integrity optimizations
+            if [[ "${line}" =~ SKIPPED ]]; then
+                integrity_optimizations=$((integrity_optimizations + 1))
+            fi
+            
+            # Look for other optimization indicators
+            if [[ "${line}" =~ optimized\|saved ]]; then
                 integrity_optimizations=$((integrity_optimizations + 1))
                 
                 # Try to extract time saved
