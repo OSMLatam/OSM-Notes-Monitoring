@@ -173,7 +173,7 @@ remove_rule() {
         # Otherwise, treat as pattern and remove matching lines
         # Escape special regex characters in pattern for sed
         local escaped_pattern
-        escaped_pattern=$(printf '%s\n' "${rule_id}" | sed 's/[[\.*^$()+?{|]/\\&/g')
+        escaped_pattern=$(printf '%s\n' "${rule_id}" | sed "s/[[\\.*^\$()+?{|]/\\\\&/g")
         sed -i "/${escaped_pattern}/d" "${ALERT_RULES_FILE}"
         log_info "Alert rule removed (pattern: ${rule_id})"
         echo "Rules matching '${rule_id}' removed"
