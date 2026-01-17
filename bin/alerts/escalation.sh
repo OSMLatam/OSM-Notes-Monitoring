@@ -502,11 +502,16 @@ main() {
     # Load configuration
     load_config "${CONFIG_FILE:-}"
     
+    # Strip leading -- from action if present
+    if [[ "${action}" =~ ^-- ]]; then
+        action="${action#--}"
+    fi
+    
     case "${action}" in
-        check)
+        check|--check)
             check_escalation "${2:-}"
             ;;
-        escalate)
+        escalate|--escalate)
             if [[ -z "${2:-}" ]]; then
                 echo "Error: Alert ID required"
                 usage
@@ -514,13 +519,13 @@ main() {
             fi
             escalate_alert "${2}" "${3:-}"
             ;;
-        rules)
+        rules|--rules)
             show_rules "${2:-}"
             ;;
-        oncall)
+        oncall|--oncall)
             show_oncall "${2:-}"
             ;;
-        rotate)
+        rotate|--rotate)
             rotate_oncall
             ;;
         -h|--help|help)
