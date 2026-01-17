@@ -69,12 +69,15 @@ setup() {
         local query="${1}"
         local _dbname="${2:-test_db}"
         
-        # Normalize query by removing whitespace and newlines for matching
+        # Normalize query by removing whitespace and newlines for matching, convert to lowercase
         local normalized_query
-        normalized_query=$(echo "${query}" | tr -d '\n' | tr -s ' ')
+        normalized_query=$(echo "${query}" | tr -d '\n\r\t' | tr -s ' ' | tr '[:upper:]' '[:lower:]')
         
         # Debug: log query to file for debugging
         echo "QUERY: ${normalized_query}" >> "${TEST_LOG_DIR}/sql_queries.log" 2>&1 || true
+        echo "RAW_QUERY_START" >> "${TEST_LOG_DIR}/sql_queries.log" 2>&1 || true
+        echo "${query}" >> "${TEST_LOG_DIR}/sql_queries.log" 2>&1 || true
+        echo "RAW_QUERY_END" >> "${TEST_LOG_DIR}/sql_queries.log" 2>&1 || true
         
         # Return table sizes data (format: tablename|total_size|table_size|indexes_size)
         # Match queries that contain pg_total_relation_size and tablename
@@ -89,6 +92,7 @@ setup() {
         if echo "${normalized_query}" | grep -q "bloat_ratio_percent"; then
             echo "notes|1000000|50000|4.76"
             echo "note_comments|500000|10000|1.96"
+            echo "MATCHED: bloat" >> "${TEST_LOG_DIR}/sql_queries.log" 2>&1 || true
             return 0
         fi
         
@@ -96,46 +100,61 @@ setup() {
         if echo "${normalized_query}" | grep -q "index_scan_ratio_percent"; then
             echo "notes|9500|500|95.00"
             echo "note_comments|8000|200|97.56"
+            echo "MATCHED: index_usage" >> "${TEST_LOG_DIR}/sql_queries.log" 2>&1 || true
             return 0
         fi
         
-        # Return unused indexes data
-        if echo "${normalized_query}" | grep -q "unused_index_count"; then
+        # Return unused indexes data (from pg_stat_user_indexes)
+        # Check for pg_stat_user_indexes - be more permissive
+        if echo "${normalized_query}" | grep -q "pg_stat_user_indexes"; then
+            echo "MATCHED: unused_indexes" >> "${TEST_LOG_DIR}/sql_queries.log" 2>&1 || true
             echo "2|1048576"
             return 0
         fi
         
-        # Return slow queries data
-        if echo "${normalized_query}" | grep -q "slow_query_count"; then
+        # Return slow queries data (from pg_stat_statements)
+        if echo "${normalized_query}" | grep -q "pg_stat_statements"; then
+            echo "MATCHED: slow_queries" >> "${TEST_LOG_DIR}/sql_queries.log" 2>&1 || true
             echo "3"
             return 0
         fi
         
-        # Return cache hit ratio
-        if echo "${normalized_query}" | grep -q "cache_hit_ratio_percent"; then
+        # Return cache hit ratio (from pg_stat_database with blks_hit)
+        # Be more permissive - just check for pg_stat_database and blks_hit
+        if echo "${normalized_query}" | grep -q "pg_stat_database" && echo "${normalized_query}" | grep -q "blks_hit"; then
+            echo "MATCHED: cache_hit_ratio" >> "${TEST_LOG_DIR}/sql_queries.log" 2>&1 || true
             echo "98.5"
             return 0
         fi
         
-        # Return connection stats
-        if echo "${normalized_query}" | grep -q "application_name" && echo "${normalized_query}" | grep -q "COUNT"; then
+        # Return connection stats by application (pg_stat_activity with application_name)
+        # This must come BEFORE the overall connection stats check
+        if echo "${normalized_query}" | grep -q "pg_stat_activity" && echo "${normalized_query}" | grep -q "application_name" && echo "${normalized_query}" | grep -q "group by"; then
+            echo "MATCHED: connection_stats_by_app" >> "${TEST_LOG_DIR}/sql_queries.log" 2>&1 || true
             echo "osm-ingestion|5"
             echo "osm-monitoring|2"
             return 0
         fi
         
-        if echo "${normalized_query}" | grep -q "total_connections" && echo "${normalized_query}" | grep -q "active_connections"; then
+        # Return overall connection stats (pg_stat_activity with COUNT and FILTER)
+        # Check for COUNT with FILTER pattern - be more permissive
+        if echo "${normalized_query}" | grep -q "pg_stat_activity" && echo "${normalized_query}" | grep -q "count.*filter"; then
+            echo "MATCHED: connection_stats_overall" >> "${TEST_LOG_DIR}/sql_queries.log" 2>&1 || true
             echo "10|3|5|1|1"
             return 0
         fi
         
-        if echo "${normalized_query}" | grep -q "connection_usage_percent"; then
+        # Return connection usage stats
+        if echo "${normalized_query}" | grep -q "connection_usage_percent\|max_connections" && echo "${normalized_query}" | grep -q "current_setting"; then
+            echo "MATCHED: connection_usage" >> "${TEST_LOG_DIR}/sql_queries.log" 2>&1 || true
             echo "10|100|10.00"
             return 0
         fi
         
-        # Return lock stats
-        if echo "${normalized_query}" | grep -q "total_locks" && echo "${normalized_query}" | grep -q "granted_locks"; then
+        # Return lock stats (from pg_locks with COUNT and FILTER)
+        # Be more permissive - just check for pg_locks and count/filter
+        if echo "${normalized_query}" | grep -q "pg_locks" && echo "${normalized_query}" | grep -q "count"; then
+            echo "MATCHED: lock_stats" >> "${TEST_LOG_DIR}/sql_queries.log" 2>&1 || true
             echo "25|24|1"
             return 0
         fi
@@ -151,7 +170,7 @@ setup() {
     }
     export -f execute_sql_query
     
-    # Source libraries (execute_sql_query mock is already set, so it won't be overwritten)
+    # Source libraries first
     # shellcheck disable=SC1091
     source "${BATS_TEST_DIRNAME}/../../../bin/lib/loggingFunctions.sh"
     # shellcheck disable=SC1091
@@ -169,7 +188,105 @@ setup() {
     : > "${METRICS_FILE}"
     export METRICS_FILE
     
-    # Mock record_metric BEFORE sourcing (metricsFunctions.sh defines it, but we override)
+    # NOW override execute_sql_query AFTER loading monitoringFunctions.sh
+    # shellcheck disable=SC2317
+    execute_sql_query() {
+        local query="${1}"
+        local _dbname="${2:-test_db}"
+        
+        # Normalize query by removing whitespace and newlines for matching, convert to lowercase
+        local normalized_query
+        normalized_query=$(echo "${query}" | tr -d '\n\r\t' | tr -s ' ' | tr '[:upper:]' '[:lower:]')
+        
+        # Debug: log query to file for debugging
+        echo "QUERY: ${normalized_query}" >> "${TEST_LOG_DIR}/sql_queries.log" 2>&1 || true
+        
+        # Return table sizes data (format: tablename|total_size|table_size|indexes_size)
+        if echo "${normalized_query}" | grep -q "pg_total_relation_size" && echo "${normalized_query}" | grep -q "tablename"; then
+            echo "notes|1234567890|1000000000|234567890"
+            echo "note_comments|987654321|800000000|187654321"
+            echo "MATCHED: table_sizes" >> "${TEST_LOG_DIR}/sql_queries.log" 2>&1 || true
+            return 0
+        fi
+        
+        # Return bloat data
+        if echo "${normalized_query}" | grep -q "bloat_ratio_percent"; then
+            echo "notes|1000000|50000|4.76"
+            echo "note_comments|500000|10000|1.96"
+            echo "MATCHED: bloat" >> "${TEST_LOG_DIR}/sql_queries.log" 2>&1 || true
+            return 0
+        fi
+        
+        # Return index usage data
+        if echo "${normalized_query}" | grep -q "index_scan_ratio_percent"; then
+            echo "notes|9500|500|95.00"
+            echo "note_comments|8000|200|97.56"
+            echo "MATCHED: index_usage" >> "${TEST_LOG_DIR}/sql_queries.log" 2>&1 || true
+            return 0
+        fi
+        
+        # Return unused indexes data (from pg_stat_user_indexes)
+        if echo "${normalized_query}" | grep -q "pg_stat_user_indexes"; then
+            echo "MATCHED: unused_indexes" >> "${TEST_LOG_DIR}/sql_queries.log" 2>&1 || true
+            echo "2|1048576"
+            return 0
+        fi
+        
+        # Return slow queries data (from pg_stat_statements)
+        if echo "${normalized_query}" | grep -q "pg_stat_statements"; then
+            echo "MATCHED: slow_queries" >> "${TEST_LOG_DIR}/sql_queries.log" 2>&1 || true
+            echo "3"
+            return 0
+        fi
+        
+        # Return cache hit ratio (from pg_stat_database with blks_hit)
+        if echo "${normalized_query}" | grep -q "pg_stat_database" && echo "${normalized_query}" | grep -q "blks_hit"; then
+            echo "MATCHED: cache_hit_ratio" >> "${TEST_LOG_DIR}/sql_queries.log" 2>&1 || true
+            echo "98.5"
+            return 0
+        fi
+        
+        # Return connection stats by application (pg_stat_activity with application_name)
+        if echo "${normalized_query}" | grep -q "pg_stat_activity" && echo "${normalized_query}" | grep -q "application_name" && echo "${normalized_query}" | grep -q "group by"; then
+            echo "MATCHED: connection_stats_by_app" >> "${TEST_LOG_DIR}/sql_queries.log" 2>&1 || true
+            echo "osm-ingestion|5"
+            echo "osm-monitoring|2"
+            return 0
+        fi
+        
+        # Return overall connection stats (pg_stat_activity with COUNT and FILTER)
+        if echo "${normalized_query}" | grep -q "pg_stat_activity" && echo "${normalized_query}" | grep -q "count.*filter"; then
+            echo "MATCHED: connection_stats_overall" >> "${TEST_LOG_DIR}/sql_queries.log" 2>&1 || true
+            echo "10|3|5|1|1"
+            return 0
+        fi
+        
+        # Return connection usage stats
+        if echo "${normalized_query}" | grep -q "connection_usage_percent\|max_connections" && echo "${normalized_query}" | grep -q "current_setting"; then
+            echo "MATCHED: connection_usage" >> "${TEST_LOG_DIR}/sql_queries.log" 2>&1 || true
+            echo "10|100|10.00"
+            return 0
+        fi
+        
+        # Return lock stats (from pg_locks with COUNT)
+        if echo "${normalized_query}" | grep -q "pg_locks" && echo "${normalized_query}" | grep -q "count"; then
+            echo "MATCHED: lock_stats" >> "${TEST_LOG_DIR}/sql_queries.log" 2>&1 || true
+            echo "25|24|1"
+            return 0
+        fi
+        
+        if echo "${normalized_query}" | grep -q "deadlocks_count\|deadlocks AS"; then
+            echo "0"
+            return 0
+        fi
+        
+        # Return empty for other queries
+        echo ""
+        return 0
+    }
+    export -f execute_sql_query
+    
+    # Mock record_metric
     # shellcheck disable=SC2317
     record_metric() {
         echo "$*" >> "${METRICS_FILE}"
@@ -309,14 +426,17 @@ teardown() {
     # Reset metrics file
     METRICS_FILE="${TEST_LOG_DIR}/metrics_called.txt"
     : > "${METRICS_FILE}"
+    export METRICS_FILE
     
-    # Redefine record_metric just before calling the function
+    # Ensure record_metric uses the correct METRICS_FILE
     # shellcheck disable=SC2317
     record_metric() {
-        echo "$*" >> "${METRICS_FILE}"
+        local file="${METRICS_FILE:-${TEST_LOG_DIR}/metrics_called.txt}"
+        echo "$*" >> "${file}"
         return 0
     }
     export -f record_metric
+    export METRICS_FILE
     
     # Run function
     run collect_unused_indexes
@@ -324,10 +444,21 @@ teardown() {
     # Should succeed
     assert_success
     
+    # Debug output
+    if [[ -f "${TEST_LOG_DIR}/sql_queries.log" ]]; then
+        echo "DEBUG: Last SQL queries:"
+        tail -10 "${TEST_LOG_DIR}/sql_queries.log" || true
+    fi
+    if [[ -f "${METRICS_FILE}" ]]; then
+        echo "DEBUG: Metrics file contents:"
+        cat "${METRICS_FILE}" || true
+        echo "DEBUG: Metrics file line count: $(wc -l < "${METRICS_FILE}")"
+    fi
+    
     # Check that metrics were recorded
     local metrics_found=0
     if [[ -f "${METRICS_FILE}" ]]; then
-        while IFS= read -r metric; do
+        while IFS= read -r metric || [[ -n "${metric}" ]]; do
             if [[ "${metric}" == *"db_unused_indexes"* ]]; then
                 metrics_found=$((metrics_found + 1))
             fi
