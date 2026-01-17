@@ -138,11 +138,27 @@ setup() {
         if [[ "${1}" == "+%s" ]]; then
             echo "1704672000"  # Fixed timestamp
             return 0
-        elif [[ "${1}" == "-d" ]] && [[ "${2}" == "1 hour ago" ]]; then
-            echo "2026-01-08 21"
-            return 0
+        elif [[ "${1}" == "-d" ]]; then
+            local date_arg="${2}"
+            if [[ "${date_arg}" == "1 hour ago" ]]; then
+                echo "2026-01-08 21"
+                return 0
+            elif [[ "${date_arg}" == "60 minutes ago" ]]; then
+                echo "1704668400"  # 60 minutes before fixed timestamp
+                return 0
+            elif [[ "${date_arg}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}[[:space:]]+[0-9]{2}:[0-9]{2}:[0-9]{2} ]]; then
+                # Parse timestamp and convert to epoch (simplified for testing)
+                # For test purposes, return a fixed epoch for any valid timestamp format
+                echo "1704672000"
+                return 0
+            fi
         fi
-        return 1
+        # Fallback: try to use real date command if available
+        if command -v date >/dev/null 2>&1; then
+            command date "$@"
+        else
+            return 1
+        fi
     }
     export -f date
     
@@ -337,6 +353,63 @@ create_lock_file() {
     run check_daemon_lock_file
     
     # Should succeed and return 0 (no lock)
+    assert_success
+    assert_output "0"
+}
+
+@test "parse_log_timestamp handles basic timestamp format" {
+    # Test basic format: YYYY-MM-DD HH:MM:SS
+    local test_line="2026-01-08 22:03:26 - INFO - Cycle 3225 completed successfully"
+    run parse_log_timestamp "${test_line}"
+    
+    assert_success
+    # Should return a valid epoch timestamp (greater than 0)
+    assert [ "${output}" -gt 0 ]
+}
+
+@test "parse_log_timestamp handles timestamp with microseconds" {
+    # Test format with microseconds: YYYY-MM-DD HH:MM:SS.microseconds
+    local test_line="2026-01-08 22:03:26.123456 - INFO - Cycle 3225 completed successfully"
+    run parse_log_timestamp "${test_line}"
+    
+    assert_success
+    # Should return a valid epoch timestamp
+    assert [ "${output}" -gt 0 ]
+}
+
+@test "parse_log_timestamp handles ISO format" {
+    # Test ISO format: YYYY-MM-DDTHH:MM:SS
+    local test_line="2026-01-08T22:03:26 - INFO - Cycle 3225 completed successfully"
+    run parse_log_timestamp "${test_line}"
+    
+    assert_success
+    # Should return a valid epoch timestamp
+    assert [ "${output}" -gt 0 ]
+}
+
+@test "parse_log_timestamp handles timestamp with timezone" {
+    # Test format with timezone: YYYY-MM-DD HH:MM:SS+timezone
+    local test_line="2026-01-08 22:03:26+00:00 - INFO - Cycle 3225 completed successfully"
+    run parse_log_timestamp "${test_line}"
+    
+    assert_success
+    # Should return a valid epoch timestamp
+    assert [ "${output}" -gt 0 ]
+}
+
+@test "parse_log_timestamp returns 0 for invalid input" {
+    # Test with invalid input
+    run parse_log_timestamp ""
+    
+    assert_success
+    assert_output "0"
+}
+
+@test "parse_log_timestamp returns 0 for line without timestamp" {
+    # Test with line that doesn't contain a timestamp
+    local test_line="This is a log line without a timestamp"
+    run parse_log_timestamp "${test_line}"
+    
     assert_success
     assert_output "0"
 }

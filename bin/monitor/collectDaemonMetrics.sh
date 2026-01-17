@@ -236,6 +236,89 @@ check_daemon_lock_file() {
 }
 
 ##
+# Parse timestamp from log line to epoch seconds
+# Handles multiple timestamp formats:
+# - YYYY-MM-DD HH:MM:SS
+# - YYYY-MM-DD HH:MM:SS.microseconds
+# - YYYY-MM-DD HH:MM:SS+timezone
+# - YYYY-MM-DD HH:MM:SS.microseconds+timezone
+# - YYYY-MM-DDTHH:MM:SS (ISO format)
+##
+parse_log_timestamp() {
+    local log_line="${1:-}"
+    local timestamp_epoch=0
+    
+    if [[ -z "${log_line}" ]]; then
+        echo "0"
+        return 0
+    fi
+    
+    # Try multiple timestamp formats
+    # Format 1: YYYY-MM-DD HH:MM:SS (basic format)
+    if [[ "${log_line}" =~ ([0-9]{4}-[0-9]{2}-[0-9]{2})[[:space:]]+([0-9]{2}):([0-9]{2}):([0-9]{2}) ]]; then
+        local log_date="${BASH_REMATCH[1]}"
+        local log_time="${BASH_REMATCH[2]}:${BASH_REMATCH[3]}:${BASH_REMATCH[4]}"
+        local log_timestamp="${log_date} ${log_time}"
+        timestamp_epoch=$(date -d "${log_timestamp}" +%s 2>/dev/null || echo "0")
+        if [[ ${timestamp_epoch} -gt 0 ]]; then
+            echo "${timestamp_epoch}"
+            return 0
+        fi
+    fi
+    
+    # Format 2: YYYY-MM-DD HH:MM:SS.microseconds (with microseconds)
+    if [[ "${log_line}" =~ ([0-9]{4}-[0-9]{2}-[0-9]{2})[[:space:]]+([0-9]{2}):([0-9]{2}):([0-9]{2})\.[0-9]+ ]]; then
+        local log_date="${BASH_REMATCH[1]}"
+        local log_time="${BASH_REMATCH[2]}:${BASH_REMATCH[3]}:${BASH_REMATCH[4]}"
+        local log_timestamp="${log_date} ${log_time}"
+        timestamp_epoch=$(date -d "${log_timestamp}" +%s 2>/dev/null || echo "0")
+        if [[ ${timestamp_epoch} -gt 0 ]]; then
+            echo "${timestamp_epoch}"
+            return 0
+        fi
+    fi
+    
+    # Format 3: YYYY-MM-DDTHH:MM:SS (ISO format)
+    if [[ "${log_line}" =~ ([0-9]{4}-[0-9]{2}-[0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2}) ]]; then
+        local log_date="${BASH_REMATCH[1]}"
+        local log_time="${BASH_REMATCH[2]}:${BASH_REMATCH[3]}:${BASH_REMATCH[4]}"
+        local log_timestamp="${log_date} ${log_time}"
+        timestamp_epoch=$(date -d "${log_timestamp}" +%s 2>/dev/null || echo "0")
+        if [[ ${timestamp_epoch} -gt 0 ]]; then
+            echo "${timestamp_epoch}"
+            return 0
+        fi
+    fi
+    
+    # Format 4: Try to extract any date-time pattern and let date command handle it
+    # This is a fallback that tries to parse the first date-time-like pattern
+    # Handles formats like: YYYY-MM-DD HH:MM:SS+timezone or YYYY-MM-DD HH:MM:SS-timezone
+    if [[ "${log_line}" =~ ([0-9]{4}-[0-9]{2}-[0-9]{2}[[:space:]]+[0-9]{2}:[0-9]{2}:[0-9]{2}[^[:space:]]*) ]]; then
+        local extracted_timestamp="${BASH_REMATCH[1]}"
+        # Try parsing with timezone first (date command can handle +HH:MM or -HH:MM)
+        timestamp_epoch=$(date -d "${extracted_timestamp}" +%s 2>/dev/null || echo "0")
+        if [[ ${timestamp_epoch} -gt 0 ]]; then
+            echo "${timestamp_epoch}"
+            return 0
+        fi
+        # If that failed, try removing timezone info
+        # Remove timezone offset (format: +HH:MM or -HH:MM at the end)
+        if [[ "${extracted_timestamp}" =~ ^(.+)[+-][0-9]{2}:[0-9]{2}$ ]]; then
+            extracted_timestamp="${BASH_REMATCH[1]}"
+            timestamp_epoch=$(date -d "${extracted_timestamp}" +%s 2>/dev/null || echo "0")
+            if [[ ${timestamp_epoch} -gt 0 ]]; then
+                echo "${timestamp_epoch}"
+                return 0
+            fi
+        fi
+    fi
+    
+    # If all formats failed, return 0
+    echo "0"
+    return 0
+}
+
+##
 # Parse daemon logs for cycle metrics
 ##
 parse_daemon_cycle_metrics() {
@@ -320,41 +403,54 @@ parse_daemon_cycle_metrics() {
     
     if [[ ${threshold_epoch} -gt 0 ]]; then
         # Count cycles completed in the last 60 minutes by comparing timestamps
-        # Get recent cycle completion lines (last ~70 entries to cover 60+ minutes)
+        # Increased buffer to 500 lines to ensure we capture all cycles even with high log volume
+        # This handles cases where there are many log lines between cycle completions
         local recent_cycle_lines
-        recent_cycle_lines=$(tail -70 "${log_file}" 2>/dev/null | grep -E "Cycle [0-9]+ completed successfully" || echo "")
+        recent_cycle_lines=$(tail -500 "${log_file}" 2>/dev/null | grep -E "Cycle [0-9]+ completed successfully" || echo "")
         
         if [[ -n "${recent_cycle_lines}" ]]; then
+            local parsed_count=0
+            local valid_count=0
             while IFS= read -r line; do
-                # Extract timestamp from log line (format: YYYY-MM-DD HH:MM:SS)
-                if [[ "${line}" =~ ([0-9]{4}-[0-9]{2}-[0-9]{2})[[:space:]]+([0-9]{2}):([0-9]{2}):([0-9]{2}) ]]; then
-                    local log_date="${BASH_REMATCH[1]}"
-                    local log_time="${BASH_REMATCH[2]}:${BASH_REMATCH[3]}:${BASH_REMATCH[4]}"
-                    local log_timestamp="${log_date} ${log_time}"
-                    
-                    # Convert log timestamp to epoch seconds
-                    local log_epoch
-                    log_epoch=$(date -d "${log_timestamp}" +%s 2>/dev/null || echo "0")
+                # Extract timestamp from log line using robust parsing function
+                local log_epoch
+                log_epoch=$(parse_log_timestamp "${line}")
+                
+                if [[ ${log_epoch} -gt 0 ]]; then
+                    parsed_count=$((parsed_count + 1))
                     
                     # If log timestamp is >= threshold (within last 60 minutes), count it
-                    if [[ ${log_epoch} -ge ${threshold_epoch} ]] && [[ ${log_epoch} -gt 0 ]]; then
+                    if [[ ${log_epoch} -ge ${threshold_epoch} ]]; then
                         recent_cycles=$((recent_cycles + 1))
+                        valid_count=$((valid_count + 1))
                     fi
                 fi
             done <<< "${recent_cycle_lines}"
+            
+            # If we parsed lines but found no valid cycles, log debug info
+            if [[ ${parsed_count} -gt 0 ]] && [[ ${valid_count} -eq 0 ]]; then
+                log_debug "${COMPONENT}: Found ${parsed_count} cycle lines but none within last 60 minutes (threshold: ${threshold_epoch})"
+            elif [[ ${parsed_count} -eq 0 ]] && [[ -n "${recent_cycle_lines}" ]]; then
+                # Log if we found cycle lines but couldn't parse timestamps
+                log_debug "${COMPONENT}: Found cycle lines but failed to parse timestamps (first line: $(echo "${recent_cycle_lines}" | head -1 | cut -c1-50))"
+            fi
         fi
     fi
     
     # Fallback: if date command failed or no cycles found, use previous hour pattern
-    if [[ ${recent_cycles} -eq 0 ]] || [[ ${threshold_epoch} -eq 0 ]]; then
+    # Only use fallback if we truly found zero cycles (not just parsing issues)
+    if [[ ${recent_cycles} -eq 0 ]] && [[ ${threshold_epoch} -eq 0 ]]; then
+        log_debug "${COMPONENT}: Using fallback method for cycles_per_hour calculation"
         local hour_pattern
         hour_pattern=$(date -d '1 hour ago' '+%Y-%m-%d %H' 2>/dev/null || echo "")
         if [[ -n "${hour_pattern}" ]]; then
             recent_cycles=$(grep -E "Cycle [0-9]+ completed successfully" "${log_file}" 2>/dev/null | grep -c "${hour_pattern}" 2>/dev/null || echo "0")
+            recent_cycles=$(echo "${recent_cycles}" | tr -d '[:space:]' || echo "0")
+            recent_cycles=$((recent_cycles + 0))
         fi
     fi
     
-    recent_cycles=$(echo "${recent_cycles}" | tr -d '[:space:]' || echo "0")
+    # Ensure cycles_per_hour is set correctly
     cycles_per_hour=$((recent_cycles + 0))
     
     # Record metrics
@@ -398,14 +494,12 @@ parse_daemon_processing_metrics() {
     if [[ -n "${last_cycle_line}" ]]; then
         # Extract cycle number and timestamp
         local cycle_num=0
-        local cycle_timestamp=""
         if [[ "${last_cycle_line}" =~ Cycle[[:space:]]+([0-9]+) ]]; then
             cycle_num="${BASH_REMATCH[1]}"
         fi
-        # Extract timestamp from cycle completion line (format: YYYY-MM-DD HH:MM:SS)
-        if [[ "${last_cycle_line}" =~ ([0-9]{4}-[0-9]{2}-[0-9]{2}[[:space:]]+[0-9]{2}:[0-9]{2}:[0-9]{2}) ]]; then
-            cycle_timestamp="${BASH_REMATCH[1]}"
-        fi
+        # Extract timestamp from cycle completion line using robust parsing
+        local cycle_timestamp_epoch=0
+        cycle_timestamp_epoch=$(parse_log_timestamp "${last_cycle_line}")
         
         # Look for processing stats around this cycle
         # Instead of searching a fixed number of lines back, find the most recent
@@ -419,11 +513,6 @@ parse_daemon_processing_metrics() {
         # If no context found with grep -B, try alternative: find all "Uploaded new" messages
         # that occurred before the cycle timestamp
         if [[ -z "${cycle_context}" ]] || [[ "${cycle_context}" =~ ^[[:space:]]*$ ]]; then
-            # Extract cycle timestamp for comparison
-            local cycle_timestamp_epoch=0
-            if [[ -n "${cycle_timestamp}" ]]; then
-                cycle_timestamp_epoch=$(date -d "${cycle_timestamp}" +%s 2>/dev/null || echo "0")
-            fi
             
             # Get recent "Uploaded new" messages from tail of log
             if [[ ${cycle_timestamp_epoch} -gt 0 ]]; then
@@ -433,12 +522,10 @@ parse_daemon_processing_metrics() {
                 # Filter messages that occurred before cycle completion
                 if [[ -n "${recent_uploaded_messages}" ]]; then
                     while IFS= read -r line; do
-                        if [[ "${line}" =~ ([0-9]{4}-[0-9]{2}-[0-9]{2}[[:space:]]+[0-9]{2}:[0-9]{2}:[0-9]{2}) ]]; then
-                            local msg_timestamp_epoch
-                            msg_timestamp_epoch=$(date -d "${BASH_REMATCH[1]}" +%s 2>/dev/null || echo "0")
-                            if [[ ${msg_timestamp_epoch} -lt ${cycle_timestamp_epoch} ]] && [[ ${msg_timestamp_epoch} -gt 0 ]]; then
-                                cycle_context="${cycle_context}${line}"$'\n'
-                            fi
+                        local msg_timestamp_epoch
+                        msg_timestamp_epoch=$(parse_log_timestamp "${line}")
+                        if [[ ${msg_timestamp_epoch} -lt ${cycle_timestamp_epoch} ]] && [[ ${msg_timestamp_epoch} -gt 0 ]]; then
+                            cycle_context="${cycle_context}${line}"$'\n'
                         fi
                     done <<< "${recent_uploaded_messages}"
                 fi

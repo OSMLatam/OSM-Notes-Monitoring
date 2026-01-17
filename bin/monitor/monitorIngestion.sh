@@ -2154,6 +2154,52 @@ check_api_download_success_rate() {
     local daemon_log_file="${DAEMON_LOG_FILE:-/var/log/osm-notes-ingestion/daemon/processAPINotesDaemon.log}"
     
     if [[ -f "${daemon_log_file}" ]]; then
+        # Source collectDaemonMetrics.sh to get parse_log_timestamp function
+        # This function handles multiple timestamp formats robustly
+        local daemon_metrics_script="${SCRIPT_DIR}/collectDaemonMetrics.sh"
+        if [[ -f "${daemon_metrics_script}" ]]; then
+            # shellcheck disable=SC1090
+            source "${daemon_metrics_script}" 2>/dev/null || true
+        fi
+        
+        # Define parse_log_timestamp if not available (fallback)
+        if ! declare -f parse_log_timestamp >/dev/null 2>&1; then
+            parse_log_timestamp() {
+                local log_line="${1:-}"
+                if [[ -z "${log_line}" ]]; then
+                    echo "0"
+                    return 0
+                fi
+                # Try multiple timestamp formats
+                # Format 1: YYYY-MM-DD HH:MM:SS (basic format)
+                if [[ "${log_line}" =~ ([0-9]{4}-[0-9]{2}-[0-9]{2})[[:space:]]+([0-9]{2}):([0-9]{2}):([0-9]{2}) ]]; then
+                    local log_date="${BASH_REMATCH[1]}"
+                    local log_time="${BASH_REMATCH[2]}:${BASH_REMATCH[3]}:${BASH_REMATCH[4]}"
+                    local log_timestamp="${log_date} ${log_time}"
+                    local timestamp_epoch
+                    timestamp_epoch=$(date -d "${log_timestamp}" +%s 2>/dev/null || echo "0")
+                    if [[ ${timestamp_epoch} -gt 0 ]]; then
+                        echo "${timestamp_epoch}"
+                        return 0
+                    fi
+                fi
+                # Format 2: YYYY-MM-DD HH:MM:SS.microseconds
+                if [[ "${log_line}" =~ ([0-9]{4}-[0-9]{2}-[0-9]{2})[[:space:]]+([0-9]{2}):([0-9]{2}):([0-9]{2})\.[0-9]+ ]]; then
+                    local log_date="${BASH_REMATCH[1]}"
+                    local log_time="${BASH_REMATCH[2]}:${BASH_REMATCH[3]}:${BASH_REMATCH[4]}"
+                    local log_timestamp="${log_date} ${log_time}"
+                    local timestamp_epoch
+                    timestamp_epoch=$(date -d "${log_timestamp}" +%s 2>/dev/null || echo "0")
+                    if [[ ${timestamp_epoch} -gt 0 ]]; then
+                        echo "${timestamp_epoch}"
+                        return 0
+                    fi
+                fi
+                echo "0"
+                return 0
+            }
+        fi
+        
         # Count API download attempts in last 24 hours - look for "__getNewNotesFromApi" function calls
         # Each cycle calls this function once to download from API
         # Filter by timestamp (last 24 hours) instead of fixed line count to avoid changing values during the day
@@ -2166,41 +2212,43 @@ check_api_download_success_rate() {
             threshold_epoch=$(date -d "${threshold_timestamp}" +%s 2>/dev/null || echo "0")
             
             if [[ ${threshold_epoch} -gt 0 ]]; then
+                
                 # Count downloads in last 24 hours by filtering lines with timestamps >= threshold
                 local downloads=0
                 while IFS= read -r line; do
-                    # Extract timestamp from log line (format: YYYY-MM-DD HH:MM:SS)
-                    if [[ "${line}" =~ ([0-9]{4}-[0-9]{2}-[0-9]{2}[[:space:]]+[0-9]{2}:[0-9]{2}:[0-9]{2}) ]]; then
-                        local log_timestamp="${BASH_REMATCH[1]}"
-                        # Convert log timestamp to epoch seconds
-                        local log_epoch
-                        log_epoch=$(date -d "${log_timestamp}" +%s 2>/dev/null || echo "0")
-                        # Compare timestamps (log_epoch >= threshold_epoch means within last 24 hours)
-                        if [[ ${log_epoch} -ge ${threshold_epoch} ]] && [[ ${log_epoch} -gt 0 ]]; then
-                            if [[ "${line}" =~ (__getNewNotesFromApi|getNewNotesFromApi) ]]; then
-                                downloads=$((downloads + 1))
-                            fi
+                    # Extract timestamp using robust parsing function
+                    local log_epoch
+                    log_epoch=$(parse_log_timestamp "${line}")
+                    # Compare timestamps (log_epoch >= threshold_epoch means within last 24 hours)
+                    if [[ ${log_epoch} -ge ${threshold_epoch} ]] && [[ ${log_epoch} -gt 0 ]]; then
+                        if [[ "${line}" =~ (__getNewNotesFromApi|getNewNotesFromApi) ]]; then
+                            downloads=$((downloads + 1))
                         fi
                     fi
                 done < <(tail -5000 "${daemon_log_file}" 2>/dev/null || echo "")
                 
                 # Count successful downloads in last 24 hours
+                # Look for explicit success messages
                 local successes=0
                 while IFS= read -r line; do
-                    # Extract timestamp from log line
-                    if [[ "${line}" =~ ([0-9]{4}-[0-9]{2}-[0-9]{2}[[:space:]]+[0-9]{2}:[0-9]{2}:[0-9]{2}) ]]; then
-                        local log_timestamp="${BASH_REMATCH[1]}"
-                        # Convert log timestamp to epoch seconds
-                        local log_epoch
-                        log_epoch=$(date -d "${log_timestamp}" +%s 2>/dev/null || echo "0")
-                        # Compare timestamps
-                        if [[ ${log_epoch} -ge ${threshold_epoch} ]] && [[ ${log_epoch} -gt 0 ]]; then
-                            if [[ "${line}" =~ (Successfully downloaded notes from API|SEQUENTIAL API XML PROCESSING COMPLETED SUCCESSFULLY) ]]; then
-                                successes=$((successes + 1))
-                            fi
+                    # Extract timestamp using robust parsing function
+                    local log_epoch
+                    log_epoch=$(parse_log_timestamp "${line}")
+                    # Compare timestamps
+                    if [[ ${log_epoch} -ge ${threshold_epoch} ]] && [[ ${log_epoch} -gt 0 ]]; then
+                        if [[ "${line}" =~ (Successfully downloaded notes from API|SEQUENTIAL API XML PROCESSING COMPLETED SUCCESSFULLY) ]]; then
+                            successes=$((successes + 1))
                         fi
                     fi
                 done < <(tail -5000 "${daemon_log_file}" 2>/dev/null || echo "")
+                
+                # Log detailed information for debugging low success rates
+                if [[ ${downloads} -gt 0 ]] && [[ ${successes} -lt ${downloads} ]]; then
+                    local success_rate_calc=$((successes * 100 / downloads))
+                    if [[ ${success_rate_calc} -lt 50 ]]; then
+                        log_debug "${COMPONENT}: Low API download success rate detected: ${success_rate_calc}% (${successes}/${downloads}). This may be normal if API calls succeed but return no new data."
+                    fi
+                fi
                 
                 total_downloads=${downloads}
                 successful_downloads=${successes}
