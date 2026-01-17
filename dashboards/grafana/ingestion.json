@@ -304,6 +304,7 @@
     {
       "id": 8,
       "title": "Daemon Processing Rate & Cycles",
+      "description": "Processing throughput (notes/sec) and cycle frequency (cycles/hour). Notes/sec will be 0 when no new notes are available to process - this is normal behavior when OSM API has no new activity.",
       "type": "timeseries",
       "gridPos": {"h": 10, "w": 12, "x": 12, "y": 4},
       "targets": [
@@ -327,7 +328,11 @@
       "fieldConfig": {
         "defaults": {
           "decimals": 2,
-          "min": 0
+          "min": 0,
+          "custom": {
+            "axisPlacement": "auto",
+            "axisLabel": ""
+          }
         },
         "overrides": [
           {
@@ -335,7 +340,9 @@
             "properties": [
               {"id": "displayName", "value": "Notes/sec"},
               {"id": "unit", "value": "short"},
-              {"id": "color", "value": {"mode": "fixed", "fixedColor": "blue"}}
+              {"id": "color", "value": {"mode": "fixed", "fixedColor": "blue"}},
+              {"id": "custom.axisPlacement", "value": 1},
+              {"id": "custom.axisLabel", "value": "Notes/sec"}
             ]
           },
           {
@@ -343,7 +350,10 @@
             "properties": [
               {"id": "displayName", "value": "Cycles/hour"},
               {"id": "unit", "value": "short"},
-              {"id": "color", "value": {"mode": "fixed", "fixedColor": "green"}}
+              {"id": "color", "value": {"mode": "fixed", "fixedColor": "green"}},
+              {"id": "custom.axisPlacement", "value": 2},
+              {"id": "custom.axisLabel", "value": "Cycles/hour"},
+              {"id": "max", "value": 70}
             ]
           }
         ]

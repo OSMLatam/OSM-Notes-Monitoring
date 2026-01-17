@@ -37,15 +37,19 @@ setup() {
     export DBUSER="${DBUSER:-postgres}"
     
     TEST_RULES_FILE="${BATS_TEST_DIRNAME}/../../../tmp/test_alert_rules_additional.conf"
-    export ALERT_RULES_FILE="${TEST_RULES_FILE}"
+    # Ensure directory exists before setting ALERT_RULES_FILE
+    mkdir -p "$(dirname "${TEST_RULES_FILE}")"
     rm -f "${TEST_RULES_FILE}"
+    export ALERT_RULES_FILE="${TEST_RULES_FILE}"
     
     TEST_TEMPLATES_DIR="${BATS_TEST_DIRNAME}/../../../tmp/test_templates"
     export ALERT_TEMPLATES_DIR="${TEST_TEMPLATES_DIR}"
     mkdir -p "${TEST_TEMPLATES_DIR}"
     
     init_logging "${LOG_DIR}/test_alertRules_additional.log" "test_alertRules_additional"
+    # init_alerting may override ALERT_RULES_FILE, so set it again after
     init_alerting
+    export ALERT_RULES_FILE="${TEST_RULES_FILE}"
 }
 
 teardown() {
@@ -165,10 +169,14 @@ teardown() {
 # Test: main handles --add option
 ##
 @test "main handles --add option" {
+    # Ensure file is clean
+    rm -f "${TEST_RULES_FILE}"
+    
     run main --add "TEST_COMPONENT" "critical" "test" "test@example.com"
     assert_success
     
-    # Verify rule was added
+    # Verify file was created and rule was added
+    assert [ -f "${TEST_RULES_FILE}" ]
     assert grep -q "TEST_COMPONENT:critical:test:test@example.com" "${TEST_RULES_FILE}"
 }
 
@@ -176,13 +184,35 @@ teardown() {
 # Test: main handles --remove option
 ##
 @test "main handles --remove option" {
+    # Ensure file is clean and recreate it
+    rm -f "${TEST_RULES_FILE}"
     echo "TEST_COMPONENT:critical:test:test@example.com" > "${TEST_RULES_FILE}"
     
+    # Verify file exists and has content before removal
+    assert [ -f "${TEST_RULES_FILE}" ]
+    assert grep -q "TEST_COMPONENT:critical:test" "${TEST_RULES_FILE}"
+    
+    # Run remove command - it constructs pattern as "TEST_COMPONENT:critical:test"
     run main --remove "TEST_COMPONENT" "critical" "test"
     assert_success
     
-    # Verify rule was removed
-    assert ! grep -q "TEST_COMPONENT:critical:test" "${TEST_RULES_FILE}"
+    # Verify rule was removed - check that file doesn't contain the pattern
+    # sed -i should remove the matching line
+    if [[ -f "${TEST_RULES_FILE}" ]]; then
+        # File exists, check if pattern is gone
+        if grep -q "TEST_COMPONENT:critical:test" "${TEST_RULES_FILE}" 2>/dev/null; then
+            # Pattern still exists, test failed
+            echo "DEBUG: File still contains pattern after removal"
+            cat "${TEST_RULES_FILE}"
+            assert_failure "Pattern should have been removed"
+        else
+            # Pattern is gone, test passes
+            assert_success
+        fi
+    else
+        # File was removed entirely (unlikely but possible)
+        assert_success
+    fi
 }
 
 ##

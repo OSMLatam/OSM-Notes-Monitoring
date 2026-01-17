@@ -66,8 +66,35 @@ setup() {
     
     # shellcheck disable=SC2317
     function psql() {
-        local query="${*}"
-        local args="${*}"
+        local args=("$@")
+        local query=""
+        local is_tab_format=false
+        local all_args="${*}"
+        
+        # Extract query from arguments
+        # psql can be called as: psql -h host -p port -U user -d db -c "query"
+        # or: psql -t -A -c "query" (for execute_sql_query)
+        local i=0
+        while [[ $i -lt ${#args[@]} ]]; do
+            case "${args[$i]}" in
+                -c)
+                    if [[ $((i+1)) -lt ${#args[@]} ]]; then
+                        query="${args[$((i+1))]}"
+                        break
+                    fi
+                    ;;
+                -t|-A)
+                    is_tab_format=true
+                    ;;
+            esac
+            ((i++))
+        done
+        
+        # If no -c found, treat all args as query (for backward compatibility)
+        # This handles cases where psql is called without -c flag
+        if [[ -z "${query}" ]]; then
+            query="${all_args}"
+        fi
         
         # Handle INSERT operations (for store_alert)
         if [[ "${query}" =~ INSERT.*alerts ]]; then
@@ -81,28 +108,24 @@ setup() {
             local current_status
             current_status=$(cat "${MOCK_STATUS_FILE:-${TEST_LOG_DIR}/.mock_alert_status}" 2>/dev/null || echo "active")
             
-            # Check if it's a -t -A query (tab-separated, no headers)
-            local is_tab_format=false
-            if [[ "${args}" =~ -t.*-A ]] || [[ "${args}" =~ -A.*-t ]]; then
-                is_tab_format=true
-            fi
+            # is_tab_format is already set from argument parsing above
             
-            # SELECT status queries (for checking alert status)
-            if [[ "${query}" =~ SELECT.*status.*WHERE.*id ]]; then
-                # Return current mock status
-                echo "${current_status}"
-                return 0
-            fi
-            # SELECT id queries (for get_alert_id helper)
-            if [[ "${query}" =~ SELECT.*id.*WHERE.*component ]]; then
-                echo "00000000-0000-0000-0000-000000000001"
-                return 0
-            fi
+            # IMPORTANT: Check for component filter FIRST (more specific)
+            # This must come before the generic SELECT id queries
             # SELECT queries for list_alerts or show_history with component filter
             # list_alerts uses: SELECT id, component, alert_level, alert_type, message, status, created_at, resolved_at FROM alerts WHERE 1=1 AND component = 'INGESTION'...
             # show_history uses: SELECT id, alert_level, alert_type, message, status, created_at, resolved_at FROM alerts WHERE component = 'INGESTION'...
             # Check if query contains component filter for INGESTION (handle various formats)
-            if [[ "${query}" =~ component.*=.*INGESTION ]]; then
+            # Normalize query for matching (case insensitive)
+            local query_lower
+            query_lower=$(echo "${query}" | tr '[:upper:]' '[:lower:]')
+            
+            # Debug: log query to file
+            echo "DEBUG: Query: ${query}" >> "${TEST_LOG_DIR}/psql_debug.log" 2>&1 || true
+            echo "DEBUG: Query lower: ${query_lower}" >> "${TEST_LOG_DIR}/psql_debug.log" 2>&1 || true
+            
+            if echo "${query_lower}" | grep -q "component.*=.*ingestion" || echo "${query}" | grep -q "component.*=.*INGESTION" || echo "${query}" | grep -q "component.*=.*['\"]INGESTION"; then
+                echo "DEBUG: Matched component filter" >> "${TEST_LOG_DIR}/psql_debug.log" 2>&1 || true
                 # Check if it's show_history (no component column in SELECT)
                 if [[ "${query}" =~ SELECT.*id.*alert_level.*alert_type.*message.*status ]] && [[ ! "${query}" =~ SELECT.*component ]]; then
                     # show_history format (no component column)
@@ -125,6 +148,20 @@ setup() {
                 fi
                 return 0
             fi
+            
+            # SELECT status queries (for checking alert status)
+            if [[ "${query}" =~ SELECT.*status.*WHERE.*id ]]; then
+                # Return current mock status
+                echo "${current_status}"
+                return 0
+            fi
+            
+            # SELECT id queries (for get_alert_id helper) - must come AFTER component filter check
+            if [[ "${query}" =~ SELECT.*id.*WHERE.*component ]]; then
+                echo "00000000-0000-0000-0000-000000000001"
+                return 0
+            fi
+            
             # Check for non-existent alert ID
             if [[ "${query}" =~ WHERE.*id.*=.*00000000-0000-0000-0000-000000000000 ]]; then
                 # Non-existent alert ID
@@ -178,7 +215,7 @@ setup() {
                 # Update mock status in file
                 echo "acknowledged" > "${MOCK_STATUS_FILE:-${TEST_LOG_DIR}/.mock_alert_status}"
                 # Return alert ID (RETURNING id) - only if using -t -A format
-                if [[ "${args}" =~ -t.*-A ]] || [[ "${args}" =~ -A.*-t ]]; then
+                if [[ "${all_args}" =~ -t.*-A ]] || [[ "${all_args}" =~ -A.*-t ]]; then
                     echo "00000000-0000-0000-0000-000000000001"
                 fi
                 return 0
@@ -194,7 +231,7 @@ setup() {
                 # Update mock status in file
                 echo "resolved" > "${MOCK_STATUS_FILE:-${TEST_LOG_DIR}/.mock_alert_status}"
                 # Return alert ID (RETURNING id) - only if using -t -A format
-                if [[ "${args}" =~ -t.*-A ]] || [[ "${args}" =~ -A.*-t ]]; then
+                if [[ "${all_args}" =~ -t.*-A ]] || [[ "${all_args}" =~ -A.*-t ]]; then
                     echo "00000000-0000-0000-0000-000000000001"
                 fi
                 return 0
@@ -868,7 +905,6 @@ EOF
     # shellcheck disable=SC2317
     function psql() {
         local query="${*}"
-        local args="${*}"
         
         # Handle the specific query for list_alerts with component filter
         if [[ "${query}" =~ SELECT.*FROM.alerts ]] && [[ "${query}" =~ WHERE.*component.*=.*INGESTION ]]; then
@@ -889,7 +925,7 @@ EOF
             local current_status
             current_status=$(cat "${MOCK_STATUS_FILE:-${TEST_LOG_DIR}/.mock_alert_status}" 2>/dev/null || echo "active")
             local is_tab_format=false
-            if [[ "${args}" =~ -t.*-A ]] || [[ "${args}" =~ -A.*-t ]]; then
+            if [[ "${*}" =~ -t.*-A ]] || [[ "${*}" =~ -A.*-t ]]; then
                 is_tab_format=true
             fi
             
@@ -958,7 +994,7 @@ EOF
                     return 0
                 fi
                 echo "acknowledged" > "${MOCK_STATUS_FILE:-${TEST_LOG_DIR}/.mock_alert_status}"
-                if [[ "${args}" =~ -t.*-A ]] || [[ "${args}" =~ -A.*-t ]]; then
+                if [[ "${*}" =~ -t.*-A ]] || [[ "${*}" =~ -A.*-t ]]; then
                     echo "00000000-0000-0000-0000-000000000001"
                 fi
                 return 0
@@ -968,7 +1004,7 @@ EOF
                     return 0
                 fi
                 echo "resolved" > "${MOCK_STATUS_FILE:-${TEST_LOG_DIR}/.mock_alert_status}"
-                if [[ "${args}" =~ -t.*-A ]] || [[ "${args}" =~ -A.*-t ]]; then
+                if [[ "${*}" =~ -t.*-A ]] || [[ "${*}" =~ -A.*-t ]]; then
                     echo "00000000-0000-0000-0000-000000000001"
                 fi
                 return 0

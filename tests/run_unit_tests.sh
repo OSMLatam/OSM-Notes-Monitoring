@@ -13,6 +13,12 @@ TEST_DIR=""
 TEST_DIR="${SCRIPT_DIR}/unit"
 readonly TEST_DIR
 
+# Ensure we're in the project root directory
+# This is important for tests that use relative paths
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+readonly PROJECT_ROOT
+cd "${PROJECT_ROOT}" || exit 1
+
 # Colors
 readonly RED='\033[0;31m'
 readonly GREEN='\033[0;32m'
@@ -93,9 +99,27 @@ run_tests() {
         
         print_message "${GREEN}" "Running: $(basename "${test_file}")"
         
+        # Convert test file to absolute path to avoid path issues
+        local test_file_abs
+        if [[ "${test_file}" = /* ]]; then
+            test_file_abs="${test_file}"
+        else
+            # Make absolute path - test_file is relative to TEST_DIR which is relative to SCRIPT_DIR
+            test_file_abs="${SCRIPT_DIR}/unit/$(basename "${test_file}")"
+            # If that doesn't work, try the full path from TEST_DIR
+            if [[ ! -f "${test_file_abs}" ]]; then
+                test_file_abs="$(cd "${TEST_DIR}" && find . -name "$(basename "${test_file}")" -type f | head -1)"
+                if [[ -n "${test_file_abs}" ]]; then
+                    test_file_abs="$(cd "${TEST_DIR}" && pwd)/${test_file_abs#./}"
+                else
+                    test_file_abs="${test_file}"
+                fi
+            fi
+        fi
+        
         # Capture exit code explicitly to avoid set -e terminating the script
         local bats_exit_code=0
-        bats "${test_file}" 2>&1 || bats_exit_code=$?
+        bats "${test_file_abs}" 2>&1 || bats_exit_code=$?
         
         local test_end
         local test_end_sec
