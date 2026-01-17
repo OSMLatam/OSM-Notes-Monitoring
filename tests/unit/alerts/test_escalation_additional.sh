@@ -158,6 +158,9 @@ teardown() {
 # Test: rotate_oncall handles rotation
 ##
 @test "rotate_oncall handles rotation" {
+    # Enable on-call rotation
+    export ONCALL_ROTATION_ENABLED="true"
+    
     # Mock psql
     # shellcheck disable=SC2317
     function psql() {
@@ -254,14 +257,21 @@ teardown() {
     # Mock psql
     # shellcheck disable=SC2317
     function psql() {
-        if [[ "${*}" =~ UPDATE.*alerts ]] && [[ "${*}" =~ level2 ]]; then
+        # First query: SELECT current escalation level
+        if [[ "${*}" =~ SELECT.*escalation_level ]]; then
+            echo "1"  # Current level is 1
+            return 0
+        fi
+        # Second query: UPDATE to level2
+        if [[ "${*}" =~ UPDATE.*alerts ]] && [[ "${*}" =~ 2 ]]; then
+            echo "00000000-0000-0000-0000-000000000001"  # Return alert ID
             return 0
         fi
         return 1
     }
     export -f psql
     
-    run escalate_alert "1" "level2"
+    run escalate_alert "00000000-0000-0000-0000-000000000001" "2"
     assert_success
 }
 
@@ -272,13 +282,20 @@ teardown() {
     # Mock psql
     # shellcheck disable=SC2317
     function psql() {
-        if [[ "${*}" =~ UPDATE.*alerts ]] && [[ "${*}" =~ level3 ]]; then
+        # First query: SELECT current escalation level
+        if [[ "${*}" =~ SELECT.*escalation_level ]]; then
+            echo "2"  # Current level is 2
+            return 0
+        fi
+        # Second query: UPDATE to level3
+        if [[ "${*}" =~ UPDATE.*alerts ]] && [[ "${*}" =~ 3 ]]; then
+            echo "00000000-0000-0000-0000-000000000001"  # Return alert ID
             return 0
         fi
         return 1
     }
     export -f psql
     
-    run escalate_alert "1" "level3"
+    run escalate_alert "00000000-0000-0000-0000-000000000001" "3"
     assert_success
 }

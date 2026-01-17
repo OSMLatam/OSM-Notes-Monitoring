@@ -190,7 +190,7 @@ get_routing() {
     local alert_level="${2:?Alert level required}"
     local alert_type="${3:?Alert type required}"
     
-    # Check for specific rule
+    # Check for specific rule (exact match)
     local rule
     rule=$(grep "^${component}:${alert_level}:${alert_type}:" "${ALERT_RULES_FILE:-/dev/null}" 2>/dev/null | head -1)
     
@@ -201,8 +201,32 @@ get_routing() {
         return 0
     fi
     
-    # Check for component-level rule
+    # Check for component-level-type rule with level wildcard (component:*:type)
+    rule=$(grep "^${component}:\\*:${alert_type}:" "${ALERT_RULES_FILE:-/dev/null}" 2>/dev/null | head -1)
+    if [[ -n "${rule}" ]]; then
+        route=$(echo "${rule}" | cut -d':' -f4)
+        echo "${route}"
+        return 0
+    fi
+    
+    # Check for component-level rule with type wildcard (component:level:*)
+    rule=$(grep "^${component}:${alert_level}:\\*:" "${ALERT_RULES_FILE:-/dev/null}" 2>/dev/null | head -1)
+    if [[ -n "${rule}" ]]; then
+        route=$(echo "${rule}" | cut -d':' -f4)
+        echo "${route}"
+        return 0
+    fi
+    
+    # Check for component-level rule (component:level:)
     rule=$(grep "^${component}:${alert_level}:" "${ALERT_RULES_FILE:-/dev/null}" 2>/dev/null | head -1)
+    if [[ -n "${rule}" ]]; then
+        route=$(echo "${rule}" | cut -d':' -f4)
+        echo "${route}"
+        return 0
+    fi
+    
+    # Check for full wildcard (*:*:*:route)
+    rule=$(grep "^\\*:\\*:\\*:" "${ALERT_RULES_FILE:-/dev/null}" 2>/dev/null | head -1)
     if [[ -n "${rule}" ]]; then
         route=$(echo "${rule}" | cut -d':' -f4)
         echo "${route}"
@@ -314,11 +338,17 @@ main() {
             ;;
         remove|--remove)
             if [[ -z "${2:-}" ]]; then
-                echo "Error: Rule ID required"
+                echo "Error: Rule ID or pattern required"
                 usage
                 exit 1
             fi
-            remove_rule "${2}"
+            # If multiple arguments provided, construct pattern component:level:type
+            if [[ -n "${3:-}" ]] && [[ -n "${4:-}" ]]; then
+                local pattern="${2}:${3}:${4}"
+                remove_rule "${pattern}"
+            else
+                remove_rule "${2}"
+            fi
             ;;
         route|--route)
             if [[ $# -lt 4 ]]; then
@@ -330,6 +360,11 @@ main() {
             ;;
         template|--template|templates|--templates)
             local template_action="${2:-}"
+            # If no action specified, default to list
+            if [[ -z "${template_action}" ]]; then
+                list_templates
+                return 0
+            fi
             # Strip leading -- from template_action if present
             if [[ "${template_action}" =~ ^-- ]]; then
                 template_action="${template_action#--}"

@@ -93,6 +93,7 @@ teardown() {
     }
     export -f check_escalation
     
-    run main --verbose
+    # --verbose should be an option, not an action, so it needs an action after it
+    run main --verbose check
     assert_success
 }

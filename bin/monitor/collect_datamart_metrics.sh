@@ -123,6 +123,14 @@ collect_datamart_log_metrics() {
 check_datamart_freshness() {
 	log_info "${COMPONENT}: Checking datamart freshness from database and logs"
 
+	# Check database connection first
+	if command -v check_database_connection >/dev/null 2>&1; then
+		if ! check_database_connection; then
+			log_error "${COMPONENT}: Database connection failed, skipping freshness check"
+			return 1
+		fi
+	fi
+
 	# Map datamart names to table names and log patterns
 	local datamart_config=(
 		"countries:datamartcountries:${DATAMART_COUNTRIES_PATTERN}"

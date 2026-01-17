@@ -499,6 +499,33 @@ rotate_oncall() {
 main() {
     local action="${1:-}"
     
+    # Handle options before action
+    while [[ $# -gt 0 ]]; do
+        case "${1}" in
+            -v|--verbose)
+                export LOG_LEVEL="${LOG_LEVEL_DEBUG}"
+                shift
+                ;;
+            -q|--quiet)
+                export LOG_LEVEL="${LOG_LEVEL_ERROR}"
+                shift
+                ;;
+            -h|--help)
+                usage
+                exit 0
+                ;;
+            -c|--config)
+                export CONFIG_FILE="${2}"
+                shift 2
+                ;;
+            *)
+                action="${1}"
+                shift
+                break
+                ;;
+        esac
+    done
+    
     # Load configuration
     load_config "${CONFIG_FILE:-}"
     

@@ -36,6 +36,27 @@ setup() {
     # Mock psql to avoid DB connections
     # shellcheck disable=SC2317
     psql() {
+        local args="${*}"
+        # Check if it's a table sizes query (contains pg_total_relation_size)
+        if echo "${args}" | grep -q "pg_total_relation_size" && echo "${args}" | grep -q "tablename"; then
+            # Return table sizes data (format: tablename|total_size|table_size|indexes_size)
+            echo "notes|1234567890|1000000000|234567890"
+            echo "note_comments|987654321|800000000|187654321"
+            return 0
+        fi
+        # Check if it's a bloat query
+        if echo "${args}" | grep -q "bloat_ratio_percent"; then
+            echo "notes|1000000|50000|4.76"
+            echo "note_comments|500000|10000|1.96"
+            return 0
+        fi
+        # Check if it's an index usage query
+        if echo "${args}" | grep -q "index_scan_ratio_percent"; then
+            echo "notes|9500|500|95.00"
+            echo "note_comments|8000|200|97.56"
+            return 0
+        fi
+        # Default: return empty
         echo "" 2>/dev/null
         return 0
     }
@@ -143,17 +164,22 @@ setup() {
     # Initialize logging
     init_logging "${TEST_LOG_DIR}/test_collectDatabaseMetrics.log" "test_collectDatabaseMetrics"
     
-    # Source collectDatabaseMetrics.sh functions
-    # shellcheck disable=SC1091
-    source "${BATS_TEST_DIRNAME}/../../../bin/monitor/collectDatabaseMetrics.sh" 2>/dev/null || true
+    # Set METRICS_FILE before sourcing
+    METRICS_FILE="${TEST_LOG_DIR}/metrics_called.txt"
+    : > "${METRICS_FILE}"
+    export METRICS_FILE
     
-    # Mock record_metric AFTER sourcing (metricsFunctions.sh defines it, but we override)
+    # Mock record_metric BEFORE sourcing (metricsFunctions.sh defines it, but we override)
     # shellcheck disable=SC2317
     record_metric() {
         echo "$*" >> "${METRICS_FILE}"
         return 0
     }
     export -f record_metric
+    
+    # Source collectDatabaseMetrics.sh functions
+    # shellcheck disable=SC1091
+    source "${BATS_TEST_DIRNAME}/../../../bin/monitor/collectDatabaseMetrics.sh" 2>/dev/null || true
     
     # Export functions for testing
     export -f collect_table_sizes collect_table_bloat collect_index_usage collect_unused_indexes
