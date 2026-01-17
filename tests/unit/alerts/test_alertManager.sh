@@ -99,9 +99,10 @@ setup() {
                 return 0
             fi
             # SELECT queries for list_alerts or show_history with component filter
-            # list_alerts uses: SELECT id, component, alert_level, alert_type, message, status, created_at, resolved_at FROM alerts WHERE component = 'INGESTION'...
+            # list_alerts uses: SELECT id, component, alert_level, alert_type, message, status, created_at, resolved_at FROM alerts WHERE 1=1 AND component = 'INGESTION'...
             # show_history uses: SELECT id, alert_level, alert_type, message, status, created_at, resolved_at FROM alerts WHERE component = 'INGESTION'...
-            if [[ "${query}" =~ WHERE.*component.*=.*INGESTION ]] || [[ "${query}" =~ component.*=.*INGESTION ]] || [[ "${query}" =~ AND.component.*=.*INGESTION ]]; then
+            # Check if query contains component filter for INGESTION (handle various formats)
+            if [[ "${query}" =~ component.*=.*INGESTION ]]; then
                 # Check if it's show_history (no component column in SELECT)
                 if [[ "${query}" =~ SELECT.*id.*alert_level.*alert_type.*message.*status ]] && [[ ! "${query}" =~ SELECT.*component ]]; then
                     # show_history format (no component column)

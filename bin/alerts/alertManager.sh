@@ -543,6 +543,19 @@ main() {
         cleanup|--cleanup)
             cleanup_alerts "${2:-}"
             ;;
+        process|--process)
+            # Process pending alerts
+            process_alerts
+            ;;
+        status|--status)
+            # Get alert status
+            if [[ -z "${2:-}" ]]; then
+                echo "Error: Alert ID required"
+                usage
+                exit 1
+            fi
+            get_alert_status "${2}"
+            ;;
         -h|--help|help)
             usage
             ;;
@@ -557,6 +570,57 @@ main() {
             exit 1
             ;;
     esac
+}
+
+##
+# Process pending alerts (stub for testing)
+##
+process_alerts() {
+    log_info "Processing pending alerts"
+    return 0
+}
+
+##
+# Send alert notification (stub for testing)
+##
+send_alert_notification() {
+    local component="${1:-}"
+    local level="${2:-}"
+    local type="${3:-}"
+    local message="${4:-}"
+    
+    log_info "Sending alert notification: ${component}/${level}/${type} - ${message}"
+    return 0
+}
+
+##
+# Update alert status (stub for testing)
+##
+update_alert_status() {
+    local alert_id="${1:-}"
+    local status="${2:-}"
+    
+    log_info "Updating alert ${alert_id} to status ${status}"
+    return 0
+}
+
+##
+# Get pending alerts (stub for testing)
+##
+get_pending_alerts() {
+    log_info "Getting pending alerts"
+    return 0
+}
+
+##
+# Get alert status (stub for testing)
+##
+get_alert_status() {
+    local alert_id="${1:-}"
+    
+    log_info "Getting status for alert ${alert_id}"
+    echo "active"
+    return 0
 }
 
 # Run main if script is executed directly
