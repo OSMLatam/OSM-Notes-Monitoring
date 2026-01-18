@@ -84,6 +84,10 @@ EOF
 load_config() {
     local config_file="${1:-${PROJECT_ROOT}/config/monitoring.conf}"
     
+    # Save original values to prevent overwriting test values
+    local original_alert_rules_file="${ALERT_RULES_FILE:-}"
+    local original_alert_templates_dir="${ALERT_TEMPLATES_DIR:-}"
+    
     if [[ -f "${config_file}" ]]; then
         # shellcheck disable=SC1090
         source "${config_file}" || true
@@ -98,9 +102,19 @@ load_config() {
         source "${PROJECT_ROOT}/config/alerts.conf.example" || true
     fi
     
-    # Set defaults
-    export ALERT_RULES_FILE="${ALERT_RULES_FILE:-${PROJECT_ROOT}/config/alert_rules.conf}"
-    export ALERT_TEMPLATES_DIR="${ALERT_TEMPLATES_DIR:-${PROJECT_ROOT}/config/alert_templates}"
+    # Restore original values if they were set (e.g., in test mode)
+    # Only set defaults if not already set
+    if [[ -n "${original_alert_rules_file}" ]]; then
+        export ALERT_RULES_FILE="${original_alert_rules_file}"
+    else
+        export ALERT_RULES_FILE="${ALERT_RULES_FILE:-${PROJECT_ROOT}/config/alert_rules.conf}"
+    fi
+    
+    if [[ -n "${original_alert_templates_dir}" ]]; then
+        export ALERT_TEMPLATES_DIR="${original_alert_templates_dir}"
+    else
+        export ALERT_TEMPLATES_DIR="${ALERT_TEMPLATES_DIR:-${PROJECT_ROOT}/config/alert_templates}"
+    fi
 }
 
 ##
@@ -172,8 +186,9 @@ remove_rule() {
     else
         # Otherwise, treat as pattern and remove matching lines
         # Escape special regex characters in pattern for sed
+        # Note: ] must be first in character class to be treated as literal
         local escaped_pattern
-        escaped_pattern=$(printf '%s\n' "${rule_id}" | sed "s/[[\\.*^\$()+?{|]/\\\\&/g")
+        escaped_pattern=$(printf '%s\n' "${rule_id}" | sed "s/[][\\.*^\$()+?{|]/\\\\&/g")
         sed -i "/${escaped_pattern}/d" "${ALERT_RULES_FILE}"
         log_info "Alert rule removed (pattern: ${rule_id})"
         echo "Rules matching '${rule_id}' removed"
