@@ -783,6 +783,39 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+##
+# Wrapper functions for backward compatibility and testing
+##
+add_ip_to_list() {
+    local ip="${1:?IP address required}"
+    local list_type="${2:?List type required (whitelist or blacklist)}"
+    local reason="${3:-}"
+    
+    case "${list_type}" in
+        whitelist)
+            whitelist_add "${ip}" "${reason}"
+            ;;
+        blacklist)
+            blacklist_add "${ip}" "${reason}"
+            ;;
+        *)
+            log_error "Invalid list type: ${list_type}. Must be 'whitelist' or 'blacklist'"
+            return 1
+            ;;
+    esac
+}
+
+get_ip_status() {
+    check_ip_status "$@"
+}
+
+# Export functions for use in tests
+export -f add_ip_to_list
+export -f get_ip_status
+export -f whitelist_add
+export -f blacklist_add
+export -f check_ip_status
+
 # Run main function only if script is executed directly (not sourced)
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     main "$@"

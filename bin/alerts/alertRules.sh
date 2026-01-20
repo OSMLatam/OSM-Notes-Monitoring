@@ -347,7 +347,9 @@ main() {
             list_rules "${2:-}"
             ;;
         add|--add)
-            if [[ $# -lt 5 ]]; then
+            # Check if we have enough arguments (action + component + level + type + route = 5 args)
+            # $# includes the script name, so we need at least 5 total arguments
+            if [[ $# -lt 5 ]] || [[ -z "${2:-}" ]] || [[ -z "${3:-}" ]] || [[ -z "${4:-}" ]] || [[ -z "${5:-}" ]]; then
                 echo "Error: Component, level, type, and route required"
                 usage
                 exit 1

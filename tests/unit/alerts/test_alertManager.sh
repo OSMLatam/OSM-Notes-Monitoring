@@ -226,9 +226,12 @@ setup() {
                 # Check if alert is already resolved
                 if [[ "${current_status}" == "resolved" ]]; then
                     # Already resolved - return empty (no rows updated)
+                    if [[ "${is_tab_format}" == "true" ]] || [[ "${all_args}" =~ -t.*-A ]] || [[ "${all_args}" =~ -A.*-t ]] || [[ "${*}" =~ -t.*-A ]] || [[ "${*}" =~ -A.*-t ]]; then
+                        echo ""  # Return empty string for -t -A format
+                    fi
                     return 0
                 fi
-                # Update mock status in file
+                # Update mock status in file BEFORE returning result
                 echo "resolved" > "${MOCK_STATUS_FILE:-${TEST_LOG_DIR}/.mock_alert_status}"
                 # Return alert ID (RETURNING id) - check for -t -A format in args or all_args
                 if [[ "${is_tab_format}" == "true" ]] || [[ "${all_args}" =~ -t.*-A ]] || [[ "${all_args}" =~ -A.*-t ]] || [[ "${*}" =~ -t.*-A ]] || [[ "${*}" =~ -A.*-t ]]; then
@@ -1081,9 +1084,8 @@ EOF
     alert_id=$(get_alert_id "INGESTION" "test_type" "Test message")
     
     if [[ -n "${alert_id}" ]]; then
-        # Reset mock status
-        # shellcheck disable=SC2030,SC2031
-        export MOCK_ALERT_STATUS="active"
+        # Reset mock status to active
+        echo "active" > "${MOCK_STATUS_FILE:-${TEST_LOG_DIR}/.mock_alert_status}"
         
         # Acknowledge alert
         run acknowledge_alert "${alert_id}" "test_user"
