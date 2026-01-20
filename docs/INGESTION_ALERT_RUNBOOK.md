@@ -896,6 +896,7 @@ This runbook provides detailed information about each alert type for the OSM-Not
 - Rate limiting
 - Authentication issues
 - API changes
+- **False positives:** Log patterns counting non-API download operations (fixed in recent versions)
 
 **Investigation Steps:**
 1. Review download logs for errors
@@ -903,6 +904,10 @@ This runbook provides detailed information about each alert type for the OSM-Not
 3. Test API manually: `curl ${API_URL}`
 4. Check for rate limiting
 5. Verify authentication
+6. **Verify log patterns:** Check if logs contain the expected success messages:
+   - `Successfully downloaded notes from API`
+   - `SEQUENTIAL API XML PROCESSING COMPLETED SUCCESSFULLY`
+7. **Check for false positives:** Review if non-API operations are being counted (see `docs/API_DOWNLOAD_SUCCESS_RATE_ANALYSIS.md`)
 
 **Resolution:**
 1. Fix API connectivity issues
@@ -910,12 +915,16 @@ This runbook provides detailed information about each alert type for the OSM-Not
 3. Update authentication if needed
 4. Contact API provider if API issues
 5. Implement retry logic
+6. **If false positive:** Ensure daemon logs contain the expected success message patterns
 
 **Prevention:**
 - API monitoring
 - Rate limiting handling
 - Retry mechanisms
 - API status monitoring
+- Ensure consistent logging patterns in daemon code
+
+**Note:** The monitoring code counts API download attempts by searching for `__getNewNotesFromApi` or `getNewNotesFromApi` function calls, and counts successes by searching for specific success messages. If your logs don't contain these exact patterns, you may see false warnings. See `docs/API_DOWNLOAD_SUCCESS_RATE_ANALYSIS.md` for detailed analysis.
 
 ---
 
