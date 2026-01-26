@@ -305,7 +305,7 @@ The test script:
 
 ## Related Documentation
 
-- [Database Schema](./../../docs/DATABASE_SCHEMA.md)
+- [Database Schema](./../../docs/Database_Schema.md)
 - [Monitoring Architecture](./../../docs/Monitoring_Architecture_Proposal.md)
 - [Existing Monitoring Components](./../../docs/Existing_Monitoring_Components.md)
 

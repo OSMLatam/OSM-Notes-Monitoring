@@ -117,7 +117,7 @@ This script:
 - Generates optimization recommendations
 
 For detailed information, see
-[Query Performance Optimization Guide](../docs/QUERY_PERFORMANCE_OPTIMIZATION.md).
+[Query Performance Optimization Guide](../docs/Query_Performance_Optimization.md).
 
 ## Maintenance
 
@@ -224,7 +224,7 @@ Applied migrations are tracked in the `schema_migrations` table, which is create
 
 For detailed schema documentation including ER diagrams, table descriptions, and relationships, see:
 
-- [Database Schema Documentation](../docs/DATABASE_SCHEMA.md)
+- [Database Schema Documentation](../docs/Database_Schema.md)
 
 ## References
 

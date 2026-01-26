@@ -153,7 +153,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   - `check_system_resources()` - Phase 5
   - `check_export_status()` - Phase 6
   - `check_cron_jobs()` - Phase 7
-- **Updated `ANALYTICS_MONITORING_GUIDE.md`** with comprehensive documentation for all 7 phases
+- **Updated `Analytics_Monitoring_Guide.md`** with comprehensive documentation for all 7 phases
 - **Removed obsolete documentation**:
   - `docs/ANALYTICS_MONITORING_REPORT.md` (implementation complete)
   - `docs/ANALYTICS_IMPLEMENTATION_PLAN.md` (implementation complete)

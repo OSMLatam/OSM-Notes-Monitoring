@@ -29,7 +29,7 @@ ingestion verification. OSM-Notes-Monitoring should be aware of these components
 them where appropriate.
 
 > **Note:** For recommended changes to improve integration, see
-> **[Integration Changes](./INTEGRATION_CHANGES.md)**.
+> **[Integration Changes](./Integration_Changes.md)**.
 
 ## Monitoring Scripts in OSM-Notes-Ingestion
 

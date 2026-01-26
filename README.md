@@ -40,10 +40,10 @@ OSM-Notes-Monitoring is the operational command center for the OSM Notes ecosyst
 For shared documentation of the complete ecosystem, see:
 
 - **[OSM Notes Ecosystem](https://github.com/OSM-Notes/OSM-Notes)** - Ecosystem landing page
-- **[Global Glossary](https://github.com/OSM-Notes/OSM-Notes-Common/blob/main/docs/GLOSSARY.md)** - Terms and definitions
-- **[Complete Installation Guide](https://github.com/OSM-Notes/OSM-Notes-Common/blob/main/docs/INSTALLATION.md)** - Step-by-step installation of all projects
-- **[End-to-End Data Flow](https://github.com/OSM-Notes/OSM-Notes-Common/blob/main/docs/DATA_FLOW.md)** - Complete data flow
-- **[Decision Guide](https://github.com/OSM-Notes/OSM-Notes-Common/blob/main/docs/DECISION_GUIDE.md)** - Which project do I need?
+- **[Global Glossary](https://github.com/OSM-Notes/OSM-Notes-Common/blob/main/docs/Glossary.md)** - Terms and definitions
+- **[Complete Installation Guide](https://github.com/OSM-Notes/OSM-Notes-Common/blob/main/docs/Installation.md)** - Step-by-step installation of all projects
+- **[End-to-End Data Flow](https://github.com/OSM-Notes/OSM-Notes-Common/blob/main/docs/Data_Flow.md)** - Complete data flow
+- **[Decision Guide](https://github.com/OSM-Notes/OSM-Notes-Common/blob/main/docs/Decision_Guide.md)** - Which project do I need?
 
 ---
 
@@ -238,12 +238,12 @@ This system monitors the following repositories and components:
    - Configure basic monitoring
 
 3. **Configuration** (30 min)
-   - [docs/CONFIGURATION_REFERENCE.md](./docs/CONFIGURATION_REFERENCE.md) - All configuration options (20 min)
-   - [docs/QUICK_START_GUIDE.md](./docs/QUICK_START_GUIDE.md) - Detailed setup (10 min)
+   - [docs/CONFIGURATION_REFERENCE.md](./docs/Configuration_Reference.md) - All configuration options (20 min)
+   - [docs/QUICK_START_GUIDE.md](./docs/Quick_Start_Guide.md) - Detailed setup (10 min)
 
 4. **Operations** (30 min)
-   - [docs/USER_GUIDE.md](./docs/USER_GUIDE.md) - User documentation (15 min)
-   - [docs/ALERTING_GUIDE.md](./docs/ALERTING_GUIDE.md) - Alert system usage (15 min)
+   - [docs/USER_GUIDE.md](./docs/User_Guide.md) - User documentation (15 min)
+   - [docs/ALERTING_GUIDE.md](./docs/Alerting_Guide.md) - Alert system usage (15 min)
 
 **Total time: ~2 hours** for complete setup and operations.
 
@@ -254,13 +254,13 @@ This system monitors the following repositories and components:
    - [docs/API_Security_Design.md](./docs/API_Security_Design.md) - Security design (15 min)
 
 2. **Component Monitoring** (1 hour)
-   - [docs/INGESTION_MONITORING_GUIDE.md](./docs/INGESTION_MONITORING_GUIDE.md) - Monitor ingestion (20 min)
-   - [docs/ANALYTICS_MONITORING_GUIDE.md](./docs/ANALYTICS_MONITORING_GUIDE.md) - Monitor analytics (20 min)
-   - [docs/API_SECURITY_GUIDE.md](./docs/API_SECURITY_GUIDE.md) - API security features (20 min)
+   - [docs/INGESTION_MONITORING_GUIDE.md](./docs/Ingestion_Monitoring_Guide.md) - Monitor ingestion (20 min)
+   - [docs/ANALYTICS_MONITORING_GUIDE.md](./docs/Analytics_Monitoring_Guide.md) - Monitor analytics (20 min)
+   - [docs/API_SECURITY_GUIDE.md](./docs/API_Security_Guide.md) - API security features (20 min)
 
 3. **Deep Dive** (as needed)
-   - [docs/IMPLEMENTATION_PLAN.md](./docs/IMPLEMENTATION_PLAN.md) - Implementation plan
-   - [docs/CODING_STANDARDS.md](./docs/CODING_STANDARDS.md) - Coding standards
+   - [docs/IMPLEMENTATION_PLAN.md](./docs/Implementation_Plan.md) - Implementation plan
+   - [docs/CODING_STANDARDS.md](./docs/Coding_Standards.md) - Coding standards
    - [docs/README.md](./docs/README.md) - Complete documentation index
 
 **Total time: ~2.5 hours** for complete developer overview.
@@ -402,7 +402,7 @@ This system monitors the following repositories and components:
   export SEND_ALERT_EMAIL="true"
   ```
 
-See [docs/CONFIGURATION_REFERENCE.md](./docs/CONFIGURATION_REFERENCE.md) for complete configuration options.
+See [docs/CONFIGURATION_REFERENCE.md](./docs/Configuration_Reference.md) for complete configuration options.
 
 ## Quick Start
 
@@ -473,17 +473,17 @@ For detailed architecture documentation, see:
 - [Monitoring Resumen Ejecutivo](./docs/Monitoring_Resumen_Ejecutivo.md) (Spanish)
 - [Existing Monitoring Components](./docs/Existing_Monitoring_Components.md): Integration with
   OSM-Notes-Ingestion monitoring scripts
-- [Grafana Architecture](./docs/GRAFANA_ARCHITECTURE.md): Dual Grafana deployment (API + Monitoring)
-- [Query Performance Optimization](./docs/QUERY_PERFORMANCE_OPTIMIZATION.md): SQL query optimization
+- [Grafana Architecture](./docs/GRAFANA_Architecture.md): Dual Grafana deployment (API + Monitoring)
+- [Query Performance Optimization](./docs/Query_Performance_Optimization.md): SQL query optimization
   guide
-- [Security Audit Guide](./docs/SECURITY_AUDIT_GUIDE.md): Code-level security checks
-- [Vulnerability Scanning Guide](./docs/VULNERABILITY_SCANNING_GUIDE.md): Automated vulnerability
+- [Security Audit Guide](./docs/Security_Audit_Guide.md): Code-level security checks
+- [Vulnerability Scanning Guide](./docs/Vulnerability_Scanning_Guide.md): Automated vulnerability
   detection
-- [Penetration Testing Guide](./docs/PENETRATION_TESTING_GUIDE.md): Security penetration testing
+- [Penetration Testing Guide](./docs/PENETRATION_Testing_Guide.md): Security penetration testing
   procedures
-- [Code Coverage Instrumentation](./docs/CODE_COVERAGE_INSTRUMENTATION.md): Using bashcov for real
+- [Code Coverage Instrumentation](./docs/Code_Coverage_Instrumentation.md): Using bashcov for real
   coverage measurement
-- [Code Coverage Explanation](./docs/COVERAGE_EXPLANATION.md): Understanding estimated vs
+- [Code Coverage Explanation](./docs/Coverage_Explanation.md): Understanding estimated vs
   instrumented coverage and how to improve it
 
 ## Features
@@ -637,7 +637,7 @@ bash scripts/generate_coverage_combined.sh
 - **Gap (53%)**: Normal for unit tests with mocks - indicates tests exist but don't execute full
   code paths
 
-For detailed explanation, see: [Code Coverage Explanation](./docs/COVERAGE_EXPLANATION.md)
+For detailed explanation, see: [Code Coverage Explanation](./docs/Coverage_Explanation.md)
 
 ## Configuration
 
@@ -665,57 +665,57 @@ Generate configuration files:
 
 For complete configuration reference, see:
 
-- **[Configuration Reference](./docs/CONFIGURATION_REFERENCE.md)**: All configuration options
+- **[Configuration Reference](./docs/Configuration_Reference.md)**: All configuration options
   documented
-- **[Logging Guide](./docs/LOGGING.md)**: Logging setup, rotation, and best practices
-- **[Logging Best Practices](./docs/LOGGING_BEST_PRACTICES.md)**: Comprehensive logging guidelines
+- **[Logging Guide](./docs/Logging.md)**: Logging setup, rotation, and best practices
+- **[Logging Best Practices](./docs/Logging_Best_Practices.md)**: Comprehensive logging guidelines
   and patterns
-- **[Adapting Scripts](./docs/ADAPTING_SCRIPTS.md)**: Guide for adapting existing scripts to use
+- **[Adapting Scripts](./docs/Adapting_Scripts.md)**: Guide for adapting existing scripts to use
   shared libraries
 
 ## Documentation
 
 ### Getting Started
 
-- **[Quick Start Guide](./docs/QUICK_START_GUIDE.md)**: Get up and running in 15 minutes
-- **[User Guide](./docs/USER_GUIDE.md)**: Comprehensive user documentation
+- **[Quick Start Guide](./docs/Quick_Start_Guide.md)**: Get up and running in 15 minutes
+- **[User Guide](./docs/User_Guide.md)**: Comprehensive user documentation
 - **[Setup Guide](./docs/Monitoring_SETUP_Guide.md)**: Detailed setup instructions
-- **[Documentation Index](./docs/DOCUMENTATION_INDEX.md)**: Complete index of all documentation
+- **[Documentation Index](./docs/Documentation_Index.md)**: Complete index of all documentation
 
 ### Configuration and Usage
 
-- **[Configuration Reference](./docs/CONFIGURATION_REFERENCE.md)**: All configuration options
-- **[Dashboard Guide](./docs/DASHBOARD_GUIDE.md)**: Using dashboards
-- **[Alerting Guide](./docs/ALERTING_GUIDE.md)**: Alert system usage
-- **[Grafana Setup Guide](./docs/GRAFANA_SETUP_GUIDE.md)**: Grafana dashboard setup
+- **[Configuration Reference](./docs/Configuration_Reference.md)**: All configuration options
+- **[Dashboard Guide](./docs/Dashboard_Guide.md)**: Using dashboards
+- **[Alerting Guide](./docs/Alerting_Guide.md)**: Alert system usage
+- **[Grafana Setup Guide](./docs/Grafana_Setup_Guide.md)**: Grafana dashboard setup
 
 ### Component Monitoring
 
-- **[Ingestion Monitoring Guide](./docs/INGESTION_MONITORING_GUIDE.md)**: Monitor ingestion
+- **[Ingestion Monitoring Guide](./docs/Ingestion_Monitoring_Guide.md)**: Monitor ingestion
   component
-- **[Analytics Monitoring Guide](./docs/ANALYTICS_MONITORING_GUIDE.md)**: Monitor analytics/DWH
+- **[Analytics Monitoring Guide](./docs/Analytics_Monitoring_Guide.md)**: Monitor analytics/DWH
   component
-- **[WMS Monitoring Guide](./docs/WMS_MONITORING_GUIDE.md)**: Monitor WMS service
-- **[Infrastructure Monitoring Guide](./docs/INFRASTRUCTURE_MONITORING_GUIDE.md)**: Monitor
+- **[WMS Monitoring Guide](./docs/WMS_Monitoring_Guide.md)**: Monitor WMS service
+- **[Infrastructure Monitoring Guide](./docs/Infrastructure_Monitoring_Guide.md)**: Monitor
   infrastructure
-- **[API Security Guide](./docs/API_SECURITY_GUIDE.md)**: API security features
+- **[API Security Guide](./docs/API_Security_Guide.md)**: API security features
 
 ### Architecture and Development
 
 - **[Architecture Proposal](./docs/Monitoring_Architecture_Proposal.md)**: Complete system
   architecture
 - **[API Security Design](./docs/API_Security_Design.md)**: Security and protection mechanisms
-- **[Implementation Plan](./docs/IMPLEMENTATION_PLAN.md)**: Detailed implementation plan with
+- **[Implementation Plan](./docs/Implementation_Plan.md)**: Detailed implementation plan with
   testing and standards
-- **[Coding Standards](./docs/CODING_STANDARDS.md)**: Coding standards and best practices
+- **[Coding Standards](./docs/Coding_Standards.md)**: Coding standards and best practices
 - **[Resumen Ejecutivo](./docs/Monitoring_Resumen_Ejecutivo.md)**: Executive summary (Spanish)
 - **[Existing Monitoring Components](./docs/Existing_Monitoring_Components.md)**: Integration with
   OSM-Notes-Ingestion monitoring scripts
 
 ### Production Deployment
 
-- **[Deployment Guide](./docs/DEPLOYMENT_GUIDE.md)**: General production deployment guide
-- **[Pre-Deployment Checklist](./docs/PRE_DEPLOYMENT_CHECKLIST.md)**: Checklist before production
+- **[Deployment Guide](./docs/Deployment_Guide.md)**: General production deployment guide
+- **[Pre-Deployment Checklist](./docs/Pre_Deployment_Checklist.md)**: Checklist before production
   deployment
 
 ## Related Repositories
