@@ -266,7 +266,7 @@ psql -d osm_notes -f sql/ingestion/create_indexes.sql
 
 ### Optimization Recommendations
 
-See `optimization_recommendations.md` for detailed optimization strategies, including:
+See `Optimization_Recommendations.md` for detailed optimization strategies, including:
 
 - Index recommendations
 - Query rewriting strategies
