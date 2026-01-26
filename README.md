@@ -744,6 +744,17 @@ All monitored repositories:
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md) for contribution guidelines.
 
+## GDPR Compliance
+
+**Important:** This monitoring system accesses databases and services that process personal data from OpenStreetMap, including usernames and geographic locations. We are committed to GDPR compliance.
+
+GDPR compliance mechanisms are implemented in the base project **OSM-Notes-Ingestion**. For detailed information about GDPR compliance, data processing, retention, and data subject rights, please refer to:
+
+- **GDPR Privacy Policy:** [OSM-Notes-Ingestion/docs/GDPR_Privacy_Policy.md](https://github.com/OSM-Notes/OSM-Notes-Ingestion/blob/main/docs/GDPR_Privacy_Policy.md)
+- **GDPR Procedures:** [OSM-Notes-Ingestion/docs/GDPR_Procedures.md](https://github.com/OSM-Notes/OSM-Notes-Ingestion/blob/main/docs/GDPR_Procedures.md) - Procedures for handling data subject requests
+
+This Monitoring project monitors all ecosystem components and accesses data that is subject to GDPR compliance measures implemented in OSM-Notes-Ingestion.
+
 ## License
 
 This project is licensed under the GNU General Public License v3.0 - see the [LICENSE](./LICENSE)
