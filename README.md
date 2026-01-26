@@ -200,6 +200,8 @@ This system monitors the following repositories and components:
 
 ### Application Requirements
 
+For complete installation instructions, see **[Installation and Dependencies Guide](docs/Installation_Dependencies.md)**.
+
 - **PostgreSQL** (for metrics storage in monitoring database)
 - **Bash** 4.0 or higher
 - **Standard UNIX utilities**: grep, awk, sed, curl
