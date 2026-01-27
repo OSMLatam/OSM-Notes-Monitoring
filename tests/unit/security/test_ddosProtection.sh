@@ -532,8 +532,8 @@ teardown() {
         fi
     fi
     
-    # Run main with check action (use -127 to suppress warning if command not found)
-    run -127 main "check" "" || true
+    # Run main with check action
+    run main "check" "" || true
     
     # Should detect attacks (main may return 0 or 1 depending on detection)
     # Status can be 0 (success), 1 (failure), or 127 (command not found)
@@ -608,8 +608,8 @@ teardown() {
     # Re-export block_ip to ensure mock takes precedence
     export -f block_ip
     
-    # Run main with block action (use -127 to suppress warning if command not found)
-    run -127 main "block" "192.168.1.100" "Manual block"
+    # Run main with block action
+    run main "block" "192.168.1.100" "Manual block"
     
     # Should succeed
     assert_success
@@ -682,8 +682,8 @@ teardown() {
         fi
     fi
     
-    # Run main with unblock action (use -127 to suppress warning if command not found)
-    run -127 main "unblock" "192.168.1.100"
+    # Run main with unblock action
+    run main "unblock" "192.168.1.100"
     
     # Should succeed and call DELETE
     assert_success
@@ -723,8 +723,8 @@ teardown() {
         fi
     fi
     
-    # Run main with stats action (use -127 to suppress warning if command not found)
-    run -127 main "stats"
+    # Run main with stats action
+    run main "stats"
     
     # Should succeed
     assert_success

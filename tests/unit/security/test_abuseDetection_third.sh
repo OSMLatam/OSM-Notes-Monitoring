@@ -74,7 +74,7 @@ teardown() {
     }
     export -f send_alert
     
-    run analyze_patterns
+    run analyze_patterns "192.168.1.1"
     assert_success
 }
 
@@ -102,7 +102,7 @@ teardown() {
     }
     export -f send_alert
     
-    run detect_anomalies
+    run detect_anomalies "192.168.1.1"
     assert_success
 }
 
@@ -130,7 +130,7 @@ teardown() {
     }
     export -f send_alert
     
-    run analyze_behavior
+    run analyze_behavior "192.168.1.1"
     assert_success
 }
 
@@ -157,6 +157,6 @@ teardown() {
     }
     export -f analyze_behavior
     
-    run main --analyze
+    run main analyze
     assert_success
 }

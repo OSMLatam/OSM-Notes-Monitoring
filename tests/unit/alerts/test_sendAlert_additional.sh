@@ -57,7 +57,7 @@ teardown() {
     html=$(format_html "TEST_COMPONENT" "warning" "test_alert" "Test message")
     
     [ -n "${html}" ] || return 1
-    assert echo "${html}" | grep -q "warning"
+    assert echo "${html}" | grep -qi "warning"
 }
 
 @test "format_alert_html handles info level" {
@@ -65,7 +65,7 @@ teardown() {
     html=$(format_html "TEST_COMPONENT" "info" "test_alert" "Test message")
     
     [ -n "${html}" ] || return 1
-    assert echo "${html}" | grep -q "info"
+    assert echo "${html}" | grep -qi "info"
 }
 
 ##

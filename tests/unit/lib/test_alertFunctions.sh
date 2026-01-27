@@ -444,7 +444,8 @@ teardown() {
     }
     
     run store_alert "TEST_COMPONENT" "warning" "test_alert" "Test message"
-    assert_success
+    # store_alert returns 2 when duplicate is detected
+    assert_equal 2 "${status}"
 }
 
 ##

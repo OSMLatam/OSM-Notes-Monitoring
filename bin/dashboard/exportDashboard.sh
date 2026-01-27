@@ -305,13 +305,14 @@ main() {
     log_info "Dashboard export completed"
 }
 
-# Parse command line arguments
-DASHBOARD_TYPE="all"
-OUTPUT_FILE=""
-INCLUDE_DATA="false"
-EXPORT_FORMAT="tar"
+# Parse command line arguments only if script is executed directly
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    DASHBOARD_TYPE="all"
+    OUTPUT_FILE=""
+    INCLUDE_DATA="false"
+    EXPORT_FORMAT="tar"
 
-while [[ $# -gt 0 ]]; do
+    while [[ $# -gt 0 ]]; do
     case "${1}" in
         -h|--help)
             usage
@@ -393,9 +394,8 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
     esac
-done
+    done
 
-# Run main if script is executed directly
-if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    # Run main
     main "${DASHBOARD_TYPE}" "${OUTPUT_FILE}" "${INCLUDE_DATA}"
 fi

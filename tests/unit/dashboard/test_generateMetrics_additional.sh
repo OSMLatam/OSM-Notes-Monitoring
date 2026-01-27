@@ -118,13 +118,7 @@ teardown() {
 # Test: main handles unknown option
 ##
 @test "main handles unknown option" {
-    # Mock usage
-    # shellcheck disable=SC2317
-    function usage() {
-        return 0
-    }
-    export -f usage
-    
-    run main --unknown-option || true
+    run "${BATS_TEST_DIRNAME}/../../../bin/dashboard/generateMetrics.sh" --unknown-option
     assert_failure
+    assert_output --partial "ERROR: Unknown option"
 }

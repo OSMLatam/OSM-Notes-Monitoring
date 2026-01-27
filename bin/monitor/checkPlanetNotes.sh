@@ -16,6 +16,9 @@ PROJECT_ROOT=""
 PROJECT_ROOT="$(dirname "$(dirname "${SCRIPT_DIR}")")"
 readonly PROJECT_ROOT
 
+# Set default LOG_DIR if not set
+export LOG_DIR="${LOG_DIR:-${PROJECT_ROOT}/logs}"
+
 # Source libraries
 # shellcheck disable=SC1091
 source "${PROJECT_ROOT}/bin/lib/loggingFunctions.sh"

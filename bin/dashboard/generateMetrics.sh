@@ -311,13 +311,14 @@ main() {
     fi
 }
 
-# Parse command line arguments
-OUTPUT_FILE=""
-TIME_RANGE=""
-COMPONENT=""
-OUTPUT_FORMAT=""  # Initialize as empty, set default after parsing
+# Parse command line arguments only if script is executed directly
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    OUTPUT_FILE=""
+    TIME_RANGE=""
+    COMPONENT=""
+    OUTPUT_FORMAT=""  # Initialize as empty, set default after parsing
 
-while [[ $# -gt 0 ]]; do
+    while [[ $# -gt 0 ]]; do
     case "${1}" in
         -h|--help)
             usage
@@ -365,13 +366,11 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
     esac
-done
+    done
 
-# Set default OUTPUT_FORMAT if not provided
-OUTPUT_FORMAT="${OUTPUT_FORMAT:-json}"
+    # Set default OUTPUT_FORMAT if not provided
+    OUTPUT_FORMAT="${OUTPUT_FORMAT:-json}"
 
-# Run main if script is executed directly
-if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     # If --component was specified, use it; otherwise use positional argument or default to "all"
     FINAL_COMPONENT="${COMPONENT:-${1:-all}}"
     # If COMPONENT was set via --component, skip first positional arg (it's the component)

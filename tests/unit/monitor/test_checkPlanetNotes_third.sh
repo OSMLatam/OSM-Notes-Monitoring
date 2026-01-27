@@ -86,7 +86,7 @@ EOF
     }
     export -f send_alert
     
-    run checkPlanetNotes
+    run run_planet_check
     assert_success
     
     rm -f "${test_script}"
@@ -118,7 +118,7 @@ EOF
     }
     export -f send_alert
     
-    run checkPlanetNotes
+    run run_planet_check
     assert_success
     
     rm -f "${test_script}"
@@ -151,7 +151,7 @@ EOF
     }
     export -f send_alert
     
-    run checkPlanetNotes
+    run run_planet_check
     assert_success
     
     rm -f "${test_script}"
@@ -189,7 +189,7 @@ EOF
     }
     export -f send_alert
     
-    run checkPlanetNotes
+    run run_planet_check
     assert_success
     
     # Verify metrics were recorded

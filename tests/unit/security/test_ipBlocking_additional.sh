@@ -103,7 +103,7 @@ teardown() {
     }
     export -f psql
     
-    run remove_ip_from_list "192.168.1.1" "blacklist"
+    run blacklist_remove "192.168.1.1"
     assert_success
 }
 
@@ -121,7 +121,7 @@ teardown() {
     }
     export -f psql
     
-    run list_ips_in_list "whitelist"
+    run whitelist_list
     assert_success
 }
 
@@ -140,7 +140,7 @@ teardown() {
     }
     export -f psql
     
-    run list_ips_in_list "blacklist"
+    run blacklist_list
     assert_success
     assert_output --partial "192.168.1.1"
 }
@@ -179,7 +179,7 @@ teardown() {
     }
     export -f psql
     
-    run cleanup_expired_blocks
+    run cleanup_expired
     assert_success
 }
 
@@ -198,7 +198,7 @@ teardown() {
     }
     export -f psql
     
-    run cleanup_expired_blocks
+    run cleanup_expired
     assert_success
 }
 
@@ -206,14 +206,14 @@ teardown() {
 # Test: main handles add action
 ##
 @test "main handles add action" {
-    # Mock add_ip_to_list
+    # Mock psql
     # shellcheck disable=SC2317
-    function add_ip_to_list() {
+    function psql() {
         return 0
     }
-    export -f add_ip_to_list
+    export -f psql
     
-    run main "add" "192.168.1.1" "blacklist"
+    run main "blacklist" "add" "192.168.1.1"
     assert_success
 }
 
@@ -221,14 +221,14 @@ teardown() {
 # Test: main handles remove action
 ##
 @test "main handles remove action" {
-    # Mock remove_ip_from_list
+    # Mock psql
     # shellcheck disable=SC2317
-    function remove_ip_from_list() {
+    function psql() {
         return 0
     }
-    export -f remove_ip_from_list
+    export -f psql
     
-    run main "remove" "192.168.1.1" "blacklist"
+    run main "blacklist" "remove" "192.168.1.1"
     assert_success
 }
 
@@ -243,7 +243,14 @@ teardown() {
     }
     export -f list_ips_in_list
     
-    run main "list" "whitelist"
+    # Mock psql
+    # shellcheck disable=SC2317
+    function psql() {
+        return 0
+    }
+    export -f psql
+    
+    run main "whitelist" "list"
     assert_success
 }
 
@@ -344,6 +351,6 @@ teardown() {
     }
     export -f usage
     
-    run main "--help"
+    run bash "${BATS_TEST_DIRNAME}/../../../bin/security/ipBlocking.sh" --help
     assert_success
 }

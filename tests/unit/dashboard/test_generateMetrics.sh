@@ -374,7 +374,7 @@ teardown() {
     }
     export -f psql
     
-    run "${BATS_TEST_DIRNAME}/../../../bin/dashboard/generateMetrics.sh" ingestion json --output-dir "${output_dir}"
+    run "${BATS_TEST_DIRNAME}/../../../bin/dashboard/generateMetrics.sh" ingestion json --output "${output_dir}/metrics.json"
     assert_success
     rm -rf "${output_dir}"
 }

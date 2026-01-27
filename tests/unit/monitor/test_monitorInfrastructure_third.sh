@@ -67,7 +67,8 @@ teardown() {
     }
     export -f send_alert
     
-    run check_disk_usage
+    # Use check_server_resources which checks disk usage
+    run check_server_resources
     assert_success
 }
 
@@ -95,7 +96,8 @@ teardown() {
     }
     export -f send_alert
     
-    run check_cpu_usage
+    # Use check_server_resources which checks CPU usage
+    run check_server_resources
     assert_success
 }
 
@@ -124,7 +126,8 @@ teardown() {
     }
     export -f send_alert
     
-    run check_memory_usage
+    # Use check_server_resources which checks memory usage
+    run check_server_resources
     assert_success
 }
 

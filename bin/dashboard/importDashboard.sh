@@ -116,7 +116,7 @@ import_grafana_dashboard() {
     mkdir -p "${dashboard_dir}"
     
     # Extract if archive
-    local extract_dir="${dashboard_dir}"
+    local extract_dir
     if [[ -f "${input}" ]]; then
         extract_dir=$(mktemp -d)
         
@@ -148,6 +148,13 @@ import_grafana_dashboard() {
         esac
         
         # Find grafana directory in extracted files
+        if [[ -d "${extract_dir}/grafana" ]]; then
+            extract_dir="${extract_dir}/grafana"
+        fi
+    else
+        # Input is a directory
+        extract_dir="${input}"
+        # Check if input contains grafana subdirectory
         if [[ -d "${extract_dir}/grafana" ]]; then
             extract_dir="${extract_dir}/grafana"
         fi

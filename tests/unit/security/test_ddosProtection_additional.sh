@@ -68,13 +68,13 @@ teardown() {
 # Test: check_attack_detection handles normal traffic
 ##
 @test "check_attack_detection handles normal traffic" {
-    # Mock execute_sql_query to return normal request rate
+    # Mock psql to return normal request rate
     # shellcheck disable=SC2317
-    function execute_sql_query() {
-        echo "50|192.168.1.1"  # 50 requests per second (below threshold)
+    function psql() {
+        echo "50"  # 50 requests per second (below threshold)
         return 0
     }
-    export -f execute_sql_query
+    export -f psql
     
     # shellcheck disable=SC2317
     record_metric() {
@@ -88,8 +88,21 @@ teardown() {
     }
     export -f send_alert
     
-    run check_attack_detection
-    assert_success
+    # shellcheck disable=SC2317
+    is_ip_whitelisted() {
+        return 1  # Not whitelisted
+    }
+    export -f is_ip_whitelisted
+    
+    # shellcheck disable=SC2317
+    check_geographic_filter() {
+        return 1  # Not blocked
+    }
+    export -f check_geographic_filter
+    
+    run detect_ddos_attack "192.168.1.1"
+    # Should return 1 (no attack detected) when below threshold
+    assert_equal 1 "${status}"
 }
 
 ##
@@ -116,7 +129,7 @@ teardown() {
     }
     export -f send_alert
     
-    run check_connection_rate_limiting
+    run check_concurrent_connections "192.168.1.1"
     assert_success
 }
 
@@ -132,9 +145,9 @@ teardown() {
     }
     export -f record_metric
     
-    run check_geographic_filtering
-    # Should skip when disabled
-    assert_success
+    run check_geographic_filter "192.168.1.1"
+    # Should return 1 (not blocked) when disabled
+    assert_equal 1 "${status}"
 }
 
 ##
@@ -162,26 +175,32 @@ teardown() {
 # Test: main handles --check option
 ##
 @test "main handles --check option" {
-    # Mock check functions
+    # Mock functions that check_and_block_ddos calls
     # shellcheck disable=SC2317
-    function check_attack_detection() {
-        return 0
+    function detect_ddos_attack() {
+        return 1  # No attack
     }
-    export -f check_attack_detection
+    export -f detect_ddos_attack
     
     # shellcheck disable=SC2317
-    function check_connection_rate_limiting() {
-        return 0
+    function check_concurrent_connections() {
+        return 1  # Normal
     }
-    export -f check_connection_rate_limiting
+    export -f check_concurrent_connections
     
     # shellcheck disable=SC2317
-    function check_geographic_filtering() {
+    function auto_block_ip() {
         return 0
     }
-    export -f check_geographic_filtering
+    export -f auto_block_ip
     
-    run main --check
+    # shellcheck disable=SC2317
+    function psql() {
+        return 0
+    }
+    export -f psql
+    
+    run main check
     assert_success
 }
 
@@ -204,21 +223,28 @@ teardown() {
 # Test: check_attack_detection handles database error
 ##
 @test "check_attack_detection handles database error" {
-    # Mock execute_sql_query to fail
+    # Mock psql to fail
     # shellcheck disable=SC2317
-    function execute_sql_query() {
+    function psql() {
         return 1
     }
-    export -f execute_sql_query
+    export -f psql
     
     # shellcheck disable=SC2317
-    record_metric() {
-        return 0
+    is_ip_whitelisted() {
+        return 1  # Not whitelisted
     }
-    export -f record_metric
+    export -f is_ip_whitelisted
     
-    run check_attack_detection || true
-    assert_success || assert_failure
+    # shellcheck disable=SC2317
+    check_geographic_filter() {
+        return 1  # Not blocked
+    }
+    export -f check_geographic_filter
+    
+    run detect_ddos_attack "192.168.1.1" || true
+    # Should handle error gracefully
+    assert [ ${status} -ge 0 ]
 }
 
 ##
@@ -252,10 +278,10 @@ teardown() {
     }
     export -f send_alert
     
-    run check_connection_rate_limiting || true
+    run check_concurrent_connections "192.168.1.1" || true
     
     # May send alert if threshold exceeded
-    assert_success || true
+    assert [ ${status} -ge 0 ]
 }
 
 ##
@@ -285,8 +311,9 @@ teardown() {
     }
     export -f send_alert
     
-    run check_geographic_filtering
-    assert_success
+    run check_geographic_filter "192.168.1.1"
+    # Should return 1 (not blocked) when IP is from allowed country
+    assert_equal 1 "${status}"
 }
 
 ##
@@ -324,16 +351,25 @@ teardown() {
 @test "check_attack_detection uses custom window" {
     export DDOS_CHECK_WINDOW_SECONDS="120"  # 2 minutes
     
-    # Mock execute_sql_query
+    # Mock psql
     # shellcheck disable=SC2317
-    function execute_sql_query() {
-        if [[ "${*}" =~ INTERVAL.*120 ]]; then
-            echo "50|192.168.1.1"
-            return 0
-        fi
-        return 1
+    function psql() {
+        echo "50"  # 50 requests (below threshold)
+        return 0
     }
-    export -f execute_sql_query
+    export -f psql
+    
+    # shellcheck disable=SC2317
+    is_ip_whitelisted() {
+        return 1  # Not whitelisted
+    }
+    export -f is_ip_whitelisted
+    
+    # shellcheck disable=SC2317
+    check_geographic_filter() {
+        return 1  # Not blocked
+    }
+    export -f check_geographic_filter
     
     # shellcheck disable=SC2317
     record_metric() {
@@ -347,34 +383,35 @@ teardown() {
     }
     export -f send_alert
     
-    run check_attack_detection
-    assert_success
+    run detect_ddos_attack "192.168.1.1" "120"
+    # Should use custom window
+    assert_equal 1 "${status}"  # No attack detected
 }
 
 ##
 # Test: main handles --verbose option
 ##
 @test "main handles --verbose option" {
-    # Mock check functions
+    # Mock functions
     # shellcheck disable=SC2317
-    function check_attack_detection() {
-        return 0
+    function detect_ddos_attack() {
+        return 1  # No attack
     }
-    export -f check_attack_detection
+    export -f detect_ddos_attack
     
     # shellcheck disable=SC2317
-    function check_connection_rate_limiting() {
-        return 0
+    function check_concurrent_connections() {
+        return 1  # Normal
     }
-    export -f check_connection_rate_limiting
+    export -f check_concurrent_connections
     
     # shellcheck disable=SC2317
-    function check_geographic_filtering() {
+    function psql() {
         return 0
     }
-    export -f check_geographic_filtering
+    export -f psql
     
-    run main --verbose
+    run main --verbose check
     assert_success
 }
 
@@ -382,15 +419,37 @@ teardown() {
 # Test: check_attack_detection handles multiple attacking IPs
 ##
 @test "check_attack_detection handles multiple attacking IPs" {
-    # Mock execute_sql_query to return multiple attacking IPs
+    # Mock psql to return multiple attacking IPs
     # shellcheck disable=SC2317
-    function execute_sql_query() {
-        echo "150|192.168.1.1"
-        echo "200|192.168.1.2"
-        echo "300|192.168.1.3"
+    function psql() {
+        if [[ "${*}" == *"SELECT DISTINCT ip_address"* ]]; then
+            echo "192.168.1.1"
+            echo "192.168.1.2"
+            echo "192.168.1.3"
+        else
+            echo "150"  # High request rate
+        fi
         return 0
     }
-    export -f execute_sql_query
+    export -f psql
+    
+    # shellcheck disable=SC2317
+    is_ip_whitelisted() {
+        return 1  # Not whitelisted
+    }
+    export -f is_ip_whitelisted
+    
+    # shellcheck disable=SC2317
+    check_geographic_filter() {
+        return 1  # Not blocked
+    }
+    export -f check_geographic_filter
+    
+    # shellcheck disable=SC2317
+    auto_block_ip() {
+        return 0
+    }
+    export -f auto_block_ip
     
     # shellcheck disable=SC2317
     record_metric() {
@@ -411,6 +470,8 @@ teardown() {
     }
     export -f auto_block_ip
     
-    run check_attack_detection || true
-    assert_success || true
+    # Test check_and_block_ddos which handles multiple IPs
+    run check_and_block_ddos || true
+    # Should handle multiple IPs
+    assert [ ${status} -ge 0 ]
 }

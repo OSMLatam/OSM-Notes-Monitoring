@@ -642,40 +642,40 @@ main() {
     return ${overall_result}
 }
 
-# Parse command line arguments
-SPECIFIC_CHECK=""
-while [[ $# -gt 0 ]]; do
-    case $1 in
-        -h|--help)
-            usage
-            exit 0
-            ;;
-        -v|--verbose)
-            export LOG_LEVEL="${LOG_LEVEL_DEBUG}"
-            shift
-            ;;
-        -q|--quiet)
-            export LOG_LEVEL="${LOG_LEVEL_ERROR}"
-            shift
-            ;;
-        -c|--config)
-            export CONFIG_FILE="$2"
-            shift 2
-            ;;
-        --check)
-            SPECIFIC_CHECK="$2"
-            shift 2
-            ;;
-        *)
-            log_error "Unknown option: $1"
-            usage
-            exit 1
-            ;;
-    esac
-done
-
-# Run main function only if script is executed directly
+# Parse command line arguments only if script is executed directly
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    SPECIFIC_CHECK=""
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            -h|--help)
+                usage
+                exit 0
+                ;;
+            -v|--verbose)
+                export LOG_LEVEL="${LOG_LEVEL_DEBUG}"
+                shift
+                ;;
+            -q|--quiet)
+                export LOG_LEVEL="${LOG_LEVEL_ERROR}"
+                shift
+                ;;
+            -c|--config)
+                export CONFIG_FILE="$2"
+                shift 2
+                ;;
+            --check)
+                SPECIFIC_CHECK="$2"
+                shift 2
+                ;;
+            *)
+                log_error "Unknown option: $1"
+                usage
+                exit 1
+                ;;
+        esac
+    done
+
+    # Run main function
     main "${SPECIFIC_CHECK}"
 fi
 
