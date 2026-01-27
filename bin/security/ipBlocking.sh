@@ -35,11 +35,11 @@ export LOG_DIR="${LOG_DIR:-${PROJECT_ROOT}/logs}"
 
 # Only initialize if not in test mode or if script is executed directly
 if [[ "${TEST_MODE:-false}" != "true" ]] || [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
-    # Initialize logging
-    init_logging "${LOG_DIR}/ip_blocking.log" "ipBlocking"
-    
-    # Initialize security functions
-    init_security
+ # Initialize logging
+ init_logging "${LOG_DIR}/ip_blocking.log" "ipBlocking"
+
+ # Initialize security functions
+ init_security
 fi
 
 # Component name (used in logging and alerts)
@@ -50,7 +50,7 @@ readonly COMPONENT
 # Show usage
 ##
 usage() {
-    cat << EOF
+ cat << EOF
 IP Blocking Management Script
 
 Usage: ${0} [OPTIONS] ACTION [IP] [OPTIONS...]
@@ -89,21 +89,21 @@ EOF
 # Load configuration
 ##
 load_config() {
-    local config_file="${1:-${PROJECT_ROOT}/config/monitoring.conf}"
-    
-    if [[ -f "${config_file}" ]]; then
-        # shellcheck disable=SC1090
-        source "${config_file}" || true
-    fi
-    
-    # Load security config if available
-    if [[ -f "${PROJECT_ROOT}/config/security.conf" ]]; then
-        # shellcheck source=/dev/null
-        source "${PROJECT_ROOT}/config/security.conf" || true
-    elif [[ -f "${PROJECT_ROOT}/config/security.conf.example" ]]; then
-        # shellcheck source=/dev/null
-        source "${PROJECT_ROOT}/config/security.conf.example" || true
-    fi
+ local config_file="${1:-${PROJECT_ROOT}/config/monitoring.conf}"
+
+ if [[ -f "${config_file}" ]]; then
+  # shellcheck disable=SC1090
+  source "${config_file}" || true
+ fi
+
+ # Load security config if available
+ if [[ -f "${PROJECT_ROOT}/config/security.conf" ]]; then
+  # shellcheck source=/dev/null
+  source "${PROJECT_ROOT}/config/security.conf" || true
+ elif [[ -f "${PROJECT_ROOT}/config/security.conf.example" ]]; then
+  # shellcheck source=/dev/null
+  source "${PROJECT_ROOT}/config/security.conf.example" || true
+ fi
 }
 
 ##
@@ -114,21 +114,21 @@ load_config() {
 #   $2 - Reason (optional)
 ##
 whitelist_add() {
-    local ip="${1:?IP address required}"
-    local reason="${2:-Added to whitelist}"
-    
-    # Validate IP
-    if ! is_valid_ip "${ip}"; then
-        log_error "Invalid IP address: ${ip}"
-        return 1
-    fi
-    
-    local dbname="${DBNAME:-osm_notes_monitoring}"
-    local dbhost="${DBHOST:-localhost}"
-    local dbport="${DBPORT:-5432}"
-    local dbuser="${DBUSER:-postgres}"
-    
-    local query="
+ local ip="${1:?IP address required}"
+ local reason="${2:-Added to whitelist}"
+
+ # Validate IP
+ if ! is_valid_ip "${ip}"; then
+  log_error "Invalid IP address: ${ip}"
+  return 1
+ fi
+
+ local dbname="${DBNAME:-osm_notes_monitoring}"
+ local dbhost="${DBHOST:-localhost}"
+ local dbport="${DBPORT:-5432}"
+ local dbuser="${DBUSER:-postgres}"
+
+ local query="
         INSERT INTO ip_management (ip_address, list_type, reason, created_by)
         VALUES ('${ip}'::inet, 'whitelist', '${reason}', '${USER:-system}')
         ON CONFLICT (ip_address) DO UPDATE
@@ -137,37 +137,37 @@ whitelist_add() {
             expires_at = NULL,
             created_at = CURRENT_TIMESTAMP;
     "
-    
-    # Use PGPASSWORD only if set, otherwise let psql use default authentication
-    if [[ -n "${PGPASSWORD:-}" ]]; then
-        if PGPASSWORD="${PGPASSWORD}" psql \
-            -h "${dbhost}" \
-            -p "${dbport}" \
-            -U "${dbuser}" \
-            -d "${dbname}" \
-            -c "${query}" > /dev/null 2>&1; then
-            log_info "IP ${ip} added to whitelist: ${reason}"
-            record_security_event "unblock" "${ip}" "" "{\"action\": \"whitelist_add\", \"reason\": \"${reason}\"}"
-            return 0
-        else
-            log_error "Failed to add IP ${ip} to whitelist"
-            return 1
-        fi
-    else
-        if psql \
-        -h "${dbhost}" \
-        -p "${dbport}" \
-        -U "${dbuser}" \
-        -d "${dbname}" \
-        -c "${query}" > /dev/null 2>&1; then
-        log_info "IP ${ip} added to whitelist: ${reason}"
-        record_security_event "unblock" "${ip}" "" "{\"action\": \"whitelist_add\", \"reason\": \"${reason}\"}"
-        return 0
-    else
-        log_error "Failed to add IP ${ip} to whitelist"
-        return 1
-        fi
-    fi
+
+ # Use PGPASSWORD only if set, otherwise let psql use default authentication
+ if [[ -n "${PGPASSWORD:-}" ]]; then
+  if PGPASSWORD="${PGPASSWORD}" psql \
+   -h "${dbhost}" \
+   -p "${dbport}" \
+   -U "${dbuser}" \
+   -d "${dbname}" \
+   -c "${query}" > /dev/null 2>&1; then
+   log_info "IP ${ip} added to whitelist: ${reason}"
+   record_security_event "unblock" "${ip}" "" "{\"action\": \"whitelist_add\", \"reason\": \"${reason}\"}"
+   return 0
+  else
+   log_error "Failed to add IP ${ip} to whitelist"
+   return 1
+  fi
+ else
+  if psql \
+   -h "${dbhost}" \
+   -p "${dbport}" \
+   -U "${dbuser}" \
+   -d "${dbname}" \
+   -c "${query}" > /dev/null 2>&1; then
+   log_info "IP ${ip} added to whitelist: ${reason}"
+   record_security_event "unblock" "${ip}" "" "{\"action\": \"whitelist_add\", \"reason\": \"${reason}\"}"
+   return 0
+  else
+   log_error "Failed to add IP ${ip} to whitelist"
+   return 1
+  fi
+ fi
 }
 
 ##
@@ -177,78 +177,78 @@ whitelist_add() {
 #   $1 - IP address
 ##
 whitelist_remove() {
-    local ip="${1:?IP address required}"
-    
-    local dbname="${DBNAME:-osm_notes_monitoring}"
-    local dbhost="${DBHOST:-localhost}"
-    local dbport="${DBPORT:-5432}"
-    local dbuser="${DBUSER:-postgres}"
-    
-    local query="DELETE FROM ip_management WHERE ip_address = '${ip}'::inet AND list_type = 'whitelist';"
-    
-    # Use PGPASSWORD only if set, otherwise let psql use default authentication
-    if [[ -n "${PGPASSWORD:-}" ]]; then
-        if PGPASSWORD="${PGPASSWORD}" psql \
-            -h "${dbhost}" \
-            -p "${dbport}" \
-            -U "${dbuser}" \
-            -d "${dbname}" \
-            -c "${query}" > /dev/null 2>&1; then
-            log_info "IP ${ip} removed from whitelist"
-            return 0
-        else
-            log_error "Failed to remove IP ${ip} from whitelist"
-            return 1
-        fi
-    else
-        if psql \
-        -h "${dbhost}" \
-        -p "${dbport}" \
-        -U "${dbuser}" \
-        -d "${dbname}" \
-        -c "${query}" > /dev/null 2>&1; then
-        log_info "IP ${ip} removed from whitelist"
-        return 0
-    else
-        log_error "Failed to remove IP ${ip} from whitelist"
-        return 1
-        fi
-    fi
+ local ip="${1:?IP address required}"
+
+ local dbname="${DBNAME:-osm_notes_monitoring}"
+ local dbhost="${DBHOST:-localhost}"
+ local dbport="${DBPORT:-5432}"
+ local dbuser="${DBUSER:-postgres}"
+
+ local query="DELETE FROM ip_management WHERE ip_address = '${ip}'::inet AND list_type = 'whitelist';"
+
+ # Use PGPASSWORD only if set, otherwise let psql use default authentication
+ if [[ -n "${PGPASSWORD:-}" ]]; then
+  if PGPASSWORD="${PGPASSWORD}" psql \
+   -h "${dbhost}" \
+   -p "${dbport}" \
+   -U "${dbuser}" \
+   -d "${dbname}" \
+   -c "${query}" > /dev/null 2>&1; then
+   log_info "IP ${ip} removed from whitelist"
+   return 0
+  else
+   log_error "Failed to remove IP ${ip} from whitelist"
+   return 1
+  fi
+ else
+  if psql \
+   -h "${dbhost}" \
+   -p "${dbport}" \
+   -U "${dbuser}" \
+   -d "${dbname}" \
+   -c "${query}" > /dev/null 2>&1; then
+   log_info "IP ${ip} removed from whitelist"
+   return 0
+  else
+   log_error "Failed to remove IP ${ip} from whitelist"
+   return 1
+  fi
+ fi
 }
 
 ##
 # List whitelisted IPs
 ##
 whitelist_list() {
-    local dbname="${DBNAME:-osm_notes_monitoring}"
-    local dbhost="${DBHOST:-localhost}"
-    local dbport="${DBPORT:-5432}"
-    local dbuser="${DBUSER:-postgres}"
-    
-    local query="
+ local dbname="${DBNAME:-osm_notes_monitoring}"
+ local dbhost="${DBHOST:-localhost}"
+ local dbport="${DBPORT:-5432}"
+ local dbuser="${DBUSER:-postgres}"
+
+ local query="
         SELECT ip_address, reason, created_at, created_by
         FROM ip_management
         WHERE list_type = 'whitelist'
         ORDER BY created_at DESC;
     "
-    
-    echo "Whitelisted IPs:"
-    # Use PGPASSWORD only if set, otherwise let psql use default authentication
-    if [[ -n "${PGPASSWORD:-}" ]]; then
-        PGPASSWORD="${PGPASSWORD}" psql \
-            -h "${dbhost}" \
-            -p "${dbport}" \
-            -U "${dbuser}" \
-            -d "${dbname}" \
-            -c "${query}" 2>/dev/null || true
-    else
-        psql \
-        -h "${dbhost}" \
-        -p "${dbport}" \
-        -U "${dbuser}" \
-        -d "${dbname}" \
-        -c "${query}" 2>/dev/null || true
-    fi
+
+ echo "Whitelisted IPs:"
+ # Use PGPASSWORD only if set, otherwise let psql use default authentication
+ if [[ -n "${PGPASSWORD:-}" ]]; then
+  PGPASSWORD="${PGPASSWORD}" psql \
+   -h "${dbhost}" \
+   -p "${dbport}" \
+   -U "${dbuser}" \
+   -d "${dbname}" \
+   -c "${query}" 2> /dev/null || true
+ else
+  psql \
+   -h "${dbhost}" \
+   -p "${dbport}" \
+   -U "${dbuser}" \
+   -d "${dbname}" \
+   -c "${query}" 2> /dev/null || true
+ fi
 }
 
 ##
@@ -259,21 +259,21 @@ whitelist_list() {
 #   $2 - Reason (optional)
 ##
 blacklist_add() {
-    local ip="${1:?IP address required}"
-    local reason="${2:-Added to blacklist}"
-    
-    # Validate IP
-    if ! is_valid_ip "${ip}"; then
-        log_error "Invalid IP address: ${ip}"
-        return 1
-    fi
-    
-    local dbname="${DBNAME:-osm_notes_monitoring}"
-    local dbhost="${DBHOST:-localhost}"
-    local dbport="${DBPORT:-5432}"
-    local dbuser="${DBUSER:-postgres}"
-    
-    local query="
+ local ip="${1:?IP address required}"
+ local reason="${2:-Added to blacklist}"
+
+ # Validate IP
+ if ! is_valid_ip "${ip}"; then
+  log_error "Invalid IP address: ${ip}"
+  return 1
+ fi
+
+ local dbname="${DBNAME:-osm_notes_monitoring}"
+ local dbhost="${DBHOST:-localhost}"
+ local dbport="${DBPORT:-5432}"
+ local dbuser="${DBUSER:-postgres}"
+
+ local query="
         INSERT INTO ip_management (ip_address, list_type, reason, created_by)
         VALUES ('${ip}'::inet, 'blacklist', '${reason}', '${USER:-system}')
         ON CONFLICT (ip_address) DO UPDATE
@@ -282,37 +282,37 @@ blacklist_add() {
             expires_at = NULL,
             created_at = CURRENT_TIMESTAMP;
     "
-    
-    # Use PGPASSWORD only if set, otherwise let psql use default authentication
-    if [[ -n "${PGPASSWORD:-}" ]]; then
-        if PGPASSWORD="${PGPASSWORD}" psql \
-            -h "${dbhost}" \
-            -p "${dbport}" \
-            -U "${dbuser}" \
-            -d "${dbname}" \
-            -c "${query}" > /dev/null 2>&1; then
-            log_info "IP ${ip} added to blacklist: ${reason}"
-            record_security_event "block" "${ip}" "" "{\"action\": \"blacklist_add\", \"reason\": \"${reason}\"}"
-            return 0
-        else
-            log_error "Failed to add IP ${ip} to blacklist"
-            return 1
-        fi
-    else
-        if psql \
-        -h "${dbhost}" \
-        -p "${dbport}" \
-        -U "${dbuser}" \
-        -d "${dbname}" \
-        -c "${query}" > /dev/null 2>&1; then
-        log_info "IP ${ip} added to blacklist: ${reason}"
-        record_security_event "block" "${ip}" "" "{\"action\": \"blacklist_add\", \"reason\": \"${reason}\"}"
-        return 0
-    else
-        log_error "Failed to add IP ${ip} to blacklist"
-        return 1
-        fi
-    fi
+
+ # Use PGPASSWORD only if set, otherwise let psql use default authentication
+ if [[ -n "${PGPASSWORD:-}" ]]; then
+  if PGPASSWORD="${PGPASSWORD}" psql \
+   -h "${dbhost}" \
+   -p "${dbport}" \
+   -U "${dbuser}" \
+   -d "${dbname}" \
+   -c "${query}" > /dev/null 2>&1; then
+   log_info "IP ${ip} added to blacklist: ${reason}"
+   record_security_event "block" "${ip}" "" "{\"action\": \"blacklist_add\", \"reason\": \"${reason}\"}"
+   return 0
+  else
+   log_error "Failed to add IP ${ip} to blacklist"
+   return 1
+  fi
+ else
+  if psql \
+   -h "${dbhost}" \
+   -p "${dbport}" \
+   -U "${dbuser}" \
+   -d "${dbname}" \
+   -c "${query}" > /dev/null 2>&1; then
+   log_info "IP ${ip} added to blacklist: ${reason}"
+   record_security_event "block" "${ip}" "" "{\"action\": \"blacklist_add\", \"reason\": \"${reason}\"}"
+   return 0
+  else
+   log_error "Failed to add IP ${ip} to blacklist"
+   return 1
+  fi
+ fi
 }
 
 ##
@@ -322,80 +322,80 @@ blacklist_add() {
 #   $1 - IP address
 ##
 blacklist_remove() {
-    local ip="${1:?IP address required}"
-    
-    local dbname="${DBNAME:-osm_notes_monitoring}"
-    local dbhost="${DBHOST:-localhost}"
-    local dbport="${DBPORT:-5432}"
-    local dbuser="${DBUSER:-postgres}"
-    
-    local query="DELETE FROM ip_management WHERE ip_address = '${ip}'::inet AND list_type = 'blacklist';"
-    
-    # Use PGPASSWORD only if set, otherwise let psql use default authentication
-    if [[ -n "${PGPASSWORD:-}" ]]; then
-        if PGPASSWORD="${PGPASSWORD}" psql \
-            -h "${dbhost}" \
-            -p "${dbport}" \
-            -U "${dbuser}" \
-            -d "${dbname}" \
-            -c "${query}" > /dev/null 2>&1; then
-            log_info "IP ${ip} removed from blacklist"
-            record_security_event "unblock" "${ip}" "" "{\"action\": \"blacklist_remove\"}"
-            return 0
-        else
-            log_error "Failed to remove IP ${ip} from blacklist"
-            return 1
-        fi
-    else
-        if psql \
-        -h "${dbhost}" \
-        -p "${dbport}" \
-        -U "${dbuser}" \
-        -d "${dbname}" \
-        -c "${query}" > /dev/null 2>&1; then
-        log_info "IP ${ip} removed from blacklist"
-        record_security_event "unblock" "${ip}" "" "{\"action\": \"blacklist_remove\"}"
-        return 0
-    else
-        log_error "Failed to remove IP ${ip} from blacklist"
-        return 1
-        fi
-    fi
+ local ip="${1:?IP address required}"
+
+ local dbname="${DBNAME:-osm_notes_monitoring}"
+ local dbhost="${DBHOST:-localhost}"
+ local dbport="${DBPORT:-5432}"
+ local dbuser="${DBUSER:-postgres}"
+
+ local query="DELETE FROM ip_management WHERE ip_address = '${ip}'::inet AND list_type = 'blacklist';"
+
+ # Use PGPASSWORD only if set, otherwise let psql use default authentication
+ if [[ -n "${PGPASSWORD:-}" ]]; then
+  if PGPASSWORD="${PGPASSWORD}" psql \
+   -h "${dbhost}" \
+   -p "${dbport}" \
+   -U "${dbuser}" \
+   -d "${dbname}" \
+   -c "${query}" > /dev/null 2>&1; then
+   log_info "IP ${ip} removed from blacklist"
+   record_security_event "unblock" "${ip}" "" "{\"action\": \"blacklist_remove\"}"
+   return 0
+  else
+   log_error "Failed to remove IP ${ip} from blacklist"
+   return 1
+  fi
+ else
+  if psql \
+   -h "${dbhost}" \
+   -p "${dbport}" \
+   -U "${dbuser}" \
+   -d "${dbname}" \
+   -c "${query}" > /dev/null 2>&1; then
+   log_info "IP ${ip} removed from blacklist"
+   record_security_event "unblock" "${ip}" "" "{\"action\": \"blacklist_remove\"}"
+   return 0
+  else
+   log_error "Failed to remove IP ${ip} from blacklist"
+   return 1
+  fi
+ fi
 }
 
 ##
 # List blacklisted IPs
 ##
 blacklist_list() {
-    local dbname="${DBNAME:-osm_notes_monitoring}"
-    local dbhost="${DBHOST:-localhost}"
-    local dbport="${DBPORT:-5432}"
-    local dbuser="${DBUSER:-postgres}"
-    
-    local query="
+ local dbname="${DBNAME:-osm_notes_monitoring}"
+ local dbhost="${DBHOST:-localhost}"
+ local dbport="${DBPORT:-5432}"
+ local dbuser="${DBUSER:-postgres}"
+
+ local query="
         SELECT ip_address, reason, created_at, expires_at, created_by
         FROM ip_management
         WHERE list_type = 'blacklist'
         ORDER BY created_at DESC;
     "
-    
-    echo "Blacklisted IPs:"
-    # Use PGPASSWORD only if set, otherwise let psql use default authentication
-    if [[ -n "${PGPASSWORD:-}" ]]; then
-        PGPASSWORD="${PGPASSWORD}" psql \
-            -h "${dbhost}" \
-            -p "${dbport}" \
-            -U "${dbuser}" \
-            -d "${dbname}" \
-            -c "${query}" 2>/dev/null || true
-    else
-        psql \
-        -h "${dbhost}" \
-        -p "${dbport}" \
-        -U "${dbuser}" \
-        -d "${dbname}" \
-        -c "${query}" 2>/dev/null || true
-    fi
+
+ echo "Blacklisted IPs:"
+ # Use PGPASSWORD only if set, otherwise let psql use default authentication
+ if [[ -n "${PGPASSWORD:-}" ]]; then
+  PGPASSWORD="${PGPASSWORD}" psql \
+   -h "${dbhost}" \
+   -p "${dbport}" \
+   -U "${dbuser}" \
+   -d "${dbname}" \
+   -c "${query}" 2> /dev/null || true
+ else
+  psql \
+   -h "${dbhost}" \
+   -p "${dbport}" \
+   -U "${dbuser}" \
+   -d "${dbname}" \
+   -c "${query}" 2> /dev/null || true
+ fi
 }
 
 ##
@@ -407,27 +407,27 @@ blacklist_list() {
 #   $3 - Reason (optional)
 ##
 block_ip_temporary() {
-    local ip="${1:?IP address required}"
-    local duration_minutes="${2:-15}"
-    local reason="${3:-Temporary block}"
-    
-    # Validate IP
-    if ! is_valid_ip "${ip}"; then
-        log_error "Invalid IP address: ${ip}"
-        return 1
-    fi
-    
-    # Calculate expiration time
-    local expires_at
-    expires_at=$(date -d "${duration_minutes} minutes" +"%Y-%m-%d %H:%M:%S" 2>/dev/null || date -v+"${duration_minutes}"M +"%Y-%m-%d %H:%M:%S" 2>/dev/null || echo "")
-    
-    if block_ip "${ip}" "temp_block" "${reason}" "${expires_at}"; then
-        log_info "IP ${ip} temporarily blocked for ${duration_minutes} minutes: ${reason}"
-        return 0
-    else
-        log_error "Failed to block IP ${ip}"
-        return 1
-    fi
+ local ip="${1:?IP address required}"
+ local duration_minutes="${2:-15}"
+ local reason="${3:-Temporary block}"
+
+ # Validate IP
+ if ! is_valid_ip "${ip}"; then
+  log_error "Invalid IP address: ${ip}"
+  return 1
+ fi
+
+ # Calculate expiration time
+ local expires_at
+ expires_at=$(date -d "${duration_minutes} minutes" +"%Y-%m-%d %H:%M:%S" 2> /dev/null || date -v+"${duration_minutes}"M +"%Y-%m-%d %H:%M:%S" 2> /dev/null || echo "")
+
+ if block_ip "${ip}" "temp_block" "${reason}" "${expires_at}"; then
+  log_info "IP ${ip} temporarily blocked for ${duration_minutes} minutes: ${reason}"
+  return 0
+ else
+  log_error "Failed to block IP ${ip}"
+  return 1
+ fi
 }
 
 ##
@@ -437,45 +437,45 @@ block_ip_temporary() {
 #   $1 - IP address
 ##
 unblock_ip() {
-    local ip="${1:?IP address required}"
-    
-    local dbname="${DBNAME:-osm_notes_monitoring}"
-    local dbhost="${DBHOST:-localhost}"
-    local dbport="${DBPORT:-5432}"
-    local dbuser="${DBUSER:-postgres}"
-    
-    local query="DELETE FROM ip_management WHERE ip_address = '${ip}'::inet AND list_type IN ('temp_block', 'blacklist');"
-    
-    # Use PGPASSWORD only if set, otherwise let psql use default authentication
-    if [[ -n "${PGPASSWORD:-}" ]]; then
-        if PGPASSWORD="${PGPASSWORD}" psql \
-            -h "${dbhost}" \
-            -p "${dbport}" \
-            -U "${dbuser}" \
-            -d "${dbname}" \
-            -c "${query}" > /dev/null 2>&1; then
-            log_info "IP ${ip} unblocked"
-            record_security_event "unblock" "${ip}" "" "{\"action\": \"manual_unblock\"}"
-            return 0
-        else
-            log_error "Failed to unblock IP ${ip}"
-            return 1
-        fi
-    else
-        if psql \
-        -h "${dbhost}" \
-        -p "${dbport}" \
-        -U "${dbuser}" \
-        -d "${dbname}" \
-        -c "${query}" > /dev/null 2>&1; then
-        log_info "IP ${ip} unblocked"
-        record_security_event "unblock" "${ip}" "" "{\"action\": \"manual_unblock\"}"
-        return 0
-    else
-        log_error "Failed to unblock IP ${ip}"
-        return 1
-        fi
-    fi
+ local ip="${1:?IP address required}"
+
+ local dbname="${DBNAME:-osm_notes_monitoring}"
+ local dbhost="${DBHOST:-localhost}"
+ local dbport="${DBPORT:-5432}"
+ local dbuser="${DBUSER:-postgres}"
+
+ local query="DELETE FROM ip_management WHERE ip_address = '${ip}'::inet AND list_type IN ('temp_block', 'blacklist');"
+
+ # Use PGPASSWORD only if set, otherwise let psql use default authentication
+ if [[ -n "${PGPASSWORD:-}" ]]; then
+  if PGPASSWORD="${PGPASSWORD}" psql \
+   -h "${dbhost}" \
+   -p "${dbport}" \
+   -U "${dbuser}" \
+   -d "${dbname}" \
+   -c "${query}" > /dev/null 2>&1; then
+   log_info "IP ${ip} unblocked"
+   record_security_event "unblock" "${ip}" "" "{\"action\": \"manual_unblock\"}"
+   return 0
+  else
+   log_error "Failed to unblock IP ${ip}"
+   return 1
+  fi
+ else
+  if psql \
+   -h "${dbhost}" \
+   -p "${dbport}" \
+   -U "${dbuser}" \
+   -d "${dbname}" \
+   -c "${query}" > /dev/null 2>&1; then
+   log_info "IP ${ip} unblocked"
+   record_security_event "unblock" "${ip}" "" "{\"action\": \"manual_unblock\"}"
+   return 0
+  else
+   log_error "Failed to unblock IP ${ip}"
+   return 1
+  fi
+ fi
 }
 
 ##
@@ -485,41 +485,41 @@ unblock_ip() {
 #   $1 - List type (whitelist, blacklist, temp_block, or all)
 ##
 list_ips() {
-    local list_type="${1:-all}"
-    
-    local dbname="${DBNAME:-osm_notes_monitoring}"
-    local dbhost="${DBHOST:-localhost}"
-    local dbport="${DBPORT:-5432}"
-    local dbuser="${DBUSER:-postgres}"
-    
-    local query="
+ local list_type="${1:-all}"
+
+ local dbname="${DBNAME:-osm_notes_monitoring}"
+ local dbhost="${DBHOST:-localhost}"
+ local dbport="${DBPORT:-5432}"
+ local dbuser="${DBUSER:-postgres}"
+
+ local query="
         SELECT ip_address, list_type, reason, created_at, expires_at, created_by
         FROM ip_management
     "
-    
-    if [[ "${list_type}" != "all" ]]; then
-        query="${query} WHERE list_type = '${list_type}'"
-    fi
-    
-    query="${query} ORDER BY created_at DESC;"
-    
-    echo "IP Management List (${list_type}):"
-    # Use PGPASSWORD only if set, otherwise let psql use default authentication
-    if [[ -n "${PGPASSWORD:-}" ]]; then
-        PGPASSWORD="${PGPASSWORD}" psql \
-            -h "${dbhost}" \
-            -p "${dbport}" \
-            -U "${dbuser}" \
-            -d "${dbname}" \
-            -c "${query}" 2>/dev/null || true
-    else
-        psql \
-        -h "${dbhost}" \
-        -p "${dbport}" \
-        -U "${dbuser}" \
-        -d "${dbname}" \
-        -c "${query}" 2>/dev/null || true
-    fi
+
+ if [[ "${list_type}" != "all" ]]; then
+  query="${query} WHERE list_type = '${list_type}'"
+ fi
+
+ query="${query} ORDER BY created_at DESC;"
+
+ echo "IP Management List (${list_type}):"
+ # Use PGPASSWORD only if set, otherwise let psql use default authentication
+ if [[ -n "${PGPASSWORD:-}" ]]; then
+  PGPASSWORD="${PGPASSWORD}" psql \
+   -h "${dbhost}" \
+   -p "${dbport}" \
+   -U "${dbuser}" \
+   -d "${dbname}" \
+   -c "${query}" 2> /dev/null || true
+ else
+  psql \
+   -h "${dbhost}" \
+   -p "${dbport}" \
+   -U "${dbuser}" \
+   -d "${dbname}" \
+   -c "${query}" 2> /dev/null || true
+ fi
 }
 
 ##
@@ -529,284 +529,284 @@ list_ips() {
 #   $1 - IP address
 ##
 check_ip_status() {
-    local ip="${1:?IP address required}"
-    
-    echo "Status for IP: ${ip}"
-    echo ""
-    
-    if is_ip_whitelisted "${ip}"; then
-        echo "  Status: WHITELISTED"
-    elif is_ip_blacklisted "${ip}"; then
-        echo "  Status: BLOCKED"
-    else
-        echo "  Status: NORMAL"
-    fi
-    
-    # Get details from database
-    local dbname="${DBNAME:-osm_notes_monitoring}"
-    local dbhost="${DBHOST:-localhost}"
-    local dbport="${DBPORT:-5432}"
-    local dbuser="${DBUSER:-postgres}"
-    
-    local query="
+ local ip="${1:?IP address required}"
+
+ echo "Status for IP: ${ip}"
+ echo ""
+
+ if is_ip_whitelisted "${ip}"; then
+  echo "  Status: WHITELISTED"
+ elif is_ip_blacklisted "${ip}"; then
+  echo "  Status: BLOCKED"
+ else
+  echo "  Status: NORMAL"
+ fi
+
+ # Get details from database
+ local dbname="${DBNAME:-osm_notes_monitoring}"
+ local dbhost="${DBHOST:-localhost}"
+ local dbport="${DBPORT:-5432}"
+ local dbuser="${DBUSER:-postgres}"
+
+ local query="
         SELECT list_type, reason, created_at, expires_at, created_by
         FROM ip_management
         WHERE ip_address = '${ip}'::inet
           AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP);
     "
-    
-    echo ""
-    echo "Details:"
-    # Use PGPASSWORD only if set, otherwise let psql use default authentication
-    if [[ -n "${PGPASSWORD:-}" ]]; then
-        PGPASSWORD="${PGPASSWORD}" psql \
-            -h "${dbhost}" \
-            -p "${dbport}" \
-            -U "${dbuser}" \
-            -d "${dbname}" \
-            -c "${query}" 2>/dev/null || echo "  No entries found"
-    else
-        psql \
-        -h "${dbhost}" \
-        -p "${dbport}" \
-        -U "${dbuser}" \
-        -d "${dbname}" \
-        -c "${query}" 2>/dev/null || echo "  No entries found"
-    fi
+
+ echo ""
+ echo "Details:"
+ # Use PGPASSWORD only if set, otherwise let psql use default authentication
+ if [[ -n "${PGPASSWORD:-}" ]]; then
+  PGPASSWORD="${PGPASSWORD}" psql \
+   -h "${dbhost}" \
+   -p "${dbport}" \
+   -U "${dbuser}" \
+   -d "${dbname}" \
+   -c "${query}" 2> /dev/null || echo "  No entries found"
+ else
+  psql \
+   -h "${dbhost}" \
+   -p "${dbport}" \
+   -U "${dbuser}" \
+   -d "${dbname}" \
+   -c "${query}" 2> /dev/null || echo "  No entries found"
+ fi
 }
 
 ##
 # Clean up expired temporary blocks
 ##
 cleanup_expired() {
-    local dbname="${DBNAME:-osm_notes_monitoring}"
-    local dbhost="${DBHOST:-localhost}"
-    local dbport="${DBPORT:-5432}"
-    local dbuser="${DBUSER:-postgres}"
-    
-    local query="
+ local dbname="${DBNAME:-osm_notes_monitoring}"
+ local dbhost="${DBHOST:-localhost}"
+ local dbport="${DBPORT:-5432}"
+ local dbuser="${DBUSER:-postgres}"
+
+ local query="
         DELETE FROM ip_management
         WHERE list_type = 'temp_block'
           AND expires_at IS NOT NULL
           AND expires_at < CURRENT_TIMESTAMP;
     "
-    
-    local deleted
-    # Use PGPASSWORD only if set, otherwise let psql use default authentication
-    if [[ -n "${PGPASSWORD:-}" ]]; then
-        deleted=$(PGPASSWORD="${PGPASSWORD}" psql \
-            -h "${dbhost}" \
-            -p "${dbport}" \
-            -U "${dbuser}" \
-            -d "${dbname}" \
-            -t -A \
-            -c "SELECT COUNT(*) FROM (${query}) deleted;" 2>/dev/null || echo "0")
-        
-        # Actually delete
-        PGPASSWORD="${PGPASSWORD}" psql \
-            -h "${dbhost}" \
-            -p "${dbport}" \
-            -U "${dbuser}" \
-            -d "${dbname}" \
-            -c "${query}" > /dev/null 2>&1 || true
-    else
-        deleted=$(psql \
-            -h "${dbhost}" \
-            -p "${dbport}" \
-            -U "${dbuser}" \
-            -d "${dbname}" \
-            -t -A \
-            -c "SELECT COUNT(*) FROM (${query}) deleted;" 2>/dev/null || echo "0")
-        
-        # Actually delete
-        psql \
-            -h "${dbhost}" \
-            -p "${dbport}" \
-            -U "${dbuser}" \
-            -d "${dbname}" \
-            -c "${query}" > /dev/null 2>&1 || true
-    fi
-    
-    deleted=$(echo "${deleted}" | tr -d '[:space:]' || echo "0")
-    
-    log_info "Cleaned up ${deleted} expired temporary block(s)"
-    echo "Cleaned up ${deleted} expired temporary block(s)"
+
+ local deleted
+ # Use PGPASSWORD only if set, otherwise let psql use default authentication
+ if [[ -n "${PGPASSWORD:-}" ]]; then
+  deleted=$(PGPASSWORD="${PGPASSWORD}" psql \
+   -h "${dbhost}" \
+   -p "${dbport}" \
+   -U "${dbuser}" \
+   -d "${dbname}" \
+   -t -A \
+   -c "SELECT COUNT(*) FROM (${query}) deleted;" 2> /dev/null || echo "0")
+
+  # Actually delete
+  PGPASSWORD="${PGPASSWORD}" psql \
+   -h "${dbhost}" \
+   -p "${dbport}" \
+   -U "${dbuser}" \
+   -d "${dbname}" \
+   -c "${query}" > /dev/null 2>&1 || true
+ else
+  deleted=$(psql \
+   -h "${dbhost}" \
+   -p "${dbport}" \
+   -U "${dbuser}" \
+   -d "${dbname}" \
+   -t -A \
+   -c "SELECT COUNT(*) FROM (${query}) deleted;" 2> /dev/null || echo "0")
+
+  # Actually delete
+  psql \
+   -h "${dbhost}" \
+   -p "${dbport}" \
+   -U "${dbuser}" \
+   -d "${dbname}" \
+   -c "${query}" > /dev/null 2>&1 || true
+ fi
+
+ deleted=$(echo "${deleted}" | tr -d '[:space:]' || echo "0")
+
+ log_info "Cleaned up ${deleted} expired temporary block(s)"
+ echo "Cleaned up ${deleted} expired temporary block(s)"
 }
 
 ##
 # Main function
 ##
 main() {
-    local action="${1:-}"
-    local subaction="${2:-}"
-    
-    # Load configuration
-    load_config "${CONFIG_FILE:-}"
-    
-    # Initialize alerting
-    init_alerting
-    
-    case "${action}" in
-        whitelist)
-            case "${subaction}" in
-                add)
-                    local ip="${3:-}"
-                    local reason="${4:-Added to whitelist}"
-                    if [[ -z "${ip}" ]]; then
-                        log_error "IP address required"
-                        usage
-                        exit 1
-                    fi
-                    whitelist_add "${ip}" "${reason}"
-                    ;;
-                remove)
-                    local ip="${3:-}"
-                    if [[ -z "${ip}" ]]; then
-                        log_error "IP address required"
-                        usage
-                        exit 1
-                    fi
-                    whitelist_remove "${ip}"
-                    ;;
-                list)
-                    whitelist_list
-                    ;;
-                *)
-                    log_error "Unknown whitelist action: ${subaction}"
-                    usage
-                    exit 1
-                    ;;
-            esac
-            ;;
-        blacklist)
-            case "${subaction}" in
-                add)
-                    local ip="${3:-}"
-                    local reason="${4:-Added to blacklist}"
-                    if [[ -z "${ip}" ]]; then
-                        log_error "IP address required"
-                        usage
-                        exit 1
-                    fi
-                    blacklist_add "${ip}" "${reason}"
-                    ;;
-                remove)
-                    local ip="${3:-}"
-                    if [[ -z "${ip}" ]]; then
-                        log_error "IP address required"
-                        usage
-                        exit 1
-                    fi
-                    blacklist_remove "${ip}"
-                    ;;
-                list)
-                    blacklist_list
-                    ;;
-                *)
-                    log_error "Unknown blacklist action: ${subaction}"
-                    usage
-                    exit 1
-                    ;;
-            esac
-            ;;
-        block)
-            local ip="${2:-}"
-            local duration="${3:-15}"
-            local reason="${4:-Temporary block}"
-            if [[ -z "${ip}" ]]; then
-                log_error "IP address required"
-                usage
-                exit 1
-            fi
-            block_ip_temporary "${ip}" "${duration}" "${reason}"
-            ;;
-        unblock)
-            local ip="${2:-}"
-            if [[ -z "${ip}" ]]; then
-                log_error "IP address required"
-                usage
-                exit 1
-            fi
-            unblock_ip "${ip}"
-            ;;
-        list)
-            local list_type="${2:-all}"
-            list_ips "${list_type}"
-            ;;
-        status)
-            local ip="${2:-}"
-            if [[ -z "${ip}" ]]; then
-                log_error "IP address required"
-                usage
-                exit 1
-            fi
-            check_ip_status "${ip}"
-            ;;
-        cleanup)
-            cleanup_expired
-            ;;
-        *)
-            if [[ -n "${action}" ]]; then
-                log_error "Unknown action: ${action}"
-            fi
-            usage
-            exit 1
-            ;;
-    esac
+ local action="${1:-}"
+ local subaction="${2:-}"
+
+ # Load configuration
+ load_config "${CONFIG_FILE:-}"
+
+ # Initialize alerting
+ init_alerting
+
+ case "${action}" in
+ whitelist)
+  case "${subaction}" in
+  add)
+   local ip="${3:-}"
+   local reason="${4:-Added to whitelist}"
+   if [[ -z "${ip}" ]]; then
+    log_error "IP address required"
+    usage
+    exit 1
+   fi
+   whitelist_add "${ip}" "${reason}"
+   ;;
+  remove)
+   local ip="${3:-}"
+   if [[ -z "${ip}" ]]; then
+    log_error "IP address required"
+    usage
+    exit 1
+   fi
+   whitelist_remove "${ip}"
+   ;;
+  list)
+   whitelist_list
+   ;;
+  *)
+   log_error "Unknown whitelist action: ${subaction}"
+   usage
+   exit 1
+   ;;
+  esac
+  ;;
+ blacklist)
+  case "${subaction}" in
+  add)
+   local ip="${3:-}"
+   local reason="${4:-Added to blacklist}"
+   if [[ -z "${ip}" ]]; then
+    log_error "IP address required"
+    usage
+    exit 1
+   fi
+   blacklist_add "${ip}" "${reason}"
+   ;;
+  remove)
+   local ip="${3:-}"
+   if [[ -z "${ip}" ]]; then
+    log_error "IP address required"
+    usage
+    exit 1
+   fi
+   blacklist_remove "${ip}"
+   ;;
+  list)
+   blacklist_list
+   ;;
+  *)
+   log_error "Unknown blacklist action: ${subaction}"
+   usage
+   exit 1
+   ;;
+  esac
+  ;;
+ block)
+  local ip="${2:-}"
+  local duration="${3:-15}"
+  local reason="${4:-Temporary block}"
+  if [[ -z "${ip}" ]]; then
+   log_error "IP address required"
+   usage
+   exit 1
+  fi
+  block_ip_temporary "${ip}" "${duration}" "${reason}"
+  ;;
+ unblock)
+  local ip="${2:-}"
+  if [[ -z "${ip}" ]]; then
+   log_error "IP address required"
+   usage
+   exit 1
+  fi
+  unblock_ip "${ip}"
+  ;;
+ list)
+  local list_type="${2:-all}"
+  list_ips "${list_type}"
+  ;;
+ status)
+  local ip="${2:-}"
+  if [[ -z "${ip}" ]]; then
+   log_error "IP address required"
+   usage
+   exit 1
+  fi
+  check_ip_status "${ip}"
+  ;;
+ cleanup)
+  cleanup_expired
+  ;;
+ *)
+  if [[ -n "${action}" ]]; then
+   log_error "Unknown action: ${action}"
+  fi
+  usage
+  exit 1
+  ;;
+ esac
 }
 
 # Parse command line arguments
 CONFIG_FILE=""
 
 while [[ $# -gt 0 ]]; do
-    case $1 in
-        -h|--help)
-            usage
-            exit 0
-            ;;
-        -v|--verbose)
-            export LOG_LEVEL="${LOG_LEVEL_DEBUG}"
-            shift
-            ;;
-        -q|--quiet)
-            export LOG_LEVEL="${LOG_LEVEL_ERROR}"
-            shift
-            ;;
-        -c|--config)
-            CONFIG_FILE="$2"
-            shift 2
-            ;;
-        *)
-            # Remaining arguments are action and parameters
-            break
-            ;;
-    esac
+ case $1 in
+ -h | --help)
+  usage
+  exit 0
+  ;;
+ -v | --verbose)
+  export LOG_LEVEL="${LOG_LEVEL_DEBUG}"
+  shift
+  ;;
+ -q | --quiet)
+  export LOG_LEVEL="${LOG_LEVEL_ERROR}"
+  shift
+  ;;
+ -c | --config)
+  CONFIG_FILE="$2"
+  shift 2
+  ;;
+ *)
+  # Remaining arguments are action and parameters
+  break
+  ;;
+ esac
 done
 
 ##
 # Wrapper functions for backward compatibility and testing
 ##
 add_ip_to_list() {
-    local ip="${1:?IP address required}"
-    local list_type="${2:?List type required (whitelist or blacklist)}"
-    local reason="${3:-}"
-    
-    case "${list_type}" in
-        whitelist)
-            whitelist_add "${ip}" "${reason}"
-            ;;
-        blacklist)
-            blacklist_add "${ip}" "${reason}"
-            ;;
-        *)
-            log_error "Invalid list type: ${list_type}. Must be 'whitelist' or 'blacklist'"
-            return 1
-            ;;
-    esac
+ local ip="${1:?IP address required}"
+ local list_type="${2:?List type required (whitelist or blacklist)}"
+ local reason="${3:-}"
+
+ case "${list_type}" in
+ whitelist)
+  whitelist_add "${ip}" "${reason}"
+  ;;
+ blacklist)
+  blacklist_add "${ip}" "${reason}"
+  ;;
+ *)
+  log_error "Invalid list type: ${list_type}. Must be 'whitelist' or 'blacklist'"
+  return 1
+  ;;
+ esac
 }
 
 get_ip_status() {
-    check_ip_status "$@"
+ check_ip_status "$@"
 }
 
 # Export functions for use in tests
@@ -818,6 +818,5 @@ export -f check_ip_status
 
 # Run main function only if script is executed directly (not sourced)
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
-    main "$@"
+ main "$@"
 fi
-

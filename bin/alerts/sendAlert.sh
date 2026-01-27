@@ -29,9 +29,9 @@ source "${PROJECT_ROOT}/bin/lib/alertFunctions.sh"
 # Set default LOG_DIR if not set
 # In test mode, use TEST_LOG_DIR if available, otherwise use PROJECT_ROOT/logs
 if [[ "${TEST_MODE:-false}" == "true" ]] && [[ -n "${TEST_LOG_DIR:-}" ]]; then
-    export LOG_DIR="${TEST_LOG_DIR}"
+ export LOG_DIR="${TEST_LOG_DIR}"
 elif [[ -z "${LOG_DIR:-}" ]]; then
-    export LOG_DIR="${PROJECT_ROOT}/logs"
+ export LOG_DIR="${PROJECT_ROOT}/logs"
 fi
 
 # Ensure log directory exists
@@ -40,18 +40,18 @@ mkdir -p "${LOG_DIR}"
 # Only initialize logging if not in test mode
 # When TEST_MODE is true, initialization is skipped to avoid database connections
 if [[ "${TEST_MODE:-false}" != "true" ]]; then
-    # Initialize logging
-    init_logging "${LOG_DIR}/send_alert.log" "sendAlert"
-    
-    # Initialize alerting
-    init_alerting
+ # Initialize logging
+ init_logging "${LOG_DIR}/send_alert.log" "sendAlert"
+
+ # Initialize alerting
+ init_alerting
 fi
 
 ##
 # Show usage
 ##
 usage() {
-    cat << EOF
+ cat << EOF
 Enhanced Alert Sender Script
 
 Usage: ${0} [OPTIONS] COMPONENT LEVEL TYPE MESSAGE [METADATA]
@@ -92,29 +92,29 @@ EOF
 #   $5 - Metadata (optional)
 ##
 format_html() {
-    local component="${1}"
-    local alert_level="${2}"
-    local alert_type="${3}"
-    local message="${4}"
-    local metadata="${5:-}"
-    
-    local color
-    case "${alert_level}" in
-        critical)
-            color="#dc3545"  # Red
-            ;;
-        warning)
-            color="#ffc107"  # Yellow
-            ;;
-        info)
-            color="#17a2b8"  # Blue
-            ;;
-        *)
-            color="#6c757d"  # Gray
-            ;;
-    esac
-    
-    cat << EOF
+ local component="${1}"
+ local alert_level="${2}"
+ local alert_type="${3}"
+ local message="${4}"
+ local metadata="${5:-}"
+
+ local color
+ case "${alert_level}" in
+ critical)
+  color="#dc3545" # Red
+  ;;
+ warning)
+  color="#ffc107" # Yellow
+  ;;
+ info)
+  color="#17a2b8" # Blue
+  ;;
+ *)
+  color="#6c757d" # Gray
+  ;;
+ esac
+
+ cat << EOF
 <!DOCTYPE html>
 <html>
 <head>
@@ -149,13 +149,13 @@ EOF
 #   $5 - Metadata (optional)
 ##
 format_json() {
-    local component="${1}"
-    local alert_level="${2}"
-    local alert_type="${3}"
-    local message="${4}"
-    local metadata="${5:-null}"
-    
-    cat << EOF
+ local component="${1}"
+ local alert_level="${2}"
+ local alert_type="${3}"
+ local message="${4}"
+ local metadata="${5:-null}"
+
+ cat << EOF
 {
   "component": "${component}",
   "alert_level": "${alert_level}",
@@ -178,129 +178,127 @@ EOF
 #   $5 - Metadata (optional)
 ##
 enhanced_send_alert() {
-    local component="${1:?Component required}"
-    local alert_level="${2:?Alert level required}"
-    local alert_type="${3:?Alert type required}"
-    local message="${4:?Message required}"
-    local metadata="${5:-null}"
-    
-    # Validate alert level
-    case "${alert_level}" in
-        critical|warning|info)
-            ;;
-        *)
-            log_error "Invalid alert level: ${alert_level}"
-            return 1
-            ;;
-    esac
-    
-    # Use base send_alert function
-    send_alert "${component}" "${alert_level}" "${alert_type}" "${message}" "${metadata}"
-    
-    return 0
+ local component="${1:?Component required}"
+ local alert_level="${2:?Alert level required}"
+ local alert_type="${3:?Alert type required}"
+ local message="${4:?Message required}"
+ local metadata="${5:-null}"
+
+ # Validate alert level
+ case "${alert_level}" in
+ critical | warning | info) ;;
+ *)
+  log_error "Invalid alert level: ${alert_level}"
+  return 1
+  ;;
+ esac
+
+ # Use base send_alert function
+ send_alert "${component}" "${alert_level}" "${alert_type}" "${message}" "${metadata}"
+
+ return 0
 }
 
 ##
 # Main function
 ##
 main() {
-    local email_override=""
-    local force_slack=false
-    local skip_email=false
-    local format="text"
-    
-    # Parse options
-    while [[ $# -gt 0 ]]; do
-        case "${1}" in
-            -h|--help)
-                usage
-                exit 0
-                ;;
-            --email)
-                email_override="${2}"
-                shift 2
-                ;;
-            --slack)
-                force_slack=true
-                shift
-                ;;
-            --no-email)
-                skip_email=true
-                shift
-                ;;
-            --format)
-                format="${2}"
-                shift 2
-                ;;
-            --config|-c)
-                export CONFIG_FILE="${2}"
-                shift 2
-                ;;
-            --verbose|-v)
-                export LOG_LEVEL="${LOG_LEVEL_DEBUG}"
-                shift
-                ;;
-            --quiet|-q)
-                export LOG_LEVEL="${LOG_LEVEL_ERROR}"
-                shift
-                ;;
-            *)
-                break
-                ;;
-        esac
-    done
-    
-    if [[ $# -lt 4 ]]; then
-        echo "Error: Missing required arguments"
-        usage
-        exit 1
-    fi
-    
-    local component="${1}"
-    local alert_level="${2}"
-    local alert_type="${3}"
-    local message="${4}"
-    local metadata="${5:-null}"
-    
-    # Override email if specified
-    if [[ -n "${email_override}" ]]; then
-        export ADMIN_EMAIL="${email_override}"
-        export CRITICAL_ALERT_RECIPIENTS="${email_override}"
-        export WARNING_ALERT_RECIPIENTS="${email_override}"
-    fi
-    
-    # Skip email if requested
-    if [[ "${skip_email}" == "true" ]]; then
-        export SEND_ALERT_EMAIL="false"
-    fi
-    
-    # Force Slack if requested
-    if [[ "${force_slack}" == "true" ]]; then
-        export SLACK_ENABLED="true"
-    fi
-    
-    # Format and send based on format type
-    case "${format}" in
-        html)
-            local html_body
-            html_body=$(format_html "${component}" "${alert_level}" "${alert_type}" "${message}" "${metadata}")
-            if [[ "${SEND_ALERT_EMAIL:-false}" == "true" ]] && [[ -n "${ADMIN_EMAIL:-}" ]]; then
-                local subject="[${alert_level^^}] OSM-Notes-Monitoring: ${component} - ${alert_type}"
-                send_email_alert "${ADMIN_EMAIL}" "${subject}" "${html_body}"
-            fi
-            ;;
-        json)
-            format_json "${component}" "${alert_level}" "${alert_type}" "${message}" "${metadata}"
-            enhanced_send_alert "${component}" "${alert_level}" "${alert_type}" "${message}" "${metadata}"
-            ;;
-        text|*)
-            enhanced_send_alert "${component}" "${alert_level}" "${alert_type}" "${message}" "${metadata}"
-            ;;
-    esac
+ local email_override=""
+ local force_slack=false
+ local skip_email=false
+ local format="text"
+
+ # Parse options
+ while [[ $# -gt 0 ]]; do
+  case "${1}" in
+  -h | --help)
+   usage
+   exit 0
+   ;;
+  --email)
+   email_override="${2}"
+   shift 2
+   ;;
+  --slack)
+   force_slack=true
+   shift
+   ;;
+  --no-email)
+   skip_email=true
+   shift
+   ;;
+  --format)
+   format="${2}"
+   shift 2
+   ;;
+  --config | -c)
+   export CONFIG_FILE="${2}"
+   shift 2
+   ;;
+  --verbose | -v)
+   export LOG_LEVEL="${LOG_LEVEL_DEBUG}"
+   shift
+   ;;
+  --quiet | -q)
+   export LOG_LEVEL="${LOG_LEVEL_ERROR}"
+   shift
+   ;;
+  *)
+   break
+   ;;
+  esac
+ done
+
+ if [[ $# -lt 4 ]]; then
+  echo "Error: Missing required arguments"
+  usage
+  exit 1
+ fi
+
+ local component="${1}"
+ local alert_level="${2}"
+ local alert_type="${3}"
+ local message="${4}"
+ local metadata="${5:-null}"
+
+ # Override email if specified
+ if [[ -n "${email_override}" ]]; then
+  export ADMIN_EMAIL="${email_override}"
+  export CRITICAL_ALERT_RECIPIENTS="${email_override}"
+  export WARNING_ALERT_RECIPIENTS="${email_override}"
+ fi
+
+ # Skip email if requested
+ if [[ "${skip_email}" == "true" ]]; then
+  export SEND_ALERT_EMAIL="false"
+ fi
+
+ # Force Slack if requested
+ if [[ "${force_slack}" == "true" ]]; then
+  export SLACK_ENABLED="true"
+ fi
+
+ # Format and send based on format type
+ case "${format}" in
+ html)
+  local html_body
+  html_body=$(format_html "${component}" "${alert_level}" "${alert_type}" "${message}" "${metadata}")
+  if [[ "${SEND_ALERT_EMAIL:-false}" == "true" ]] && [[ -n "${ADMIN_EMAIL:-}" ]]; then
+   local subject="[${alert_level^^}] OSM-Notes-Monitoring: ${component} - ${alert_type}"
+   send_email_alert "${ADMIN_EMAIL}" "${subject}" "${html_body}"
+  fi
+  ;;
+ json)
+  format_json "${component}" "${alert_level}" "${alert_type}" "${message}" "${metadata}"
+  enhanced_send_alert "${component}" "${alert_level}" "${alert_type}" "${message}" "${metadata}"
+  ;;
+ text | *)
+  enhanced_send_alert "${component}" "${alert_level}" "${alert_type}" "${message}" "${metadata}"
+  ;;
+ esac
 }
 
 # Run main if script is executed directly
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
-    main "$@"
+ main "$@"
 fi
-

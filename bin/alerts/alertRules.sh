@@ -29,9 +29,9 @@ source "${PROJECT_ROOT}/bin/lib/alertFunctions.sh"
 # Set default LOG_DIR if not set
 # In test mode, use TEST_LOG_DIR if available, otherwise use PROJECT_ROOT/logs
 if [[ "${TEST_MODE:-false}" == "true" ]] && [[ -n "${TEST_LOG_DIR:-}" ]]; then
-    export LOG_DIR="${TEST_LOG_DIR}"
+ export LOG_DIR="${TEST_LOG_DIR}"
 elif [[ -z "${LOG_DIR:-}" ]]; then
-    export LOG_DIR="${PROJECT_ROOT}/logs"
+ export LOG_DIR="${PROJECT_ROOT}/logs"
 fi
 
 # Ensure log directory exists
@@ -47,7 +47,7 @@ init_alerting
 # Show usage
 ##
 usage() {
-    cat << EOF
+ cat << EOF
 Alert Rules Management Script
 
 Usage: ${0} [OPTIONS] [ACTION] [ARGS...]
@@ -82,39 +82,39 @@ EOF
 # Load configuration
 ##
 load_config() {
-    local config_file="${1:-${PROJECT_ROOT}/config/monitoring.conf}"
-    
-    # Save original values to prevent overwriting test values
-    local original_alert_rules_file="${ALERT_RULES_FILE:-}"
-    local original_alert_templates_dir="${ALERT_TEMPLATES_DIR:-}"
-    
-    if [[ -f "${config_file}" ]]; then
-        # shellcheck disable=SC1090
-        source "${config_file}" || true
-    fi
-    
-    # Load alerts config if available
-    if [[ -f "${PROJECT_ROOT}/config/alerts.conf" ]]; then
-        # shellcheck source=/dev/null
-        source "${PROJECT_ROOT}/config/alerts.conf" || true
-    elif [[ -f "${PROJECT_ROOT}/config/alerts.conf.example" ]]; then
-        # shellcheck source=/dev/null
-        source "${PROJECT_ROOT}/config/alerts.conf.example" || true
-    fi
-    
-    # Restore original values if they were set (e.g., in test mode)
-    # Only set defaults if not already set
-    if [[ -n "${original_alert_rules_file}" ]]; then
-        export ALERT_RULES_FILE="${original_alert_rules_file}"
-    else
-        export ALERT_RULES_FILE="${ALERT_RULES_FILE:-${PROJECT_ROOT}/config/alert_rules.conf}"
-    fi
-    
-    if [[ -n "${original_alert_templates_dir}" ]]; then
-        export ALERT_TEMPLATES_DIR="${original_alert_templates_dir}"
-    else
-        export ALERT_TEMPLATES_DIR="${ALERT_TEMPLATES_DIR:-${PROJECT_ROOT}/config/alert_templates}"
-    fi
+ local config_file="${1:-${PROJECT_ROOT}/config/monitoring.conf}"
+
+ # Save original values to prevent overwriting test values
+ local original_alert_rules_file="${ALERT_RULES_FILE:-}"
+ local original_alert_templates_dir="${ALERT_TEMPLATES_DIR:-}"
+
+ if [[ -f "${config_file}" ]]; then
+  # shellcheck disable=SC1090
+  source "${config_file}" || true
+ fi
+
+ # Load alerts config if available
+ if [[ -f "${PROJECT_ROOT}/config/alerts.conf" ]]; then
+  # shellcheck source=/dev/null
+  source "${PROJECT_ROOT}/config/alerts.conf" || true
+ elif [[ -f "${PROJECT_ROOT}/config/alerts.conf.example" ]]; then
+  # shellcheck source=/dev/null
+  source "${PROJECT_ROOT}/config/alerts.conf.example" || true
+ fi
+
+ # Restore original values if they were set (e.g., in test mode)
+ # Only set defaults if not already set
+ if [[ -n "${original_alert_rules_file}" ]]; then
+  export ALERT_RULES_FILE="${original_alert_rules_file}"
+ else
+  export ALERT_RULES_FILE="${ALERT_RULES_FILE:-${PROJECT_ROOT}/config/alert_rules.conf}"
+ fi
+
+ if [[ -n "${original_alert_templates_dir}" ]]; then
+  export ALERT_TEMPLATES_DIR="${original_alert_templates_dir}"
+ else
+  export ALERT_TEMPLATES_DIR="${ALERT_TEMPLATES_DIR:-${PROJECT_ROOT}/config/alert_templates}"
+ fi
 }
 
 ##
@@ -124,18 +124,18 @@ load_config() {
 #   $1 - Component (optional)
 ##
 list_rules() {
-    local component="${1:-}"
-    
-    if [[ ! -f "${ALERT_RULES_FILE:-}" ]]; then
-        echo "No alert rules file found"
-        return 0
-    fi
-    
-    if [[ -n "${component}" ]]; then
-        grep "^${component}:" "${ALERT_RULES_FILE}" 2>/dev/null || echo "No rules found for ${component}"
-    else
-        cat "${ALERT_RULES_FILE}" 2>/dev/null || echo "No rules found"
-    fi
+ local component="${1:-}"
+
+ if [[ ! -f "${ALERT_RULES_FILE:-}" ]]; then
+  echo "No alert rules file found"
+  return 0
+ fi
+
+ if [[ -n "${component}" ]]; then
+  grep "^${component}:" "${ALERT_RULES_FILE}" 2> /dev/null || echo "No rules found for ${component}"
+ else
+  cat "${ALERT_RULES_FILE}" 2> /dev/null || echo "No rules found"
+ fi
 }
 
 ##
@@ -148,20 +148,20 @@ list_rules() {
 #   $4 - Route (email, slack channel, etc.)
 ##
 add_rule() {
-    local component="${1:?Component required}"
-    local alert_level="${2:?Alert level required}"
-    local alert_type="${3:?Alert type required}"
-    local route="${4:?Route required}"
-    
-    # Create rules file if it doesn't exist
-    mkdir -p "$(dirname "${ALERT_RULES_FILE}")"
-    touch "${ALERT_RULES_FILE}"
-    
-    # Add rule (format: component:level:type:route)
-    echo "${component}:${alert_level}:${alert_type}:${route}" >> "${ALERT_RULES_FILE}"
-    
-    log_info "Alert rule added: ${component}:${alert_level}:${alert_type} -> ${route}"
-    echo "Rule added: ${component}:${alert_level}:${alert_type} -> ${route}"
+ local component="${1:?Component required}"
+ local alert_level="${2:?Alert level required}"
+ local alert_type="${3:?Alert type required}"
+ local route="${4:?Route required}"
+
+ # Create rules file if it doesn't exist
+ mkdir -p "$(dirname "${ALERT_RULES_FILE}")"
+ touch "${ALERT_RULES_FILE}"
+
+ # Add rule (format: component:level:type:route)
+ echo "${component}:${alert_level}:${alert_type}:${route}" >> "${ALERT_RULES_FILE}"
+
+ log_info "Alert rule added: ${component}:${alert_level}:${alert_type} -> ${route}"
+ echo "Rule added: ${component}:${alert_level}:${alert_type} -> ${route}"
 }
 
 ##
@@ -171,28 +171,28 @@ add_rule() {
 #   $1 - Rule ID (line number or pattern)
 ##
 remove_rule() {
-    local rule_id="${1:?Rule ID required}"
-    
-    if [[ ! -f "${ALERT_RULES_FILE:-}" ]]; then
-        echo "No alert rules file found"
-        return 1
-    fi
-    
-    # If rule_id is a number, remove that line
-    if [[ "${rule_id}" =~ ^[0-9]+$ ]]; then
-        sed -i "${rule_id}d" "${ALERT_RULES_FILE}"
-        log_info "Alert rule removed (line ${rule_id})"
-        echo "Rule removed"
-    else
-        # Otherwise, treat as pattern and remove matching lines
-        # Escape special regex characters in pattern for sed
-        # Note: ] must be first in character class to be treated as literal
-        local escaped_pattern
-        escaped_pattern=$(printf '%s\n' "${rule_id}" | sed "s/[][\\.*^\$()+?{|]/\\\\&/g")
-        sed -i "/${escaped_pattern}/d" "${ALERT_RULES_FILE}"
-        log_info "Alert rule removed (pattern: ${rule_id})"
-        echo "Rules matching '${rule_id}' removed"
-    fi
+ local rule_id="${1:?Rule ID required}"
+
+ if [[ ! -f "${ALERT_RULES_FILE:-}" ]]; then
+  echo "No alert rules file found"
+  return 1
+ fi
+
+ # If rule_id is a number, remove that line
+ if [[ "${rule_id}" =~ ^[0-9]+$ ]]; then
+  sed -i "${rule_id}d" "${ALERT_RULES_FILE}"
+  log_info "Alert rule removed (line ${rule_id})"
+  echo "Rule removed"
+ else
+  # Otherwise, treat as pattern and remove matching lines
+  # Escape special regex characters in pattern for sed
+  # Note: ] must be first in character class to be treated as literal
+  local escaped_pattern
+  escaped_pattern=$(printf '%s\n' "${rule_id}" | sed "s/[][\\.*^\$()+?{|]/\\\\&/g")
+  sed -i "/${escaped_pattern}/d" "${ALERT_RULES_FILE}"
+  log_info "Alert rule removed (pattern: ${rule_id})"
+  echo "Rules matching '${rule_id}' removed"
+ fi
 }
 
 ##
@@ -204,82 +204,82 @@ remove_rule() {
 #   $3 - Alert type
 ##
 get_routing() {
-    local component="${1:?Component required}"
-    local alert_level="${2:?Alert level required}"
-    local alert_type="${3:?Alert type required}"
-    
-    # Check for specific rule (exact match)
-    local rule
-    rule=$(grep "^${component}:${alert_level}:${alert_type}:" "${ALERT_RULES_FILE:-/dev/null}" 2>/dev/null | head -1)
-    
-    if [[ -n "${rule}" ]]; then
-        local route
-        route=$(echo "${rule}" | cut -d':' -f4)
-        echo "${route}"
-        return 0
-    fi
-    
-    # Check for component-level-type rule with level wildcard (component:*:type)
-    rule=$(grep "^${component}:\\*:${alert_type}:" "${ALERT_RULES_FILE:-/dev/null}" 2>/dev/null | head -1)
-    if [[ -n "${rule}" ]]; then
-        route=$(echo "${rule}" | cut -d':' -f4)
-        echo "${route}"
-        return 0
-    fi
-    
-    # Check for component-level rule with type wildcard (component:level:*)
-    rule=$(grep "^${component}:${alert_level}:\\*:" "${ALERT_RULES_FILE:-/dev/null}" 2>/dev/null | head -1)
-    if [[ -n "${rule}" ]]; then
-        route=$(echo "${rule}" | cut -d':' -f4)
-        echo "${route}"
-        return 0
-    fi
-    
-    # Check for component-level rule (component:level:)
-    rule=$(grep "^${component}:${alert_level}:" "${ALERT_RULES_FILE:-/dev/null}" 2>/dev/null | head -1)
-    if [[ -n "${rule}" ]]; then
-        route=$(echo "${rule}" | cut -d':' -f4)
-        echo "${route}"
-        return 0
-    fi
-    
-    # Check for full wildcard (*:*:*:route)
-    rule=$(grep "^\\*:\\*:\\*:" "${ALERT_RULES_FILE:-/dev/null}" 2>/dev/null | head -1)
-    if [[ -n "${rule}" ]]; then
-        route=$(echo "${rule}" | cut -d':' -f4)
-        echo "${route}"
-        return 0
-    fi
-    
-    # Fall back to default routing based on alert level
-    case "${alert_level}" in
-        critical)
-            echo "${CRITICAL_ALERT_RECIPIENTS:-${ADMIN_EMAIL}}"
-            ;;
-        warning)
-            echo "${WARNING_ALERT_RECIPIENTS:-${ADMIN_EMAIL}}"
-            ;;
-        info)
-            echo "${INFO_ALERT_RECIPIENTS:-}"
-            ;;
-        *)
-            echo "${ADMIN_EMAIL}"
-            ;;
-    esac
+ local component="${1:?Component required}"
+ local alert_level="${2:?Alert level required}"
+ local alert_type="${3:?Alert type required}"
+
+ # Check for specific rule (exact match)
+ local rule
+ rule=$(grep "^${component}:${alert_level}:${alert_type}:" "${ALERT_RULES_FILE:-/dev/null}" 2> /dev/null | head -1)
+
+ if [[ -n "${rule}" ]]; then
+  local route
+  route=$(echo "${rule}" | cut -d':' -f4)
+  echo "${route}"
+  return 0
+ fi
+
+ # Check for component-level-type rule with level wildcard (component:*:type)
+ rule=$(grep "^${component}:\\*:${alert_type}:" "${ALERT_RULES_FILE:-/dev/null}" 2> /dev/null | head -1)
+ if [[ -n "${rule}" ]]; then
+  route=$(echo "${rule}" | cut -d':' -f4)
+  echo "${route}"
+  return 0
+ fi
+
+ # Check for component-level rule with type wildcard (component:level:*)
+ rule=$(grep "^${component}:${alert_level}:\\*:" "${ALERT_RULES_FILE:-/dev/null}" 2> /dev/null | head -1)
+ if [[ -n "${rule}" ]]; then
+  route=$(echo "${rule}" | cut -d':' -f4)
+  echo "${route}"
+  return 0
+ fi
+
+ # Check for component-level rule (component:level:)
+ rule=$(grep "^${component}:${alert_level}:" "${ALERT_RULES_FILE:-/dev/null}" 2> /dev/null | head -1)
+ if [[ -n "${rule}" ]]; then
+  route=$(echo "${rule}" | cut -d':' -f4)
+  echo "${route}"
+  return 0
+ fi
+
+ # Check for full wildcard (*:*:*:route)
+ rule=$(grep "^\\*:\\*:\\*:" "${ALERT_RULES_FILE:-/dev/null}" 2> /dev/null | head -1)
+ if [[ -n "${rule}" ]]; then
+  route=$(echo "${rule}" | cut -d':' -f4)
+  echo "${route}"
+  return 0
+ fi
+
+ # Fall back to default routing based on alert level
+ case "${alert_level}" in
+ critical)
+  echo "${CRITICAL_ALERT_RECIPIENTS:-${ADMIN_EMAIL}}"
+  ;;
+ warning)
+  echo "${WARNING_ALERT_RECIPIENTS:-${ADMIN_EMAIL}}"
+  ;;
+ info)
+  echo "${INFO_ALERT_RECIPIENTS:-}"
+  ;;
+ *)
+  echo "${ADMIN_EMAIL}"
+  ;;
+ esac
 }
 
 ##
 # List alert templates
 ##
 list_templates() {
-    local templates_dir="${ALERT_TEMPLATES_DIR}"
-    
-    if [[ ! -d "${templates_dir}" ]]; then
-        echo "No templates directory found"
-        return 0
-    fi
-    
-    find "${templates_dir}" -maxdepth 1 -name "*.template" -type f 2>/dev/null | sed 's|.*/||' | sed 's|\.template$||' || echo "No templates found"
+ local templates_dir="${ALERT_TEMPLATES_DIR}"
+
+ if [[ ! -d "${templates_dir}" ]]; then
+  echo "No templates directory found"
+  return 0
+ fi
+
+ find "${templates_dir}" -maxdepth 1 -name "*.template" -type f 2> /dev/null | sed 's|.*/||' | sed 's|\.template$||' || echo "No templates found"
 }
 
 ##
@@ -289,16 +289,16 @@ list_templates() {
 #   $1 - Template ID
 ##
 show_template() {
-    local template_id="${1:?Template ID required}"
-    local templates_dir="${ALERT_TEMPLATES_DIR}"
-    local template_file="${templates_dir}/${template_id}.template"
-    
-    if [[ ! -f "${template_file}" ]]; then
-        echo "Template not found: ${template_id}"
-        return 1
-    fi
-    
-    cat "${template_file}"
+ local template_id="${1:?Template ID required}"
+ local templates_dir="${ALERT_TEMPLATES_DIR}"
+ local template_file="${templates_dir}/${template_id}.template"
+
+ if [[ ! -f "${template_file}" ]]; then
+  echo "Template not found: ${template_id}"
+  return 1
+ fi
+
+ cat "${template_file}"
 }
 
 ##
@@ -309,147 +309,146 @@ show_template() {
 #   $2 - Template content (file path or - for stdin)
 ##
 add_template() {
-    local template_id="${1:?Template ID required}"
-    local content="${2:?Content required}"
-    local templates_dir="${ALERT_TEMPLATES_DIR}"
-    
-    mkdir -p "${templates_dir}"
-    local template_file="${templates_dir}/${template_id}.template"
-    
-    if [[ "${content}" == "-" ]]; then
-        cat > "${template_file}"
-    elif [[ -f "${content}" ]]; then
-        cp "${content}" "${template_file}"
-    else
-        echo "${content}" > "${template_file}"
-    fi
-    
-    log_info "Template ${template_id} added/updated"
-    echo "Template ${template_id} saved"
+ local template_id="${1:?Template ID required}"
+ local content="${2:?Content required}"
+ local templates_dir="${ALERT_TEMPLATES_DIR}"
+
+ mkdir -p "${templates_dir}"
+ local template_file="${templates_dir}/${template_id}.template"
+
+ if [[ "${content}" == "-" ]]; then
+  cat > "${template_file}"
+ elif [[ -f "${content}" ]]; then
+  cp "${content}" "${template_file}"
+ else
+  echo "${content}" > "${template_file}"
+ fi
+
+ log_info "Template ${template_id} added/updated"
+ echo "Template ${template_id} saved"
 }
 
 ##
 # Main function
 ##
 main() {
-    local action="${1:-}"
-    
-    # Load configuration
-    load_config "${CONFIG_FILE:-}"
-    
-    # Strip leading -- from action if present
-    if [[ "${action}" =~ ^-- ]]; then
-        action="${action#--}"
-    fi
-    
-    case "${action}" in
-        list|--list)
-            list_rules "${2:-}"
-            ;;
-        add|--add)
-            # Check if we have enough arguments (action + component + level + type + route = 5 args)
-            # $# includes the script name, so we need at least 5 total arguments
-            if [[ $# -lt 5 ]] || [[ -z "${2:-}" ]] || [[ -z "${3:-}" ]] || [[ -z "${4:-}" ]] || [[ -z "${5:-}" ]]; then
-                echo "Error: Component, level, type, and route required"
-                usage
-                exit 1
-            fi
-            add_rule "${2}" "${3}" "${4}" "${5}"
-            ;;
-        remove|--remove)
-            if [[ -z "${2:-}" ]]; then
-                echo "Error: Rule ID or pattern required"
-                usage
-                exit 1
-            fi
-            # If multiple arguments provided, construct pattern component:level:type
-            if [[ -n "${3:-}" ]] && [[ -n "${4:-}" ]]; then
-                local pattern="${2}:${3}:${4}"
-                remove_rule "${pattern}"
-            else
-                remove_rule "${2}"
-            fi
-            ;;
-        route|--route)
-            if [[ $# -lt 4 ]]; then
-                echo "Error: Component, level, and type required"
-                usage
-                exit 1
-            fi
-            get_routing "${2}" "${3}" "${4}"
-            ;;
-        template|--template|templates|--templates)
-            local template_action="${2:-}"
-            # If no action specified, default to list
-            if [[ -z "${template_action}" ]]; then
-                list_templates
-                return 0
-            fi
-            # Strip leading -- from template_action if present
-            if [[ "${template_action}" =~ ^-- ]]; then
-                template_action="${template_action#--}"
-            fi
-            case "${template_action}" in
-                list)
-                    list_templates
-                    ;;
-                show)
-                    if [[ -z "${3:-}" ]]; then
-                        echo "Error: Template ID required"
-                        usage
-                        exit 1
-                    fi
-                    show_template "${3}"
-                    ;;
-                add|--add)
-                    if [[ $# -lt 4 ]]; then
-                        echo "Error: Template ID and content required"
-                        usage
-                        exit 1
-                    fi
-                    add_template "${3}" "${4}"
-                    ;;
-                *)
-                    echo "Error: Unknown template action: ${template_action}"
-                    usage
-                    exit 1
-                    ;;
-            esac
-            ;;
-        add-template|--add-template)
-            if [[ $# -lt 3 ]]; then
-                echo "Error: Template ID and content required"
-                usage
-                exit 1
-            fi
-            add_template "${2}" "${3}"
-            ;;
-        show-template|--show-template)
-            if [[ -z "${2:-}" ]]; then
-                echo "Error: Template ID required"
-                usage
-                exit 1
-            fi
-            show_template "${2}"
-            ;;
-        -h|--help|help)
-            usage
-            ;;
-        "")
-            echo "Error: Action required"
-            usage
-            exit 1
-            ;;
-        *)
-            echo "Error: Unknown action: ${action}"
-            usage
-            exit 1
-            ;;
-    esac
+ local action="${1:-}"
+
+ # Load configuration
+ load_config "${CONFIG_FILE:-}"
+
+ # Strip leading -- from action if present
+ if [[ "${action}" =~ ^-- ]]; then
+  action="${action#--}"
+ fi
+
+ case "${action}" in
+ list | --list)
+  list_rules "${2:-}"
+  ;;
+ add | --add)
+  # Check if we have enough arguments (action + component + level + type + route = 5 args)
+  # $# includes the script name, so we need at least 5 total arguments
+  if [[ $# -lt 5 ]] || [[ -z "${2:-}" ]] || [[ -z "${3:-}" ]] || [[ -z "${4:-}" ]] || [[ -z "${5:-}" ]]; then
+   echo "Error: Component, level, type, and route required"
+   usage
+   exit 1
+  fi
+  add_rule "${2}" "${3}" "${4}" "${5}"
+  ;;
+ remove | --remove)
+  if [[ -z "${2:-}" ]]; then
+   echo "Error: Rule ID or pattern required"
+   usage
+   exit 1
+  fi
+  # If multiple arguments provided, construct pattern component:level:type
+  if [[ -n "${3:-}" ]] && [[ -n "${4:-}" ]]; then
+   local pattern="${2}:${3}:${4}"
+   remove_rule "${pattern}"
+  else
+   remove_rule "${2}"
+  fi
+  ;;
+ route | --route)
+  if [[ $# -lt 4 ]]; then
+   echo "Error: Component, level, and type required"
+   usage
+   exit 1
+  fi
+  get_routing "${2}" "${3}" "${4}"
+  ;;
+ template | --template | templates | --templates)
+  local template_action="${2:-}"
+  # If no action specified, default to list
+  if [[ -z "${template_action}" ]]; then
+   list_templates
+   return 0
+  fi
+  # Strip leading -- from template_action if present
+  if [[ "${template_action}" =~ ^-- ]]; then
+   template_action="${template_action#--}"
+  fi
+  case "${template_action}" in
+  list)
+   list_templates
+   ;;
+  show)
+   if [[ -z "${3:-}" ]]; then
+    echo "Error: Template ID required"
+    usage
+    exit 1
+   fi
+   show_template "${3}"
+   ;;
+  add | --add)
+   if [[ $# -lt 4 ]]; then
+    echo "Error: Template ID and content required"
+    usage
+    exit 1
+   fi
+   add_template "${3}" "${4}"
+   ;;
+  *)
+   echo "Error: Unknown template action: ${template_action}"
+   usage
+   exit 1
+   ;;
+  esac
+  ;;
+ add-template | --add-template)
+  if [[ $# -lt 3 ]]; then
+   echo "Error: Template ID and content required"
+   usage
+   exit 1
+  fi
+  add_template "${2}" "${3}"
+  ;;
+ show-template | --show-template)
+  if [[ -z "${2:-}" ]]; then
+   echo "Error: Template ID required"
+   usage
+   exit 1
+  fi
+  show_template "${2}"
+  ;;
+ -h | --help | help)
+  usage
+  ;;
+ "")
+  echo "Error: Action required"
+  usage
+  exit 1
+  ;;
+ *)
+  echo "Error: Unknown action: ${action}"
+  usage
+  exit 1
+  ;;
+ esac
 }
 
 # Run main if script is executed directly
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
-    main "$@"
+ main "$@"
 fi
-
