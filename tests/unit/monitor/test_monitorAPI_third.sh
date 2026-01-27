@@ -56,14 +56,44 @@ teardown() {
 # Test: check_api_availability handles slow response
 ##
 @test "check_api_availability handles slow response" {
-    # Mock curl to return slow response
+    # Create mock curl executable so command -v finds it
+    local mock_curl_dir="${BATS_TEST_DIRNAME}/../../tmp/bin"
+    mkdir -p "${mock_curl_dir}"
+    local mock_curl="${mock_curl_dir}/curl"
+    cat > "${mock_curl}" << 'EOF'
+#!/bin/bash
+# Return HTTP 200 with slow response time
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -w)
+            shift
+            if [[ "$1" == "%{http_code}" ]]; then
+                sleep 0.002
+                echo "200"
+            elif [[ "$1" == "%{time_total}" ]]; then
+                echo "0.002"
+            fi
+            ;;
+        -s|-o|--max-time|--connect-timeout)
+            shift
+            ;;
+        *)
+            ;;
+    esac
+    shift
+done
+exit 0
+EOF
+    chmod +x "${mock_curl}"
+    # shellcheck disable=SC2030,SC2031
+    export PATH="${mock_curl_dir}:${PATH}"
+    
+    # Mock log functions
     # shellcheck disable=SC2317
-    function curl() {
-        sleep 0.002
-        echo "OK"
+    log_info() {
         return 0
     }
-    export -f curl
+    export -f log_info
     
     # shellcheck disable=SC2317
     record_metric() {
@@ -79,6 +109,9 @@ teardown() {
     
     run check_api_availability
     assert_success
+    
+    # Cleanup
+    rm -rf "${mock_curl_dir}"
 }
 
 ##

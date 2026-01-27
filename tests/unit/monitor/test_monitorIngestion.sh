@@ -209,12 +209,28 @@ create_test_log() {
 }
 
 @test "check_error_rate calculates error rate correctly" {
+    # Ensure log directory exists
+    mkdir -p "${TEST_INGESTION_DIR}/logs"
+    
     # Create log file with errors
     create_test_log "test.log" "INFO: Test message
 ERROR: Test error
 INFO: Another message
 ERROR: Another error
 WARNING: Test warning"
+    
+    # Mock log functions
+    # shellcheck disable=SC2317
+    log_info() {
+        return 0
+    }
+    export -f log_info
+    
+    # shellcheck disable=SC2317
+    log_warning() {
+        return 0
+    }
+    export -f log_warning
     
     # shellcheck disable=SC2317
     record_metric() {

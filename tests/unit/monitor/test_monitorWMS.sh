@@ -130,19 +130,51 @@ create_test_log() {
 }
 
 @test "check_wms_service_availability succeeds when service is available" {
-    # Mock curl to return success
+    export WMS_ENABLED="true"
+    export WMS_BASE_URL="http://localhost:8080/wms"
+    export WMS_CHECK_TIMEOUT="5"
+    
+    # Create mock curl executable so command -v finds it
+    local mock_curl_dir="${BATS_TEST_DIRNAME}/../../tmp/bin"
+    mkdir -p "${mock_curl_dir}"
+    local mock_curl="${mock_curl_dir}/curl"
+    cat > "${mock_curl}" << 'EOF'
+#!/bin/bash
+# Return HTTP 200 when called with -w "%{http_code}"
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -w)
+            shift
+            if [[ "$1" == "%{http_code}" ]]; then
+                echo "200"
+            fi
+            ;;
+        -s|-o|--max-time|--connect-timeout)
+            shift
+            ;;
+        *)
+            ;;
+    esac
+    shift
+done
+exit 0
+EOF
+    chmod +x "${mock_curl}"
+    # shellcheck disable=SC2030,SC2031
+    export PATH="${mock_curl_dir}:${PATH}"
+    
+    # Mock log functions
     # shellcheck disable=SC2317
-    curl() {
-        if [[ "${1}" == "-s" ]] && [[ "${2}" == "-o" ]]; then
-            echo "200" > "${4}"
-            return 0
-        elif [[ "${1}" == "-w" ]]; then
-            echo "200"
-            return 0
-        fi
+    log_info() {
         return 0
     }
-    export -f curl
+    export -f log_info
+    
+    # shellcheck disable=SC2317
+    log_warning() {
+        return 0
+    }
+    export -f log_warning
     
     # shellcheck disable=SC2317
     record_metric() {
@@ -161,6 +193,9 @@ create_test_log() {
     
     # Should succeed
     assert_success
+    
+    # Cleanup
+    rm -rf "${mock_curl_dir}"
 }
 
 @test "check_wms_service_availability alerts when service is unavailable" {
@@ -320,18 +355,37 @@ create_test_log() {
 
 @test "check_response_time records metric when response time is acceptable" {
     export WMS_ENABLED="true"
+    export WMS_BASE_URL="http://localhost:8080/wms"
+    export WMS_CHECK_TIMEOUT="5"
     
-    # Mock curl to return fast response
-    # shellcheck disable=SC2317
-    curl() {
-        if [[ "${1}" == "-w" ]]; then
-            sleep 0.001  # Simulate 1ms response
-            echo "200"
-            return 0
-        fi
-        return 0
-    }
-    export -f curl
+    # Create mock curl executable so command -v finds it
+    local mock_curl_dir="${BATS_TEST_DIRNAME}/../../tmp/bin"
+    mkdir -p "${mock_curl_dir}"
+    local mock_curl="${mock_curl_dir}/curl"
+    cat > "${mock_curl}" << 'EOF'
+#!/bin/bash
+# Return HTTP 200 with fast response time
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -w)
+            shift
+            if [[ "$1" == "%{http_code}" ]]; then
+                echo "200"
+            fi
+            ;;
+        -s|-o|--max-time|--connect-timeout)
+            shift
+            ;;
+        *)
+            ;;
+    esac
+    shift
+done
+exit 0
+EOF
+    chmod +x "${mock_curl}"
+    # shellcheck disable=SC2030,SC2031
+    export PATH="${mock_curl_dir}:${PATH}"
     
     # Mock log functions
     # shellcheck disable=SC2317
@@ -365,6 +419,9 @@ create_test_log() {
     # Should succeed and record metric
     assert_success
     assert_file_exists "${metric_file}"
+    
+    # Cleanup
+    rm -rf "${mock_curl_dir}"
 }
 
 @test "check_response_time alerts when response time exceeds threshold" {
@@ -759,6 +816,13 @@ INFO: Request processed"
     }
     export -f log_info
     
+    # Mock log functions
+    # shellcheck disable=SC2317
+    log_info() {
+        return 0
+    }
+    export -f log_info
+    
     # shellcheck disable=SC2317
     log_warning() {
         return 0
@@ -778,10 +842,10 @@ INFO: Request processed"
     }
     export -f send_alert
     
-    # Run check
+    # Run check (may return 1 if hit rate is low, which is expected)
     run check_cache_hit_rate || true
     
-    # Alert should have been sent
+    # Alert should have been sent (hit rate is 60%, threshold is 80%)
     assert_file_exists "${alert_file}"
 }
 
@@ -808,12 +872,36 @@ INFO: Request processed"
 }
 
 @test "check_response_time handles curl unavailability gracefully" {
-    # Unset curl command
+    export WMS_ENABLED="true"
+    
+    # Remove curl from PATH temporarily to simulate it not being available
+    local original_path="${PATH}"
+    # Create a temporary PATH without curl
+    local temp_path=""
+    IFS=':' read -ra path_parts <<< "${PATH}"
+    for part in "${path_parts[@]}"; do
+        if [[ "${part}" != *"tmp/bin"* ]] && [[ "${part}" != *"/usr/bin"* ]] && [[ "${part}" != *"/bin"* ]]; then
+            if [[ -z "${temp_path}" ]]; then
+                temp_path="${part}"
+            else
+                temp_path="${temp_path}:${part}"
+            fi
+        fi
+    done
+    export PATH="${temp_path}"
+    
+    # Mock log functions
     # shellcheck disable=SC2317
-    curl() {
-        return 127  # Command not found
+    log_info() {
+        return 0
     }
-    export -f curl
+    export -f log_info
+    
+    # shellcheck disable=SC2317
+    log_warning() {
+        return 0
+    }
+    export -f log_warning
     
     # shellcheck disable=SC2317
     record_metric() {
@@ -829,6 +917,9 @@ INFO: Request processed"
     
     # Run check
     run check_response_time
+    
+    # Restore PATH
+    export PATH="${original_path}"
     
     # Should succeed (skip gracefully)
     assert_success
@@ -873,8 +964,8 @@ INFO: Request processed"
     }
     export -f check_cache_hit_rate
     
-    # Run main with all checks
-    run main "all"
+    # Run main with no arguments (runs all checks)
+    run main
     
     # Should succeed
     assert_success
@@ -1068,17 +1159,38 @@ INFO: Request processed"
 }
 
 @test "check_cache_hit_rate handles low cache hit rate" {
+    export WMS_ENABLED="true"
     export WMS_CACHE_HIT_RATE_THRESHOLD="80"
     
-    # Mock psql to return low cache hit rate
+    # Mock execute_sql_query to return low cache hit rate
     # shellcheck disable=SC2317
-    psql() {
-        if [[ "${*}" == *"SELECT"* ]] && [[ "${*}" == *"cache_hit"* ]]; then
-            echo "70|100"  # 70% cache hit rate (below 80% threshold)
+    execute_sql_query() {
+        if [[ "${1}" == *"cache_hits"* ]] || [[ "${1}" == *"cache_misses"* ]]; then
+            echo "700|300"  # 700 hits, 300 misses = 70% hit rate (below 80% threshold)
         fi
         return 0
     }
-    export -f psql
+    export -f execute_sql_query
+    
+    # Mock check_database_connection
+    # shellcheck disable=SC2317
+    check_database_connection() {
+        return 0
+    }
+    export -f check_database_connection
+    
+    # Mock log functions
+    # shellcheck disable=SC2317
+    log_info() {
+        return 0
+    }
+    export -f log_info
+    
+    # shellcheck disable=SC2317
+    log_warning() {
+        return 0
+    }
+    export -f log_warning
     
     # Mock send_alert
     # shellcheck disable=SC2317
@@ -1097,7 +1209,7 @@ INFO: Request processed"
     # Run check_cache_hit_rate
     run check_cache_hit_rate
     
-    # Should detect low cache hit rate
+    # Should detect low cache hit rate and return failure
     assert_failure
 }
 
