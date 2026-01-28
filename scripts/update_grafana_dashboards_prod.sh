@@ -1,15 +1,15 @@
 #!/bin/bash
 #
-# Script para Actualizar Todos los Dashboards de Grafana en Producción
-# Usa los permisos sudo configurados para angoca
-# Este script reemplaza /usr/local/bin/update_grafana_dashboard.sh
+# Script to Update All Grafana Dashboards in Production
+# Uses sudo permissions configured for angoca
+# This script replaces /usr/local/bin/update_grafana_dashboard.sh
 #
 # Version: 2.0.0
 # Date: 2026-01-10
 #
-# Uso:
-#   ./update_grafana_dashboards_prod.sh [ruta_a_dashboards]
-#   O desde el servidor:
+# Usage:
+#   ./update_grafana_dashboards_prod.sh [dashboards_path]
+#   Or from the server:
 #   /usr/local/bin/update_grafana_dashboards_prod.sh
 #
 
@@ -53,7 +53,7 @@ main() {
     local dashboards_source_dir="${1:-}"
 
     print_message "${GREEN}" "=========================================="
-    print_message "${GREEN}" "Actualizar Dashboards de Grafana"
+    print_message "${GREEN}" "Update Grafana Dashboards"
     print_message "${GREEN}" "=========================================="
     echo
 
@@ -70,35 +70,35 @@ main() {
             # Use /tmp if JSON files are there (for remote deployment)
             dashboards_source_dir="/tmp"
         else
-            print_message "${RED}" "Error: No se encontró el directorio de dashboards"
-            print_message "${YELLOW}" "Usa: $0 <ruta_a_dashboards/grafana>"
-            print_message "${YELLOW}" "O copia los dashboards a /tmp primero"
+            print_message "${RED}" "Error: Dashboards directory not found"
+            print_message "${YELLOW}" "Use: $0 <dashboards_path/grafana>"
+            print_message "${YELLOW}" "Or copy dashboards to /tmp first"
             exit 1
         fi
     fi
 
     if [[ ! -d "${dashboards_source_dir}" ]]; then
-        print_message "${RED}" "Error: Directorio no encontrado: ${dashboards_source_dir}"
+        print_message "${RED}" "Error: Directory not found: ${dashboards_source_dir}"
         exit 1
     fi
 
-    print_message "${BLUE}" "Directorio fuente: ${dashboards_source_dir}"
+    print_message "${BLUE}" "Source directory: ${dashboards_source_dir}"
 
     # Count dashboards
     local dashboard_count
     dashboard_count=$(find "${dashboards_source_dir}" -maxdepth 1 -name "*.json" -type f 2>/dev/null | wc -l)
 
     if [[ "${dashboard_count}" -eq 0 ]]; then
-        print_message "${RED}" "Error: No se encontraron dashboards JSON en ${dashboards_source_dir}"
+        print_message "${RED}" "Error: No JSON dashboards found in ${dashboards_source_dir}"
         exit 1
     fi
 
-    print_message "${BLUE}" "Encontrados ${dashboard_count} dashboards"
+    print_message "${BLUE}" "Found ${dashboard_count} dashboards"
     echo
 
     # Create temporary directory
     mkdir -p "${TEMP_DIR}"
-    print_message "${CYAN}" "Preparando dashboards..."
+    print_message "${CYAN}" "Preparing dashboards..."
 
     # Copy all dashboards to temp directory (excluding test files)
     local copied=0
@@ -109,19 +109,19 @@ main() {
         dashboard_name=$(basename "${dashboard_file}")
         if cp "${dashboard_file}" "${TEMP_DIR}/${dashboard_name}" 2>/dev/null; then
             ((copied++))
-            print_message "${CYAN}" "  ✓ Preparado: ${dashboard_name}"
+            print_message "${CYAN}" "  ✓ Prepared: ${dashboard_name}"
         fi
     done
 
     if [[ ${copied} -eq 0 ]]; then
-        print_message "${RED}" "Error: No se pudieron copiar dashboards a ${TEMP_DIR}"
+        print_message "${RED}" "Error: Could not copy dashboards to ${TEMP_DIR}"
         exit 1
     fi
 
-    print_message "${CYAN}" "Total preparados: ${copied}"
+    print_message "${CYAN}" "Total prepared: ${copied}"
 
     echo
-    print_message "${BLUE}" "Desplegando dashboards a Grafana..."
+    print_message "${BLUE}" "Deploying dashboards to Grafana..."
 
     # Copy each dashboard using sudo (with NOPASSWD permissions)
     local deployed=0
@@ -140,50 +140,50 @@ main() {
         if sudo cp "${dashboard_file}" "${PROVISIONING_DIR}/${dashboard_name}" 2>/dev/null; then
             sudo chown grafana:grafana "${PROVISIONING_DIR}/${dashboard_name}" 2>/dev/null || true
             sudo chmod 644 "${PROVISIONING_DIR}/${dashboard_name}" 2>/dev/null || true
-            print_message "${GREEN}" "  ✓ Desplegado: ${dashboard_name}"
+            print_message "${GREEN}" "  ✓ Deployed: ${dashboard_name}"
             ((deployed++))
         else
-            print_message "${RED}" "  ✗ Error al desplegar: ${dashboard_name}"
+            print_message "${RED}" "  ✗ Error deploying: ${dashboard_name}"
             ((failed++))
         fi
     done
 
     echo
-    print_message "${BLUE}" "Reiniciando Grafana..."
+    print_message "${BLUE}" "Restarting Grafana..."
 
     # Restart Grafana
     if sudo systemctl restart grafana-server; then
-        print_message "${GREEN}" "✓ Grafana reiniciado exitosamente"
+        print_message "${GREEN}" "✓ Grafana restarted successfully"
 
         # Wait a moment for Grafana to start
         sleep 2
 
         # Check status
         if sudo systemctl is-active --quiet grafana-server; then
-            print_message "${GREEN}" "✓ Grafana está corriendo"
+            print_message "${GREEN}" "✓ Grafana is running"
         else
-            print_message "${YELLOW}" "⚠ Verificar estado de Grafana: sudo systemctl status grafana-server"
+            print_message "${YELLOW}" "⚠ Check Grafana status: sudo systemctl status grafana-server"
         fi
     else
-        print_message "${YELLOW}" "⚠ Error al reiniciar Grafana"
+        print_message "${YELLOW}" "⚠ Error restarting Grafana"
     fi
 
     echo
     print_message "${GREEN}" "=========================================="
-    print_message "${GREEN}" "Resumen"
+    print_message "${GREEN}" "Summary"
     print_message "${GREEN}" "=========================================="
-    print_message "${GREEN}" "✓ Dashboards desplegados: ${deployed}"
+    print_message "${GREEN}" "✓ Dashboards deployed: ${deployed}"
     if [[ ${failed} -gt 0 ]]; then
-        print_message "${RED}" "✗ Dashboards con errores: ${failed}"
+        print_message "${RED}" "✗ Dashboards with errors: ${failed}"
     fi
 
     # Count final dashboards
     local final_count
     final_count=$(find "${PROVISIONING_DIR}" -maxdepth 1 -name "*.json" -type f 2>/dev/null | wc -l)
-    print_message "${CYAN}" "Total de dashboards en Grafana: ${final_count}"
+    print_message "${CYAN}" "Total dashboards in Grafana: ${final_count}"
 
     echo
-    print_message "${CYAN}" "Accede a Grafana para ver los dashboards:"
+    print_message "${CYAN}" "Access Grafana to view dashboards:"
     print_message "${CYAN}" "  http://192.168.0.7:3003"
     echo
 }
