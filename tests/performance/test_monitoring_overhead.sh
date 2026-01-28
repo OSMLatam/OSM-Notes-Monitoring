@@ -16,7 +16,8 @@ export TEST_DB_NAME="${TEST_DB_NAME:-osm_notes_monitoring_test}"
 
 load "${BATS_TEST_DIRNAME}/../test_helper.bash"
 
-# Set LOG_DIR before loading monitorIngestion.sh
+# Set TEST_MODE and LOG_DIR before loading monitorIngestion.sh
+export TEST_MODE=true
 export LOG_DIR="${LOG_DIR:-${BATS_TEST_DIRNAME}/../tmp/logs}"
 mkdir -p "${LOG_DIR}"
 

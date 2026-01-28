@@ -185,6 +185,9 @@ skip_if_database_not_available() {
 @test "Stress test: concurrent alerts and metrics" {
     skip_if_database_not_available
     
+    # Disable alert deduplication for this test to ensure all alerts are recorded
+    export ALERT_DEDUPLICATION_ENABLED="false"
+    
     # Clean up any existing test data
     run_sql_query "DELETE FROM metrics WHERE component = 'ingestion' AND metric_name = 'stress_concurrent';" > /dev/null 2>&1 || true
     run_sql_query "DELETE FROM alerts WHERE component = 'ingestion' AND alert_type = 'stress_alert';" > /dev/null 2>&1 || true
@@ -221,7 +224,7 @@ skip_if_database_not_available() {
     alert_count=$(run_sql_query "SELECT COUNT(*) FROM alerts WHERE component = 'ingestion' AND alert_type = 'stress_alert';" | tr -d ' ' || echo "0")
     
     assert [ "${metric_count}" -eq 50 ]
-    assert [ "${alert_count}" -ge 15 ]  # Some may be deduplicated
+    assert [ "${alert_count}" -eq 20 ]  # All alerts should be recorded when deduplication is disabled
     assert [ "${duration_ms}" -lt 15000 ]
 }
 

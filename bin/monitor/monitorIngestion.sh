@@ -35,8 +35,10 @@ source "${PROJECT_ROOT}/bin/lib/parseStructuredLogs.sh"
 # Set default LOG_DIR if not set
 export LOG_DIR="${LOG_DIR:-${PROJECT_ROOT}/logs}"
 
-# Initialize logging
-init_logging "${LOG_DIR}/ingestion.log" "monitorIngestion"
+# Initialize logging only if not in test mode or if script is executed directly
+if [[ "${TEST_MODE:-false}" != "true" ]] || [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+ init_logging "${LOG_DIR}/ingestion.log" "monitorIngestion"
+fi
 
 # Component name
 # Component name (allow override in test mode)
