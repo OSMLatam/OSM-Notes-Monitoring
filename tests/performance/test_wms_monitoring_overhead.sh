@@ -16,7 +16,8 @@ export TEST_DB_NAME="${TEST_DB_NAME:-osm_notes_monitoring_test}"
 
 load "${BATS_TEST_DIRNAME}/../test_helper.bash"
 
-# Set LOG_DIR before loading monitorWMS.sh
+# Set TEST_MODE and LOG_DIR before loading monitorWMS.sh
+export TEST_MODE=true
 export LOG_DIR="${LOG_DIR:-${BATS_TEST_DIRNAME}/../tmp/logs}"
 mkdir -p "${LOG_DIR}"
 
@@ -49,13 +50,13 @@ setup() {
     # Set test environment
     export TEST_MODE=true
     export LOG_LEVEL="${LOG_LEVEL_WARN}"
-    
+
     # Set test database
     export DBNAME="${TEST_DB_NAME}"
     export DBHOST="${DBHOST:-localhost}"
     export DBPORT="${DBPORT:-5432}"
     export DBUSER="${DBUSER:-postgres}"
-    
+
     # Set test WMS configuration
     export WMS_ENABLED="true"
     export WMS_BASE_URL="http://localhost:8080"
@@ -66,12 +67,12 @@ setup() {
     export WMS_TILE_GENERATION_THRESHOLD="5000"
     export WMS_CACHE_HIT_RATE_THRESHOLD="80"
     export WMS_LOG_DIR="${TEST_LOG_DIR}"
-    
+
     # Disable email alerts for testing
     export SEND_ALERT_EMAIL="false"
     export SLACK_ENABLED="false"
     export ALERT_DEDUPLICATION_ENABLED="false"
-    
+
     # Mock curl for fast responses
     # shellcheck disable=SC2317
     curl() {
@@ -83,13 +84,13 @@ setup() {
         return 0
     }
     export -f curl
-    
+
     # Initialize logging
     TEST_LOG_DIR="${BATS_TEST_DIRNAME}/../tmp/logs"
     mkdir -p "${TEST_LOG_DIR}"
     export LOG_FILE="${TEST_LOG_DIR}/test_wms_monitoring_overhead.log"
     init_logging "${LOG_FILE}" "test_wms_monitoring_overhead"
-    
+
     # Initialize alerting
     init_alerting
 }
@@ -134,184 +135,184 @@ calculate_average() {
 
 @test "Performance: check_wms_service_availability overhead" {
     skip_if_database_not_available
-    
+
     local times=()
-    
+
     # Measure execution time multiple times
     for _ in $(seq 1 "${PERFORMANCE_ITERATIONS}"); do
         local duration
         duration=$(measure_time check_wms_service_availability)
         times+=("${duration}")
     done
-    
+
     # Calculate average time
     local avg_time
     avg_time=$(printf '%s\n' "${times[@]}" | calculate_average)
-    
+
     # Verify performance is within threshold
     assert [ "${avg_time}" -lt "${THRESHOLD_CHECK_SERVICE_AVAILABILITY}" ] \
         "Average execution time (${avg_time}ms) exceeds threshold (${THRESHOLD_CHECK_SERVICE_AVAILABILITY}ms)"
-    
+
     # Log results
     echo "# Average time: ${avg_time}ms" >&3
 }
 
 @test "Performance: check_http_health overhead" {
     skip_if_database_not_available
-    
+
     local times=()
-    
+
     # Measure execution time multiple times
     for _ in $(seq 1 "${PERFORMANCE_ITERATIONS}"); do
         local duration
         duration=$(measure_time check_http_health)
         times+=("${duration}")
     done
-    
+
     # Calculate average time
     local avg_time
     avg_time=$(printf '%s\n' "${times[@]}" | calculate_average)
-    
+
     # Verify performance is within threshold
     assert [ "${avg_time}" -lt "${THRESHOLD_CHECK_HEALTH}" ] \
         "Average execution time (${avg_time}ms) exceeds threshold (${THRESHOLD_CHECK_HEALTH}ms)"
-    
+
     # Log results
     echo "# Average time: ${avg_time}ms" >&3
 }
 
 @test "Performance: check_response_time overhead" {
     skip_if_database_not_available
-    
+
     local times=()
-    
+
     # Measure execution time multiple times
     for _ in $(seq 1 "${PERFORMANCE_ITERATIONS}"); do
         local duration
         duration=$(measure_time check_response_time)
         times+=("${duration}")
     done
-    
+
     # Calculate average time
     local avg_time
     avg_time=$(printf '%s\n' "${times[@]}" | calculate_average)
-    
+
     # Verify performance is within threshold
     assert [ "${avg_time}" -lt "${THRESHOLD_CHECK_RESPONSE_TIME}" ] \
         "Average execution time (${avg_time}ms) exceeds threshold (${THRESHOLD_CHECK_RESPONSE_TIME}ms)"
-    
+
     # Log results
     echo "# Average time: ${avg_time}ms" >&3
 }
 
 @test "Performance: check_error_rate overhead" {
     skip_if_database_not_available
-    
+
     local times=()
-    
+
     # Measure execution time multiple times
     for _ in $(seq 1 "${PERFORMANCE_ITERATIONS}"); do
         local duration
         duration=$(measure_time check_error_rate)
         times+=("${duration}")
     done
-    
+
     # Calculate average time
     local avg_time
     avg_time=$(printf '%s\n' "${times[@]}" | calculate_average)
-    
+
     # Verify performance is within threshold
     assert [ "${avg_time}" -lt "${THRESHOLD_CHECK_ERROR_RATE}" ] \
         "Average execution time (${avg_time}ms) exceeds threshold (${THRESHOLD_CHECK_ERROR_RATE}ms)"
-    
+
     # Log results
     echo "# Average time: ${avg_time}ms" >&3
 }
 
 @test "Performance: check_tile_generation_performance overhead" {
     skip_if_database_not_available
-    
+
     local times=()
-    
+
     # Measure execution time multiple times
     for _ in $(seq 1 "${PERFORMANCE_ITERATIONS}"); do
         local duration
         duration=$(measure_time check_tile_generation_performance)
         times+=("${duration}")
     done
-    
+
     # Calculate average time
     local avg_time
     avg_time=$(printf '%s\n' "${times[@]}" | calculate_average)
-    
+
     # Verify performance is within threshold
     assert [ "${avg_time}" -lt "${THRESHOLD_CHECK_TILE_PERFORMANCE}" ] \
         "Average execution time (${avg_time}ms) exceeds threshold (${THRESHOLD_CHECK_TILE_PERFORMANCE}ms)"
-    
+
     # Log results
     echo "# Average time: ${avg_time}ms" >&3
 }
 
 @test "Performance: check_cache_hit_rate overhead" {
     skip_if_database_not_available
-    
+
     local times=()
-    
+
     # Measure execution time multiple times
     for _ in $(seq 1 "${PERFORMANCE_ITERATIONS}"); do
         local duration
         duration=$(measure_time check_cache_hit_rate)
         times+=("${duration}")
     done
-    
+
     # Calculate average time
     local avg_time
     avg_time=$(printf '%s\n' "${times[@]}" | calculate_average)
-    
+
     # Verify performance is within threshold
     assert [ "${avg_time}" -lt "${THRESHOLD_CHECK_CACHE}" ] \
         "Average execution time (${avg_time}ms) exceeds threshold (${THRESHOLD_CHECK_CACHE}ms)"
-    
+
     # Log results
     echo "# Average time: ${avg_time}ms" >&3
 }
 
 @test "Performance: complete WMS monitoring cycle overhead" {
     skip_if_database_not_available
-    
+
     local times=()
-    
+
     # Measure execution time of complete monitoring cycle
     for _ in $(seq 1 "${PERFORMANCE_ITERATIONS}"); do
         local start_time
         start_time=$(date +%s%N)
-        
+
         check_wms_service_availability
         check_http_health
         check_response_time
         check_error_rate
-        
+
         local end_time
         end_time=$(date +%s%N)
         local duration_ms
         duration_ms=$(( (end_time - start_time) / 1000000 ))
         times+=("${duration_ms}")
     done
-    
+
     # Calculate average time
     local avg_time
     avg_time=$(printf '%s\n' "${times[@]}" | calculate_average)
-    
+
     # Calculate total threshold (sum of individual thresholds)
     local total_threshold
     total_threshold=$((THRESHOLD_CHECK_SERVICE_AVAILABILITY + THRESHOLD_CHECK_HEALTH + THRESHOLD_CHECK_RESPONSE_TIME + THRESHOLD_CHECK_ERROR_RATE))
-    
+
     # Verify performance is within threshold (allow some overhead for coordination)
     local adjusted_threshold
     adjusted_threshold=$((total_threshold + 200))
     assert [ "${avg_time}" -lt "${adjusted_threshold}" ] \
         "Average execution time (${avg_time}ms) exceeds threshold (${adjusted_threshold}ms)"
-    
+
     # Log results
     echo "# Average time: ${avg_time}ms" >&3
     echo "# Threshold: ${adjusted_threshold}ms" >&3
@@ -319,10 +320,10 @@ calculate_average() {
 
 @test "Performance: concurrent WMS checks overhead" {
     skip_if_database_not_available
-    
+
     local start_time
     start_time=$(date +%s%N)
-    
+
     # Run WMS checks concurrently
     check_wms_service_availability &
     local pid1=$!
@@ -332,23 +333,23 @@ calculate_average() {
     local pid3=$!
     check_error_rate &
     local pid4=$!
-    
+
     # Wait for all to complete
     wait "${pid1}" "${pid2}" "${pid3}" "${pid4}"
-    
+
     local end_time
     end_time=$(date +%s%N)
     local duration_ms
     duration_ms=$(( (end_time - start_time) / 1000000 ))
-    
+
     # Calculate sequential threshold
     local sequential_threshold
     sequential_threshold=$((THRESHOLD_CHECK_SERVICE_AVAILABILITY + THRESHOLD_CHECK_HEALTH + THRESHOLD_CHECK_RESPONSE_TIME + THRESHOLD_CHECK_ERROR_RATE))
-    
+
     # Log results
     echo "# Concurrent execution time: ${duration_ms}ms" >&3
     echo "# Sequential threshold: ${sequential_threshold}ms" >&3
-    
+
     # Note: We don't assert here as concurrent execution may be slower due to DB contention
     # This test is mainly for measurement purposes
 }

@@ -63,11 +63,11 @@ setup() {
     # Initialize security functions
     init_security
     
-    # Clean test database
-    clean_test_database
-    
-    # Ensure security_events table exists
+    # Ensure security_events table exists before cleaning
     ensure_security_tables
+    
+    # Clean test database
+    clean_test_database || true
 }
 
 teardown() {
@@ -154,11 +154,12 @@ record_request() {
         sleep "${sleep_time}"  # ~150 requests per second
     done
     
-    # Check for DDoS attack
-    run check_attack_detection "${test_ip}" "60" "100"
+    # Check for DDoS attack using detect_ddos_attack function
+    run detect_ddos_attack "${test_ip}" "60" "100"
     
     # Should detect attack (may succeed or fail depending on timing)
     # The important thing is that it processes the high load
+    # detect_ddos_attack returns 0 if attack detected, 1 if normal
     assert [ "$status" -ge 0 ]
     
     # Verify events were recorded
@@ -212,7 +213,7 @@ record_request() {
     for i in $(seq 1 "${iterations}"); do
         record_request "${test_ip}" "/api/test"
         if [[ $((i % 100)) -eq 0 ]]; then
-            check_attack_detection "${test_ip}" "60" "100" >/dev/null 2>&1 || true
+            detect_ddos_attack "${test_ip}" "60" "100" >/dev/null 2>&1 || true
         fi
     done
     
@@ -238,7 +239,7 @@ record_request() {
     done
     
     # Trigger attack detection
-    check_attack_detection "${test_ip}" "60" "100" >/dev/null 2>&1 || true
+    detect_ddos_attack "${test_ip}" "60" "100" >/dev/null 2>&1 || true
     
     # Auto-block should be triggered
     # Verify IP is blocked (check via ip_management table)
@@ -327,7 +328,7 @@ count_security_events_for_ip() {
     for i in $(seq 1 "${iterations}"); do
         record_request "${test_ip}" "/api/test"
         if [[ $((i % 50)) -eq 0 ]]; then
-            check_attack_detection "${test_ip}" "60" "100" >/dev/null 2>&1 || true
+            detect_ddos_attack "${test_ip}" "60" "100" >/dev/null 2>&1 || true
         fi
     done
     
@@ -365,7 +366,7 @@ count_security_events_for_ip() {
     local start_time
     start_time=$(date +%s%N)
     
-    check_attack_detection "${test_ip}" "60" "100" >/dev/null 2>&1 || true
+    detect_ddos_attack "${test_ip}" "60" "100" >/dev/null 2>&1 || true
     
     local end_time
     end_time=$(date +%s%N)
