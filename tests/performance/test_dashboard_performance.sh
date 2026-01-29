@@ -163,7 +163,9 @@ teardown() {
     local output_file="${TEST_DASHBOARD_DIR}/large_metrics.json"
 
     # Set TEST_MODE and LOG_DIR to avoid permission errors
+    # shellcheck disable=SC2030,SC2031
     export TEST_MODE=true
+    # shellcheck disable=SC2030,SC2031
     export LOG_DIR="${TEST_DASHBOARD_DIR}/logs"
     mkdir -p "${LOG_DIR}"
 
@@ -190,7 +192,9 @@ teardown() {
         local output_file="${TEST_DASHBOARD_DIR}/metrics.json"
 
         # Set TEST_MODE and LOG_DIR to avoid permission errors
+        # shellcheck disable=SC2030,SC2031
         export TEST_MODE=true
+        # shellcheck disable=SC2030,SC2031
         export LOG_DIR="${TEST_DASHBOARD_DIR}/logs"
         mkdir -p "${LOG_DIR}"
 
