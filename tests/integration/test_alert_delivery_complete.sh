@@ -107,26 +107,26 @@ EOF
 ##
 setup() {
     print_message "${BLUE}" "Setting up test environment..."
-    
+
     # Set test database
     export DBNAME="${TEST_DBNAME}"
     export DBHOST="${DBHOST:-localhost}"
     export DBPORT="${DBPORT:-5432}"
     export DBUSER="${DBUSER:-postgres}"
-    
+
     # Set test email
     export ADMIN_EMAIL="test@example.com"
     export CRITICAL_ALERT_RECIPIENTS="test@example.com"
     export WARNING_ALERT_RECIPIENTS="test@example.com"
     export INFO_ALERT_RECIPIENTS="test@example.com"
-    
+
     # Create mock commands
     create_mock_mutt
     create_mock_curl
-    
+
     # Add mock bin to PATH
     export PATH="${MOCK_BIN_DIR}:${PATH}"
-    
+
     # Initialize logging
     TEST_LOG_DIR="${SCRIPT_DIR}/../tmp/logs"
     mkdir -p "${TEST_LOG_DIR}"
@@ -134,13 +134,13 @@ setup() {
     export LOG_DIR="${TEST_LOG_DIR}"
     export LOG_LEVEL="${LOG_LEVEL_INFO:-1}"
     init_logging "${LOG_FILE}" "test_alert_delivery_complete"
-    
+
     # Initialize alerting
     init_alerting
-    
+
     # Clean up old test logs
     rm -f /tmp/mock_email.log /tmp/mock_slack.log
-    
+
     print_message "${GREEN}" "✓ Test environment ready"
 }
 
@@ -150,7 +150,7 @@ setup() {
 cleanup() {
     # Remove mock commands
     rm -rf "${MOCK_BIN_DIR}"
-    
+
     # Clean up test logs
     rm -f /tmp/mock_email.log /tmp/mock_slack.log
 }
@@ -160,15 +160,15 @@ cleanup() {
 ##
 test_email_alert_enabled() {
     print_message "${BLUE}" "\n=== Test: Email Alert Enabled ==="
-    
+
     export SEND_ALERT_EMAIL="true"
     export SLACK_ENABLED="false"
     export ALERT_DEDUPLICATION_ENABLED="false"
-    
+
     # Send alert
     if send_alert "TEST" "critical" "test_type" "Test email alert" 2>&1; then
         sleep 1
-        
+
         # Check if email was sent (mocked)
         if [[ -f /tmp/mock_email.log ]] && grep -q "MOCK_EMAIL_SENT" /tmp/mock_email.log; then
             print_message "${GREEN}" "  ✓ Email alert sent"
@@ -191,18 +191,18 @@ test_email_alert_enabled() {
 ##
 test_email_alert_disabled() {
     print_message "${BLUE}" "\n=== Test: Email Alert Disabled ==="
-    
+
     export SEND_ALERT_EMAIL="false"
     export SLACK_ENABLED="false"
     export ALERT_DEDUPLICATION_ENABLED="false"
-    
+
     # Clean up previous log
     rm -f /tmp/mock_email.log
-    
+
     # Send alert
     if send_alert "TEST" "critical" "test_type" "Test alert" 2>&1; then
         sleep 1
-        
+
         # Check that email was NOT sent
         if [[ ! -f /tmp/mock_email.log ]]; then
             print_message "${GREEN}" "  ✓ Email alert correctly skipped"
@@ -225,20 +225,20 @@ test_email_alert_disabled() {
 ##
 test_slack_alert_enabled() {
     print_message "${BLUE}" "\n=== Test: Slack Alert Enabled ==="
-    
+
     export SEND_ALERT_EMAIL="false"
     export SLACK_ENABLED="true"
     export SLACK_WEBHOOK_URL="https://hooks.slack.com/services/TEST/WEBHOOK/URL"
     export SLACK_CHANNEL="#test-channel"
     export ALERT_DEDUPLICATION_ENABLED="false"
-    
+
     # Clean up previous log
     rm -f /tmp/mock_slack.log
-    
+
     # Send alert
     if send_alert "TEST" "warning" "test_type" "Test Slack alert" 2>&1; then
         sleep 1
-        
+
         # Check if Slack was sent (mocked)
         if [[ -f /tmp/mock_slack.log ]] && grep -q "MOCK_SLACK_SENT" /tmp/mock_slack.log; then
             print_message "${GREEN}" "  ✓ Slack alert sent"
@@ -261,18 +261,18 @@ test_slack_alert_enabled() {
 ##
 test_slack_alert_disabled() {
     print_message "${BLUE}" "\n=== Test: Slack Alert Disabled ==="
-    
+
     export SEND_ALERT_EMAIL="false"
     export SLACK_ENABLED="false"
     export ALERT_DEDUPLICATION_ENABLED="false"
-    
+
     # Clean up previous log
     rm -f /tmp/mock_slack.log
-    
+
     # Send alert
     if send_alert "TEST" "warning" "test_type" "Test alert" 2>&1; then
         sleep 1
-        
+
         # Check that Slack was NOT sent
         if [[ ! -f /tmp/mock_slack.log ]]; then
             print_message "${GREEN}" "  ✓ Slack alert correctly skipped"
@@ -295,31 +295,31 @@ test_slack_alert_disabled() {
 ##
 test_multi_channel_delivery() {
     print_message "${BLUE}" "\n=== Test: Multi-Channel Delivery ==="
-    
+
     export SEND_ALERT_EMAIL="true"
     export SLACK_ENABLED="true"
     export SLACK_WEBHOOK_URL="https://hooks.slack.com/services/TEST/WEBHOOK/URL"
     export SLACK_CHANNEL="#test-channel"
     export ALERT_DEDUPLICATION_ENABLED="false"
-    
+
     # Clean up previous logs
     rm -f /tmp/mock_email.log /tmp/mock_slack.log
-    
+
     # Send alert
     if send_alert "TEST" "critical" "test_type" "Test multi-channel alert" 2>&1; then
         sleep 1
-        
+
         local email_sent=false
         local slack_sent=false
-        
+
         if [[ -f /tmp/mock_email.log ]] && grep -q "MOCK_EMAIL_SENT" /tmp/mock_email.log; then
             email_sent=true
         fi
-        
+
         if [[ -f /tmp/mock_slack.log ]] && grep -q "MOCK_SLACK_SENT" /tmp/mock_slack.log; then
             slack_sent=true
         fi
-        
+
         if [[ "${email_sent}" == "true" && "${slack_sent}" == "true" ]]; then
             print_message "${GREEN}" "  ✓ Both email and Slack alerts sent"
             TESTS_PASSED=$((TESTS_PASSED + 1))
@@ -341,11 +341,11 @@ test_multi_channel_delivery() {
 ##
 test_alert_level_routing() {
     print_message "${BLUE}" "\n=== Test: Alert Level Routing ==="
-    
+
     export SEND_ALERT_EMAIL="true"
     export SLACK_ENABLED="false"
     export ALERT_DEDUPLICATION_ENABLED="false"
-    
+
     # Test critical level
     export CRITICAL_ALERT_RECIPIENTS="critical@example.com"
     rm -f /tmp/mock_email.log /tmp/mock_email.log.body
@@ -358,7 +358,7 @@ test_alert_level_routing() {
         TESTS_FAILED=$((TESTS_FAILED + 1))
         return 1
     fi
-    
+
     # Test warning level
     export WARNING_ALERT_RECIPIENTS="warning@example.com"
     rm -f /tmp/mock_email.log /tmp/mock_email.log.body
@@ -371,7 +371,7 @@ test_alert_level_routing() {
         TESTS_FAILED=$((TESTS_FAILED + 1))
         return 1
     fi
-    
+
     TESTS_PASSED=$((TESTS_PASSED + 1))
     return 0
 }
@@ -381,27 +381,27 @@ test_alert_level_routing() {
 ##
 test_alert_stored_in_database() {
     print_message "${BLUE}" "\n=== Test: Alert Stored in Database ==="
-    
+
     export SEND_ALERT_EMAIL="false"
     export SLACK_ENABLED="false"
     export ALERT_DEDUPLICATION_ENABLED="false"
-    
+
     # Check database connection
     if ! psql -d "${TEST_DBNAME}" -c "SELECT 1;" > /dev/null 2>&1; then
         print_message "${YELLOW}" "  ⚠ Database not available, skipping"
         return 0
     fi
-    
+
     # Send alert
     local test_message="Database storage test alert"
     if send_alert "TEST" "warning" "db_test" "${test_message}" 2>&1; then
         sleep 1
-        
+
         # Check database
         local count
         count=$(psql -d "${TEST_DBNAME}" -t -A -c \
             "SELECT COUNT(*) FROM alerts WHERE component = 'TEST' AND message = '${test_message}';" 2>/dev/null | tr -d '[:space:]' || echo "0")
-        
+
         if [[ "${count}" -ge 1 ]]; then
             print_message "${GREEN}" "  ✓ Alert stored in database"
             TESTS_PASSED=$((TESTS_PASSED + 1))
@@ -423,33 +423,33 @@ test_alert_stored_in_database() {
 ##
 test_alert_deduplication() {
     print_message "${BLUE}" "\n=== Test: Alert Deduplication ==="
-    
+
     export SEND_ALERT_EMAIL="false"
     export SLACK_ENABLED="false"
     export ALERT_DEDUPLICATION_ENABLED="true"
     export ALERT_DEDUPLICATION_WINDOW_MINUTES=60
-    
+
     # Check database connection
     if ! psql -d "${TEST_DBNAME}" -c "SELECT 1;" > /dev/null 2>&1; then
         print_message "${YELLOW}" "  ⚠ Database not available, skipping"
         return 0
     fi
-    
+
     # Clean up old alerts
     psql -d "${TEST_DBNAME}" -c "DELETE FROM alerts WHERE component = 'TEST' AND alert_type = 'dedup_test';" > /dev/null 2>&1 || true
-    
+
     # Send same alert twice
     local test_message="Deduplication test alert"
     send_alert "TEST" "warning" "dedup_test" "${test_message}" 2>&1
     sleep 1
     send_alert "TEST" "warning" "dedup_test" "${test_message}" 2>&1
     sleep 1
-    
+
     # Check database
     local count
     count=$(psql -d "${TEST_DBNAME}" -t -A -c \
         "SELECT COUNT(*) FROM alerts WHERE component = 'TEST' AND alert_type = 'dedup_test';" 2>/dev/null | tr -d '[:space:]' || echo "0")
-    
+
     if [[ "${count}" -eq 1 ]]; then
         print_message "${GREEN}" "  ✓ Alert deduplication works"
         TESTS_PASSED=$((TESTS_PASSED + 1))
@@ -468,7 +468,7 @@ print_summary() {
     echo
     print_message "${BLUE}" "=== Test Summary ==="
     print_message "${GREEN}" "Tests passed: ${TESTS_PASSED}"
-    
+
     if [[ ${TESTS_FAILED} -gt 0 ]]; then
         print_message "${RED}" "Tests failed: ${TESTS_FAILED}"
         echo
@@ -488,10 +488,10 @@ main() {
     print_message "${GREEN}" "Complete Alert Delivery Test Suite"
     print_message "${BLUE}" "Test database: ${TEST_DBNAME}"
     echo
-    
+
     # Setup
     setup
-    
+
     # Run tests
     test_email_alert_enabled
     test_email_alert_disabled
@@ -501,10 +501,10 @@ main() {
     test_alert_level_routing
     test_alert_stored_in_database
     test_alert_deduplication
-    
+
     # Cleanup
     cleanup
-    
+
     # Summary
     if print_summary; then
         exit 0
