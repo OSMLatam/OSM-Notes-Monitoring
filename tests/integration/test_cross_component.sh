@@ -25,6 +25,8 @@ source "${BATS_TEST_DIRNAME}/../../bin/lib/monitoringFunctions.sh"
 source "${BATS_TEST_DIRNAME}/../../bin/lib/alertFunctions.sh"
 # shellcheck disable=SC1091
 source "${BATS_TEST_DIRNAME}/../../bin/lib/metricsFunctions.sh"
+# shellcheck disable=SC1091
+source "${BATS_TEST_DIRNAME}/../../bin/lib/securityFunctions.sh"
 
 setup() {
     # Set test environment
@@ -139,7 +141,7 @@ skip_if_database_not_available() {
     
     # Step 3: API security can log security events
     if [[ "${request_rate}" -gt 500 ]]; then
-        log_security_event "high_request_rate" "192.168.1.1" "Request rate: ${request_rate}"
+        record_security_event "rate_limit" "192.168.1.1" "" "{\"request_rate\": ${request_rate}}"
     fi
     
     # Step 4: Verify security event was logged

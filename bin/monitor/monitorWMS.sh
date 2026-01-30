@@ -145,12 +145,14 @@ check_wms_service_availability() {
  record_metric "${COMPONENT}" "service_availability" "${availability_value}" "component=wms,url=${service_url}"
  record_metric "${COMPONENT}" "service_response_time_ms" "${response_time}" "component=wms,url=${service_url}"
 
- # Alert if service is unavailable
- if [[ "${is_available}" != "true" ]]; then
-  log_error "${COMPONENT}: WMS service is unavailable (HTTP ${response_code})"
-  send_alert "${COMPONENT}" "CRITICAL" "service_unavailable" "WMS service is unavailable (HTTP ${response_code}, URL: ${service_url})"
-  return 1
+# Alert if service is unavailable
+if [[ "${is_available}" != "true" ]]; then
+ log_error "${COMPONENT}: WMS service is unavailable (HTTP ${response_code})"
+ if command -v send_alert >/dev/null 2>&1; then
+  send_alert "${COMPONENT}" "CRITICAL" "service_unavailable" "WMS service is unavailable (HTTP ${response_code}, URL: ${service_url})" || true
  fi
+ return 1
+fi
 
  return 0
 }
@@ -220,12 +222,14 @@ check_http_health() {
  record_metric "${COMPONENT}" "health_status" "${health_value}" "component=wms,url=${health_url}"
  record_metric "${COMPONENT}" "health_check_response_time_ms" "${response_time}" "component=wms,url=${health_url}"
 
- # Alert if unhealthy
- if [[ "${health_status}" != "healthy" ]]; then
-  log_error "${COMPONENT}: WMS health check failed (HTTP ${response_code}, status: ${health_status})"
-  send_alert "${COMPONENT}" "CRITICAL" "health_check_failed" "WMS health check failed (HTTP ${response_code}, status: ${health_status}, URL: ${health_url})"
-  return 1
+# Alert if unhealthy
+if [[ "${health_status}" != "healthy" ]]; then
+ log_error "${COMPONENT}: WMS health check failed (HTTP ${response_code}, status: ${health_status})"
+ if command -v send_alert >/dev/null 2>&1; then
+  send_alert "${COMPONENT}" "CRITICAL" "health_check_failed" "WMS health check failed (HTTP ${response_code}, status: ${health_status}, URL: ${health_url})" || true
  fi
+ return 1
+fi
 
  return 0
 }
@@ -274,7 +278,9 @@ check_response_time() {
   # Alert if response time exceeds threshold
   if [[ ${response_time} -gt ${threshold} ]]; then
    log_warning "${COMPONENT}: Response time (${response_time}ms) exceeds threshold (${threshold}ms)"
-   send_alert "${COMPONENT}" "WARNING" "response_time_exceeded" "WMS response time (${response_time}ms) exceeds threshold (${threshold}ms, URL: ${test_url})"
+   if command -v send_alert >/dev/null 2>&1; then
+    send_alert "${COMPONENT}" "WARNING" "response_time_exceeded" "WMS response time (${response_time}ms) exceeds threshold (${threshold}ms, URL: ${test_url})" || true
+   fi
    return 1
   fi
  else
@@ -362,12 +368,14 @@ check_error_rate() {
 
  log_info "${COMPONENT}: Error rate: ${error_rate}% (${error_count} errors / ${total_requests} requests, threshold: ${threshold}%)"
 
- # Alert if error rate exceeds threshold
- if [[ ${error_rate} -gt ${threshold} ]]; then
-  log_warning "${COMPONENT}: Error rate (${error_rate}%) exceeds threshold (${threshold}%)"
-  send_alert "${COMPONENT}" "WARNING" "error_rate_exceeded" "WMS error rate (${error_rate}%) exceeds threshold (${threshold}%, errors: ${error_count}, requests: ${total_requests})"
-  return 1
+# Alert if error rate exceeds threshold
+if [[ ${error_rate} -gt ${threshold} ]]; then
+ log_warning "${COMPONENT}: Error rate (${error_rate}%) exceeds threshold (${threshold}%)"
+ if command -v send_alert >/dev/null 2>&1; then
+  send_alert "${COMPONENT}" "WARNING" "error_rate_exceeded" "WMS error rate (${error_rate}%) exceeds threshold (${threshold}%, errors: ${error_count}, requests: ${total_requests})" || true
  fi
+ return 1
+fi
 
  return 0
 }
@@ -419,12 +427,16 @@ check_tile_generation_performance() {
   # Alert if generation time exceeds threshold
   if [[ ${generation_time} -gt ${threshold} ]]; then
    log_warning "${COMPONENT}: Tile generation time (${generation_time}ms) exceeds threshold (${threshold}ms)"
-   send_alert "${COMPONENT}" "WARNING" "tile_generation_slow" "WMS tile generation time (${generation_time}ms) exceeds threshold (${threshold}ms, URL: ${test_tile_url})"
+   if command -v send_alert >/dev/null 2>&1; then
+    send_alert "${COMPONENT}" "WARNING" "tile_generation_slow" "WMS tile generation time (${generation_time}ms) exceeds threshold (${threshold}ms, URL: ${test_tile_url})" || true
+   fi
    return 1
   fi
  else
   log_warning "${COMPONENT}: Failed to generate test tile (HTTP ${response_code})"
-  send_alert "${COMPONENT}" "WARNING" "tile_generation_failed" "WMS tile generation failed (HTTP ${response_code}, URL: ${test_tile_url})"
+  if command -v send_alert >/dev/null 2>&1; then
+   send_alert "${COMPONENT}" "WARNING" "tile_generation_failed" "WMS tile generation failed (HTTP ${response_code}, URL: ${test_tile_url})" || true
+  fi
   return 1
  fi
 
@@ -531,7 +543,9 @@ check_cache_hit_rate() {
  # Don't alert when there's no data (0 requests) - this is normal when there's no recent activity
  if [[ ${total_requests} -gt 0 ]] && [[ ${hit_rate} -lt ${threshold} ]]; then
   log_warning "${COMPONENT}: Cache hit rate (${hit_rate}%) is below threshold (${threshold}%)"
-  send_alert "${COMPONENT}" "WARNING" "cache_hit_rate_low" "WMS cache hit rate (${hit_rate}%) is below threshold (${threshold}%, hits: ${cache_hits}, misses: ${cache_misses})"
+  if command -v send_alert >/dev/null 2>&1; then
+   send_alert "${COMPONENT}" "WARNING" "cache_hit_rate_low" "WMS cache hit rate (${hit_rate}%) is below threshold (${threshold}%, hits: ${cache_hits}, misses: ${cache_misses})" || true
+  fi
   return 1
  elif [[ ${total_requests} -eq 0 ]]; then
   log_debug "${COMPONENT}: No cache activity detected in the last hour (no hits or misses). Skipping cache hit rate alert."

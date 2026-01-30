@@ -127,7 +127,9 @@ check_api_availability() {
     alert_message="API returned HTTP ${http_code} (URL: ${api_url})"
    fi
 
-   send_alert "${COMPONENT}" "WARNING" "api_unavailable" "${alert_message}"
+   if command -v send_alert >/dev/null 2>&1; then
+    send_alert "${COMPONENT}" "WARNING" "api_unavailable" "${alert_message}" || true
+   fi
    return 1
   fi
  else

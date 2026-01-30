@@ -112,11 +112,13 @@ check_backup_freshness() {
  local backup_count=0
  local backup_files=()
 
- if [[ ! -d "${backup_dir}" ]]; then
-  log_warning "${COMPONENT}: Backup directory does not exist: ${backup_dir}"
-  send_alert "${COMPONENT}" "WARNING" "backup_directory_missing" "Backup directory does not exist: ${backup_dir}"
-  return 1
+if [[ ! -d "${backup_dir}" ]]; then
+ log_warning "${COMPONENT}: Backup directory does not exist: ${backup_dir}"
+ if command -v send_alert >/dev/null 2>&1; then
+  send_alert "${COMPONENT}" "WARNING" "backup_directory_missing" "Backup directory does not exist: ${backup_dir}" || true
  fi
+ return 1
+fi
 
  # Find backup files (common patterns: *.sql, *.sql.gz, *.dump, *.tar.gz, *.backup)
  while IFS= read -r -d '' file; do
@@ -125,11 +127,13 @@ check_backup_freshness() {
 
  backup_count=${#backup_files[@]}
 
- if [[ ${backup_count} -eq 0 ]]; then
-  log_warning "${COMPONENT}: No backup files found in ${backup_dir}"
-  send_alert "${COMPONENT}" "WARNING" "no_backups_found" "No backup files found in backup directory: ${backup_dir}"
-  return 1
+if [[ ${backup_count} -eq 0 ]]; then
+ log_warning "${COMPONENT}: No backup files found in ${backup_dir}"
+ if command -v send_alert >/dev/null 2>&1; then
+  send_alert "${COMPONENT}" "WARNING" "no_backups_found" "No backup files found in backup directory: ${backup_dir}" || true
  fi
+ return 1
+fi
 
  # Calculate ages of backups
  local oldest_backup_time=${current_time}
@@ -160,12 +164,14 @@ check_backup_freshness() {
 
  log_info "${COMPONENT}: Backup freshness - Count: ${backup_count}, Newest: ${newest_backup_age}s, Oldest: ${oldest_backup_age}s (threshold: ${threshold}s)"
 
- # Alert if newest backup is too old
- if [[ ${newest_backup_age} -gt ${threshold} ]]; then
-  log_warning "${COMPONENT}: Newest backup is ${newest_backup_age}s old (threshold: ${threshold}s)"
-  send_alert "${COMPONENT}" "WARNING" "backup_freshness_exceeded" "Newest backup is ${newest_backup_age}s old (threshold: ${threshold}s, directory: ${backup_dir})"
-  return 1
+# Alert if newest backup is too old
+if [[ ${newest_backup_age} -gt ${threshold} ]]; then
+ log_warning "${COMPONENT}: Newest backup is ${newest_backup_age}s old (threshold: ${threshold}s)"
+ if command -v send_alert >/dev/null 2>&1; then
+  send_alert "${COMPONENT}" "WARNING" "backup_freshness_exceeded" "Newest backup is ${newest_backup_age}s old (threshold: ${threshold}s, directory: ${backup_dir})" || true
  fi
+ return 1
+fi
 
  return 0
 }
@@ -243,12 +249,14 @@ check_repository_sync_status() {
 
  log_info "${COMPONENT}: Repository sync status - Status: ${sync_status}, Behind: ${behind_count}, Ahead: ${ahead_count}"
 
- # Alert if repository is behind
- if [[ "${sync_status}" == "behind" ]] && [[ ${behind_count} -gt 0 ]]; then
-  log_warning "${COMPONENT}: Repository is ${behind_count} commits behind remote"
-  send_alert "${COMPONENT}" "WARNING" "repo_sync_behind" "Repository is ${behind_count} commits behind remote (repo: ${repo_path})"
-  return 1
+# Alert if repository is behind
+if [[ "${sync_status}" == "behind" ]] && [[ ${behind_count} -gt 0 ]]; then
+ log_warning "${COMPONENT}: Repository is ${behind_count} commits behind remote"
+ if command -v send_alert >/dev/null 2>&1; then
+  send_alert "${COMPONENT}" "WARNING" "repo_sync_behind" "Repository is ${behind_count} commits behind remote (repo: ${repo_path})" || true
  fi
+ return 1
+fi
 
  return 0
 }
@@ -410,19 +418,23 @@ check_storage_availability() {
   fi
 
   log_warning "${COMPONENT}: Disk usage (${disk_usage}%) exceeds threshold (${disk_usage_threshold}%)"
-  send_alert "${COMPONENT}" "${alert_level}" "storage_disk_usage_high" "Disk usage (${disk_usage}%) exceeds threshold (${disk_usage_threshold}%, path: ${storage_path})"
+  if command -v send_alert >/dev/null 2>&1; then
+   send_alert "${COMPONENT}" "${alert_level}" "storage_disk_usage_high" "Disk usage (${disk_usage}%) exceeds threshold (${disk_usage_threshold}%, path: ${storage_path})" || true
+  fi
 
   if [[ "${alert_level}" == "CRITICAL" ]]; then
    return 1
   fi
  fi
 
- # Check if storage path is writable
- if [[ ! -w "${storage_path}" ]]; then
-  log_warning "${COMPONENT}: Storage path is not writable: ${storage_path}"
-  send_alert "${COMPONENT}" "CRITICAL" "storage_not_writable" "Storage path is not writable: ${storage_path}"
-  return 1
+# Check if storage path is writable
+if [[ ! -w "${storage_path}" ]]; then
+ log_warning "${COMPONENT}: Storage path is not writable: ${storage_path}"
+ if command -v send_alert >/dev/null 2>&1; then
+  send_alert "${COMPONENT}" "CRITICAL" "storage_not_writable" "Storage path is not writable: ${storage_path}" || true
  fi
+ return 1
+fi
 
  return 0
 }

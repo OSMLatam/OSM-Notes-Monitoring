@@ -25,6 +25,8 @@ source "${BATS_TEST_DIRNAME}/../../bin/lib/securityFunctions.sh"
 source "${BATS_TEST_DIRNAME}/../../bin/lib/metricsFunctions.sh"
 # shellcheck disable=SC1091
 source "${BATS_TEST_DIRNAME}/../../bin/security/rateLimiter.sh"
+# shellcheck disable=SC1091
+source "${BATS_TEST_DIRNAME}/../../bin/security/ipBlocking.sh"
 
 setup() {
     # Set test environment

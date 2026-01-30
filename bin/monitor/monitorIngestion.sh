@@ -187,23 +187,29 @@ check_script_execution_status() {
  if [[ ${scripts_found} -ne ${expected_scripts_count} ]]; then
   if [[ ${scripts_found} -lt ${expected_scripts_count} ]]; then
    log_warning "${COMPONENT}: Scripts found (${scripts_found}) below expected (${expected_scripts_count})"
-   send_alert "${COMPONENT}" "WARNING" "script_execution_status" "Low number of scripts found: ${scripts_found} (expected: ${expected_scripts_count})"
+   if command -v send_alert >/dev/null 2>&1; then
+    send_alert "${COMPONENT}" "WARNING" "script_execution_status" "Low number of scripts found: ${scripts_found} (expected: ${expected_scripts_count})" || true
+   fi
   else
    log_warning "${COMPONENT}: More scripts found (${scripts_found}) than expected (${expected_scripts_count})"
   fi
- fi
+fi
 
- # Check if all found scripts are executable
- if [[ ${scripts_executable} -lt ${scripts_found} ]]; then
-  log_warning "${COMPONENT}: Some scripts are not executable (${scripts_executable}/${scripts_found})"
-  send_alert "${COMPONENT}" "WARNING" "script_execution_status" "Scripts executable count (${scripts_executable}) is less than scripts found (${scripts_found})"
+# Check if all found scripts are executable
+if [[ ${scripts_executable} -lt ${scripts_found} ]]; then
+ log_warning "${COMPONENT}: Some scripts are not executable (${scripts_executable}/${scripts_found})"
+ if command -v send_alert >/dev/null 2>&1; then
+  send_alert "${COMPONENT}" "WARNING" "script_execution_status" "Scripts executable count (${scripts_executable}) is less than scripts found (${scripts_found})" || true
  fi
+fi
 
- # Critical check: scripts_executable must equal expected count
- if [[ ${scripts_executable} -ne ${expected_scripts_count} ]]; then
-  log_warning "${COMPONENT}: Scripts executable (${scripts_executable}) does not match expected count (${expected_scripts_count})"
-  send_alert "${COMPONENT}" "WARNING" "script_execution_status" "Scripts executable count (${scripts_executable}) does not match expected (${expected_scripts_count}). All scripts must be executable."
+# Critical check: scripts_executable must equal expected count
+if [[ ${scripts_executable} -ne ${expected_scripts_count} ]]; then
+ log_warning "${COMPONENT}: Scripts executable (${scripts_executable}) does not match expected count (${expected_scripts_count})"
+ if command -v send_alert >/dev/null 2>&1; then
+  send_alert "${COMPONENT}" "WARNING" "script_execution_status" "Scripts executable count (${scripts_executable}) does not match expected (${expected_scripts_count}). All scripts must be executable." || true
  fi
+fi
 
  # Check last execution time from log files
  check_last_execution_time
@@ -305,30 +311,38 @@ check_error_rate() {
  local error_count_threshold="${INGESTION_ERROR_COUNT_THRESHOLD:-1000}"
  if [[ ${error_lines} -gt ${error_count_threshold} ]]; then
   log_warning "${COMPONENT}: Error count (${error_lines}) exceeds threshold (${error_count_threshold})"
-  send_alert "${COMPONENT}" "WARNING" "error_rate" "High error count detected: ${error_lines} errors in 24h (threshold: ${error_count_threshold})"
+  if command -v send_alert >/dev/null 2>&1; then
+   send_alert "${COMPONENT}" "WARNING" "error_rate" "High error count detected: ${error_lines} errors in 24h (threshold: ${error_count_threshold})" || true
+  fi
  fi
 
  # Check warning count threshold
  local warning_count_threshold="${INGESTION_WARNING_COUNT_THRESHOLD:-2000}"
  if [[ ${warning_lines} -gt ${warning_count_threshold} ]]; then
   log_warning "${COMPONENT}: Warning count (${warning_lines}) exceeds threshold (${warning_count_threshold})"
-  send_alert "${COMPONENT}" "INFO" "warning_rate" "High warning count detected: ${warning_lines} warnings in 24h (threshold: ${warning_count_threshold})"
+  if command -v send_alert >/dev/null 2>&1; then
+   send_alert "${COMPONENT}" "INFO" "warning_rate" "High warning count detected: ${warning_lines} warnings in 24h (threshold: ${warning_count_threshold})" || true
+  fi
  fi
 
  # Check error rate threshold
  local max_error_rate="${INGESTION_MAX_ERROR_RATE:-5}"
  if [[ ${error_rate} -gt ${max_error_rate} ]]; then
   log_warning "${COMPONENT}: Error rate (${error_rate}%) exceeds threshold (${max_error_rate}%)"
-  send_alert "${COMPONENT}" "WARNING" "error_rate" "High error rate detected: ${error_rate}% (threshold: ${max_error_rate}%, errors: ${error_lines}/${total_lines})"
+  if command -v send_alert >/dev/null 2>&1; then
+   send_alert "${COMPONENT}" "WARNING" "error_rate" "High error rate detected: ${error_rate}% (threshold: ${max_error_rate}%, errors: ${error_lines}/${total_lines})" || true
+  fi
   return 1
  fi
 
- # Check warning rate threshold
- local warning_rate_threshold="${INGESTION_WARNING_RATE_THRESHOLD:-15}"
- if [[ ${warning_rate} -gt ${warning_rate_threshold} ]]; then
-  log_warning "${COMPONENT}: Warning rate (${warning_rate}%) exceeds threshold (${warning_rate_threshold}%)"
-  send_alert "${COMPONENT}" "WARNING" "warning_rate" "High warning rate detected: ${warning_rate}% (threshold: ${warning_rate_threshold}%, warnings: ${warning_lines}/${total_lines})"
+# Check warning rate threshold
+local warning_rate_threshold="${INGESTION_WARNING_RATE_THRESHOLD:-15}"
+if [[ ${warning_rate} -gt ${warning_rate_threshold} ]]; then
+ log_warning "${COMPONENT}: Warning rate (${warning_rate}%) exceeds threshold (${warning_rate_threshold}%)"
+ if command -v send_alert >/dev/null 2>&1; then
+  send_alert "${COMPONENT}" "WARNING" "warning_rate" "High warning rate detected: ${warning_rate}% (threshold: ${warning_rate_threshold}%, warnings: ${warning_lines}/${total_lines})" || true
  fi
+fi
 
  # Check for recent error spikes (errors in last hour)
  check_recent_error_spikes
@@ -387,7 +401,9 @@ check_recent_error_spikes() {
 
   if [[ ${recent_error_rate} -gt ${spike_threshold} ]]; then
    log_warning "${COMPONENT}: Error spike detected in last hour: ${recent_error_rate}%"
-   send_alert "${COMPONENT}" "WARNING" "error_spike" "Error spike detected: ${recent_error_rate}% in last hour (${recent_errors} errors)"
+   if command -v send_alert >/dev/null 2>&1; then
+    send_alert "${COMPONENT}" "WARNING" "error_spike" "Error spike detected: ${recent_error_rate}% in last hour (${recent_errors} errors)" || true
+   fi
   fi
  fi
 
@@ -456,7 +472,9 @@ check_disk_space() {
 
   if [[ ${usage_percent} -ge ${disk_threshold} ]]; then
    log_warning "${COMPONENT}: Disk usage (${usage_percent}%) exceeds threshold (${disk_threshold}%) for ${dir}"
-   send_alert "${COMPONENT}" "WARNING" "disk_space" "High disk usage: ${usage_percent}% on ${dir} (threshold: ${disk_threshold}%, available: ${available_space})"
+   if command -v send_alert >/dev/null 2>&1; then
+    send_alert "${COMPONENT}" "WARNING" "disk_space" "High disk usage: ${usage_percent}% on ${dir} (threshold: ${disk_threshold}%, available: ${available_space})" || true
+   fi
    total_issues=$((total_issues + 1))
   elif [[ ${usage_percent} -ge $((disk_threshold - 10)) ]]; then
    log_warning "${COMPONENT}: Disk usage (${usage_percent}%) approaching threshold (${disk_threshold}%) for ${dir}"
@@ -496,7 +514,9 @@ check_system_disk_usage() {
 
   if [[ ${root_usage} -ge ${disk_threshold} ]]; then
    log_warning "${COMPONENT}: Root filesystem usage (${root_usage}%) exceeds threshold (${disk_threshold}%)"
-   send_alert "${COMPONENT}" "WARNING" "disk_space" "High root filesystem usage: ${root_usage}% (available: ${root_available})"
+   if command -v send_alert >/dev/null 2>&1; then
+    send_alert "${COMPONENT}" "WARNING" "disk_space" "High root filesystem usage: ${root_usage}% (available: ${root_available})" || true
+   fi
   fi
  fi
 
@@ -539,7 +559,9 @@ check_last_execution_time() {
  local log_age_threshold="${INGESTION_LAST_LOG_AGE_THRESHOLD:-24}"
  if [[ ${age_hours} -gt ${log_age_threshold} ]]; then
   log_warning "${COMPONENT}: Log file is older than threshold (${age_hours} hours, threshold: ${log_age_threshold} hours)"
-  send_alert "${COMPONENT}" "WARNING" "last_execution_time" "No recent activity detected: last log is ${age_hours} hours old (threshold: ${log_age_threshold} hours)"
+  if command -v send_alert >/dev/null 2>&1; then
+   send_alert "${COMPONENT}" "WARNING" "last_execution_time" "No recent activity detected: last log is ${age_hours} hours old (threshold: ${log_age_threshold} hours)" || true
+  fi
  fi
 
  return 0
@@ -560,7 +582,9 @@ check_ingestion_health() {
   error_message="Ingestion repository not found: ${INGESTION_REPO_PATH}"
   log_error "${COMPONENT}: ${error_message}"
   record_metric "${COMPONENT}" "health_status" "0" "component=ingestion"
-  send_alert "${COMPONENT}" "CRITICAL" "ingestion_health" "Health check failed: ${error_message}"
+  if command -v send_alert >/dev/null 2>&1; then
+   send_alert "${COMPONENT}" "CRITICAL" "ingestion_health" "Health check failed: ${error_message}" || true
+  fi
   return 1
  fi
 
@@ -578,7 +602,9 @@ check_ingestion_health() {
    error_message="No recent log files found (older than 1 day)"
    log_warning "${COMPONENT}: ${error_message}"
    record_metric "${COMPONENT}" "health_status" "1" "component=ingestion"
-   send_alert "${COMPONENT}" "WARNING" "ingestion_health" "Health check warning: ${error_message}"
+   if command -v send_alert >/dev/null 2>&1; then
+    send_alert "${COMPONENT}" "WARNING" "ingestion_health" "Health check warning: ${error_message}" || true
+   fi
    return 0
   fi
  fi
@@ -628,11 +654,13 @@ check_database_connection_performance() {
  log_debug "${COMPONENT}: Database connection time: ${duration_ms}ms"
  record_metric "${COMPONENT}" "db_connection_time_ms" "${duration_ms}" "component=ingestion"
 
- # Alert if connection is slow (> 1000ms)
- if [[ ${duration_ms} -gt 1000 ]]; then
-  log_warning "${COMPONENT}: Slow database connection: ${duration_ms}ms"
-  send_alert "${COMPONENT}" "WARNING" "database_connection" "Slow database connection: ${duration_ms}ms"
+# Alert if connection is slow (> 1000ms)
+if [[ ${duration_ms} -gt 1000 ]]; then
+ log_warning "${COMPONENT}: Slow database connection: ${duration_ms}ms"
+ if command -v send_alert >/dev/null 2>&1; then
+  send_alert "${COMPONENT}" "WARNING" "database_connection" "Slow database connection: ${duration_ms}ms" || true
  fi
+fi
 
  return 0
 }
@@ -669,7 +697,9 @@ check_database_query_performance() {
 
   if [[ ${duration_ms} -gt ${slow_query_threshold} ]]; then
    log_warning "${COMPONENT}: Slow query detected: ${duration_ms}ms (threshold: ${slow_query_threshold}ms)"
-   send_alert "${COMPONENT}" "WARNING" "slow_query" "Slow query detected: ${duration_ms}ms"
+   if command -v send_alert >/dev/null 2>&1; then
+    send_alert "${COMPONENT}" "WARNING" "slow_query" "Slow query detected: ${duration_ms}ms" || true
+   fi
   fi
  fi
 
@@ -803,7 +833,9 @@ check_advanced_database_metrics() {
 
   if [[ ${cache_hit_int} -lt ${threshold_int} ]]; then
    log_warning "${COMPONENT}: Cache hit ratio (${cache_hit_ratio}%) below threshold (${cache_hit_threshold}%)"
-   send_alert "${COMPONENT}" "WARNING" "db_cache_hit_ratio" "Database cache hit ratio (${cache_hit_ratio}%) below threshold (${cache_hit_threshold}%)"
+   if command -v send_alert >/dev/null 2>&1; then
+    send_alert "${COMPONENT}" "WARNING" "db_cache_hit_ratio" "Database cache hit ratio (${cache_hit_ratio}%) below threshold (${cache_hit_threshold}%)" || true
+   fi
   fi
  fi
 
@@ -818,12 +850,14 @@ check_advanced_database_metrics() {
  local slow_queries_count
  slow_queries_count=$(execute_sql_query "${slow_queries_query}" 2> /dev/null | tr -d '[:space:]' || echo "")
 
- if [[ -n "${slow_queries_count}" ]] && [[ "${slow_queries_count}" =~ ^[0-9]+$ ]]; then
-  if [[ ${slow_queries_count} -gt 0 ]]; then
-   log_warning "${COMPONENT}: ${slow_queries_count} slow queries detected"
-   send_alert "${COMPONENT}" "WARNING" "db_slow_queries" "${slow_queries_count} slow queries detected (>1s average execution time)"
+if [[ -n "${slow_queries_count}" ]] && [[ "${slow_queries_count}" =~ ^[0-9]+$ ]]; then
+ if [[ ${slow_queries_count} -gt 0 ]]; then
+  log_warning "${COMPONENT}: ${slow_queries_count} slow queries detected"
+  if command -v send_alert >/dev/null 2>&1; then
+   send_alert "${COMPONENT}" "WARNING" "db_slow_queries" "${slow_queries_count} slow queries detected (>1s average execution time)" || true
   fi
  fi
+fi
 
  # Check connection usage
  local conn_usage_query
@@ -844,7 +878,9 @@ check_advanced_database_metrics() {
 
   if [[ ${conn_usage_int} -gt ${threshold_int} ]]; then
    log_warning "${COMPONENT}: Connection usage (${conn_usage}%) exceeds threshold (${conn_usage_threshold}%)"
-   send_alert "${COMPONENT}" "WARNING" "db_connection_usage" "Database connection usage (${conn_usage}%) exceeds threshold (${conn_usage_threshold}%)"
+   if command -v send_alert >/dev/null 2>&1; then
+    send_alert "${COMPONENT}" "WARNING" "db_connection_usage" "Database connection usage (${conn_usage}%) exceeds threshold (${conn_usage_threshold}%)" || true
+   fi
   fi
  fi
 
@@ -859,13 +895,15 @@ check_advanced_database_metrics() {
  local deadlocks_count
  deadlocks_count=$(execute_sql_query "${deadlocks_query}" 2> /dev/null | tr -d '[:space:]' || echo "")
 
- if [[ -n "${deadlocks_count}" ]] && [[ "${deadlocks_count}" =~ ^[0-9]+$ ]]; then
-  if [[ ${deadlocks_count} -gt 0 ]]; then
-   log_error "${COMPONENT}: ${deadlocks_count} deadlocks detected"
-   send_alert "${COMPONENT}" "CRITICAL" "db_deadlocks" "${deadlocks_count} deadlocks detected in database"
-   return 1
+if [[ -n "${deadlocks_count}" ]] && [[ "${deadlocks_count}" =~ ^[0-9]+$ ]]; then
+ if [[ ${deadlocks_count} -gt 0 ]]; then
+  log_error "${COMPONENT}: ${deadlocks_count} deadlocks detected"
+  if command -v send_alert >/dev/null 2>&1; then
+   send_alert "${COMPONENT}" "CRITICAL" "db_deadlocks" "${deadlocks_count} deadlocks detected in database" || true
   fi
+  return 1
  fi
+fi
 
  log_info "${COMPONENT}: Advanced database metrics check completed"
  return 0
@@ -984,7 +1022,9 @@ check_ingestion_performance() {
    log_error "${COMPONENT}: Missing dependencies: ${missing_deps[*]}"
    log_error "${COMPONENT}: Current PATH: ${PATH}"
    rm -f "${lock_file}" # Remove lock on error
-   send_alert "${COMPONENT}" "ERROR" "performance_check_failed" "Performance analysis failed: Missing dependencies (${missing_deps[*]}). Check PATH and install missing tools."
+   if command -v send_alert >/dev/null 2>&1; then
+    send_alert "${COMPONENT}" "ERROR" "performance_check_failed" "Performance analysis failed: Missing dependencies (${missing_deps[*]}). Check PATH and install missing tools." || true
+   fi
    export PATH="${saved_path}" # Restore PATH before returning
    return 1
   fi
@@ -1115,7 +1155,9 @@ check_ingestion_performance() {
    local perf_duration_threshold="${INGESTION_PERFORMANCE_CHECK_DURATION_THRESHOLD:-300}"
    if [[ ${duration} -gt ${perf_duration_threshold} ]]; then
     log_warning "${COMPONENT}: Performance check duration (${duration}s) exceeds threshold (${perf_duration_threshold}s)"
-    send_alert "${COMPONENT}" "WARNING" "performance_check" "Performance check took too long: ${duration}s (threshold: ${perf_duration_threshold}s)"
+    if command -v send_alert >/dev/null 2>&1; then
+     send_alert "${COMPONENT}" "WARNING" "performance_check" "Performance check took too long: ${duration}s (threshold: ${perf_duration_threshold}s)" || true
+    fi
    fi
 
    # Log if script took a long time (for monitoring purposes)
@@ -1126,7 +1168,9 @@ check_ingestion_performance() {
    # Check performance check failures (only alert on real performance failures, not technical issues)
    if [[ ${fail_count} -gt 0 ]]; then
     log_warning "${COMPONENT}: Performance check found ${fail_count} performance failures"
-    send_alert "${COMPONENT}" "WARNING" "performance_check" "Performance check found ${fail_count} failures, ${warning_count} warnings"
+    if command -v send_alert >/dev/null 2>&1; then
+     send_alert "${COMPONENT}" "WARNING" "performance_check" "Performance check found ${fail_count} failures, ${warning_count} warnings" || true
+    fi
    elif [[ ${technical_failures} -gt 0 ]]; then
     # Log technical failures but don't alert (these are configuration issues, not performance problems)
     log_info "${COMPONENT}: Performance check completed with ${technical_failures} technical failures (scripts cannot execute - check PATH configuration)"
@@ -1136,7 +1180,9 @@ check_ingestion_performance() {
    local perf_warnings_threshold="${INGESTION_PERFORMANCE_CHECK_WARNINGS_THRESHOLD:-10}"
    if [[ ${warning_count} -gt ${perf_warnings_threshold} ]]; then
     log_warning "${COMPONENT}: Performance check warnings (${warning_count}) exceeds threshold (${perf_warnings_threshold})"
-    send_alert "${COMPONENT}" "WARNING" "performance_check" "Performance check found ${warning_count} warnings (threshold: ${perf_warnings_threshold})"
+    if command -v send_alert >/dev/null 2>&1; then
+     send_alert "${COMPONENT}" "WARNING" "performance_check" "Performance check found ${warning_count} warnings (threshold: ${perf_warnings_threshold})" || true
+    fi
    elif [[ ${warning_count} -gt 0 ]]; then
     log_warning "${COMPONENT}: Performance check found ${warning_count} warnings"
    fi
@@ -1210,7 +1256,9 @@ check_ingestion_performance() {
     alert_message="Performance analysis failed: exit_code=${exit_code} (${error_type}), duration=${duration}s. ${error_hint} Error: ${error_summary} Full output: ${output_file}"
    fi
 
-   send_alert "${COMPONENT}" "CRITICAL" "performance_check_failed" "${alert_message}"
+   if command -v send_alert >/dev/null 2>&1; then
+    send_alert "${COMPONENT}" "CRITICAL" "performance_check_failed" "${alert_message}" || true
+   fi
 
    # Remove lock file on error (including timeout)
    if [[ -f "${lock_file}" ]]; then
@@ -1321,7 +1369,9 @@ check_data_freshness() {
    local freshness_threshold="${INGESTION_DATA_FRESHNESS_THRESHOLD:-3600}"
    if (($(echo "${freshness_seconds} > ${freshness_threshold}" | bc -l 2> /dev/null || echo "0"))); then
     log_warning "${COMPONENT}: Data freshness (${freshness_seconds}s) exceeds threshold (${freshness_threshold}s)"
-    send_alert "${COMPONENT}" "WARNING" "data_freshness" "Data freshness exceeded: ${freshness_seconds}s (threshold: ${freshness_threshold}s)"
+    if command -v send_alert >/dev/null 2>&1; then
+     send_alert "${COMPONENT}" "WARNING" "data_freshness" "Data freshness exceeded: ${freshness_seconds}s (threshold: ${freshness_threshold}s)" || true
+    fi
    fi
   fi
 
@@ -1456,7 +1506,9 @@ check_ingestion_data_quality() {
   if [[ "${TEST_MODE:-false}" == "true" ]]; then
    echo "DEBUG: Calling send_alert for low quality score" >&2
   fi
-  send_alert "${COMPONENT}" "WARNING" "data_quality" "Data quality below threshold: ${quality_score}% (threshold: ${quality_threshold}%)"
+  if command -v send_alert >/dev/null 2>&1; then
+   send_alert "${COMPONENT}" "WARNING" "data_quality" "Data quality below threshold: ${quality_score}% (threshold: ${quality_threshold}%)" || true
+  fi
   return 1
  fi
 
@@ -1501,7 +1553,9 @@ check_processing_latency() {
    local latency_threshold="${INGESTION_LATENCY_THRESHOLD:-300}"
    if (($(echo "${latency_seconds} > ${latency_threshold}" | bc -l 2> /dev/null || echo "0"))); then
     log_warning "${COMPONENT}: Processing latency (${latency_seconds}s) exceeds threshold (${latency_threshold}s)"
-    send_alert "${COMPONENT}" "WARNING" "processing_latency" "High processing latency: ${latency_seconds}s (threshold: ${latency_threshold}s)"
+    if command -v send_alert >/dev/null 2>&1; then
+     send_alert "${COMPONENT}" "WARNING" "processing_latency" "High processing latency: ${latency_seconds}s (threshold: ${latency_threshold}s)" || true
+    fi
     return 1
    fi
   fi
@@ -1526,7 +1580,9 @@ check_processing_latency() {
     local latency_threshold="${INGESTION_LATENCY_THRESHOLD:-300}"
     if [[ ${latency_seconds} -gt ${latency_threshold} ]]; then
      log_warning "${COMPONENT}: Processing latency (${latency_seconds}s) exceeds threshold (${latency_threshold}s)"
-     send_alert "${COMPONENT}" "WARNING" "processing_latency" "High processing latency: ${latency_seconds}s (threshold: ${latency_threshold}s)"
+     if command -v send_alert >/dev/null 2>&1; then
+      send_alert "${COMPONENT}" "WARNING" "processing_latency" "High processing latency: ${latency_seconds}s (threshold: ${latency_threshold}s)" || true
+     fi
      return 1
     fi
    fi
@@ -1718,7 +1774,9 @@ check_api_download_status() {
   if [[ "${TEST_MODE:-false}" == "true" ]]; then
    echo "DEBUG: Calling send_alert for no recent activity" >&2
   fi
-  send_alert "${COMPONENT}" "WARNING" "api_download_status" "No recent API download activity detected"
+  if command -v send_alert >/dev/null 2>&1; then
+   send_alert "${COMPONENT}" "WARNING" "api_download_status" "No recent API download activity detected" || true
+  fi
   return 1
  fi
 
@@ -1845,19 +1903,25 @@ check_advanced_api_metrics() {
  local success_threshold="${INGESTION_API_SUCCESS_RATE_THRESHOLD:-95}"
  if [[ ${total_requests} -gt 0 ]] && [[ ${success_rate_percent} -lt ${success_threshold} ]]; then
   log_warning "${COMPONENT}: API success rate (${success_rate_percent}%) below threshold (${success_threshold}%)"
-  send_alert "${COMPONENT}" "WARNING" "api_success_rate_low" "API success rate is low: ${success_rate_percent}% (threshold: ${success_threshold}%)"
+  if command -v send_alert >/dev/null 2>&1; then
+   send_alert "${COMPONENT}" "WARNING" "api_success_rate_low" "API success rate is low: ${success_rate_percent}% (threshold: ${success_threshold}%)" || true
+  fi
  fi
 
  if [[ ${errors_5xx} -gt 0 ]]; then
   log_critical "${COMPONENT}: Detected ${errors_5xx} HTTP 5xx errors"
-  send_alert "${COMPONENT}" "CRITICAL" "api_errors_5xx" "Detected ${errors_5xx} HTTP 5xx errors"
+  if command -v send_alert >/dev/null 2>&1; then
+   send_alert "${COMPONENT}" "CRITICAL" "api_errors_5xx" "Detected ${errors_5xx} HTTP 5xx errors" || true
+  fi
   return 1
  fi
 
  local rate_limit_threshold="${INGESTION_API_RATE_LIMIT_THRESHOLD:-10}"
  if [[ ${rate_limit_hits} -gt ${rate_limit_threshold} ]]; then
   log_warning "${COMPONENT}: Rate limit hits (${rate_limit_hits}) exceed threshold (${rate_limit_threshold})"
-  send_alert "${COMPONENT}" "WARNING" "api_rate_limit_frequent" "Rate limit reached frequently: ${rate_limit_hits} hits"
+  if command -v send_alert >/dev/null 2>&1; then
+   send_alert "${COMPONENT}" "WARNING" "api_rate_limit_frequent" "Rate limit reached frequently: ${rate_limit_hits} hits" || true
+  fi
  fi
 
  # Check sync gap (compare last note timestamp with database)
@@ -1882,7 +1946,9 @@ check_advanced_api_metrics() {
    local sync_gap_threshold="${INGESTION_API_SYNC_GAP_THRESHOLD:-3600}"
    if [[ ${sync_gap} -gt ${sync_gap_threshold} ]]; then
     log_warning "${COMPONENT}: API sync gap (${sync_gap}s) exceeds threshold (${sync_gap_threshold}s)"
-    send_alert "${COMPONENT}" "WARNING" "api_sync_gap_high" "API sync gap is high: ${sync_gap}s (threshold: ${sync_gap_threshold}s)"
+    if command -v send_alert >/dev/null 2>&1; then
+     send_alert "${COMPONENT}" "WARNING" "api_sync_gap_high" "API sync gap is high: ${sync_gap}s (threshold: ${sync_gap_threshold}s)" || true
+    fi
    fi
   fi
  fi
@@ -1928,7 +1994,9 @@ check_boundary_metrics() {
 
  if [[ ${exit_code} -ne 0 ]]; then
   log_warning "${COMPONENT}: Boundary metrics collection failed (exit code: ${exit_code})"
-  send_alert "${COMPONENT}" "WARNING" "boundary_metrics_collection_failed" "Boundary metrics collection failed with exit code ${exit_code}"
+  if command -v send_alert >/dev/null 2>&1; then
+   send_alert "${COMPONENT}" "WARNING" "boundary_metrics_collection_failed" "Boundary metrics collection failed with exit code ${exit_code}" || true
+  fi
   return 1
  fi
 
@@ -1948,7 +2016,9 @@ check_boundary_metrics() {
  if [[ -n "${countries_update_age}" ]] && [[ "${countries_update_age}" =~ ^[0-9]+$ ]]; then
   if [[ ${countries_update_age} -gt ${update_age_threshold} ]]; then
    log_warning "${COMPONENT}: Countries boundary update age (${countries_update_age} hours) exceeds threshold (${update_age_threshold} hours)"
-   send_alert "${COMPONENT}" "WARNING" "boundary_update_stale" "Countries boundary data is stale: ${countries_update_age} hours old (threshold: ${update_age_threshold} hours)"
+   if command -v send_alert >/dev/null 2>&1; then
+    send_alert "${COMPONENT}" "WARNING" "boundary_update_stale" "Countries boundary data is stale: ${countries_update_age} hours old (threshold: ${update_age_threshold} hours)" || true
+   fi
   fi
  fi
 
@@ -1983,7 +2053,9 @@ check_boundary_metrics() {
    local percentage_threshold="${INGESTION_BOUNDARY_NO_COUNTRY_THRESHOLD:-10}"
    if [[ ${percentage_without_country} -gt ${percentage_threshold} ]]; then
     log_warning "${COMPONENT}: Percentage of notes without country (${percentage_without_country}%) exceeds threshold (${percentage_threshold}%)"
-    send_alert "${COMPONENT}" "WARNING" "boundary_no_country_high" "High percentage of notes without country: ${percentage_without_country}% (${notes_without_country}/${total_notes})"
+    if command -v send_alert >/dev/null 2>&1; then
+     send_alert "${COMPONENT}" "WARNING" "boundary_no_country_high" "High percentage of notes without country: ${percentage_without_country}% (${notes_without_country}/${total_notes})" || true
+    fi
    fi
   fi
  fi
@@ -2001,7 +2073,9 @@ check_boundary_metrics() {
 
  if [[ -n "${wrong_country_count}" ]] && [[ "${wrong_country_count}" =~ ^[0-9]+$ ]] && [[ ${wrong_country_count} -gt 0 ]]; then
   log_warning "${COMPONENT}: Detected ${wrong_country_count} notes with wrong country assignment"
-  send_alert "${COMPONENT}" "WARNING" "boundary_wrong_country" "Detected ${wrong_country_count} notes with wrong country assignment"
+  if command -v send_alert >/dev/null 2>&1; then
+   send_alert "${COMPONENT}" "WARNING" "boundary_wrong_country" "Detected ${wrong_country_count} notes with wrong country assignment" || true
+  fi
  fi
 
  log_info "${COMPONENT}: Boundary metrics check completed"
@@ -2027,7 +2101,9 @@ check_structured_log_metrics() {
 
  if ! parse_structured_logs "${daemon_log_file}" "${time_window_hours}"; then
   log_warning "${COMPONENT}: Structured log parsing failed"
-  send_alert "${COMPONENT}" "WARNING" "structured_log_parsing_failed" "Failed to parse structured logs from ${daemon_log_file}"
+  if command -v send_alert >/dev/null 2>&1; then
+   send_alert "${COMPONENT}" "WARNING" "structured_log_parsing_failed" "Failed to parse structured logs from ${daemon_log_file}" || true
+  fi
   return 1
  fi
 
@@ -2037,7 +2113,9 @@ check_structured_log_metrics() {
 
  if [[ -n "${failed_cycles}" ]] && [[ "${failed_cycles}" =~ ^[0-9]+$ ]] && [[ ${failed_cycles} -gt 0 ]]; then
   log_warning "${COMPONENT}: Detected ${failed_cycles} failed cycles in logs"
-  send_alert "${COMPONENT}" "CRITICAL" "cycles_failed" "Detected ${failed_cycles} failed cycles in daemon logs"
+  if command -v send_alert >/dev/null 2>&1; then
+   send_alert "${COMPONENT}" "CRITICAL" "cycles_failed" "Detected ${failed_cycles} failed cycles in daemon logs" || true
+  fi
  fi
 
  # Check for slow stages
@@ -2045,10 +2123,12 @@ check_structured_log_metrics() {
  slowest_stage_duration=$(get_metric_value "${COMPONENT}" "log_slowest_stage_duration_seconds" "component=ingestion" || echo "0")
  local stage_threshold="${INGESTION_SLOW_STAGE_THRESHOLD_SECONDS:-30}"
 
- if [[ -n "${slowest_stage_duration}" ]] && [[ "${slowest_stage_duration}" =~ ^[0-9]+$ ]] && [[ ${slowest_stage_duration} -gt ${stage_threshold} ]]; then
-  log_warning "${COMPONENT}: Slowest stage duration (${slowest_stage_duration}s) exceeds threshold (${stage_threshold}s)"
-  send_alert "${COMPONENT}" "WARNING" "slow_stage_detected" "Slowest stage duration: ${slowest_stage_duration}s (threshold: ${stage_threshold}s)"
+if [[ -n "${slowest_stage_duration}" ]] && [[ "${slowest_stage_duration}" =~ ^[0-9]+$ ]] && [[ ${slowest_stage_duration} -gt ${stage_threshold} ]]; then
+ log_warning "${COMPONENT}: Slowest stage duration (${slowest_stage_duration}s) exceeds threshold (${stage_threshold}s)"
+ if command -v send_alert >/dev/null 2>&1; then
+  send_alert "${COMPONENT}" "WARNING" "slow_stage_detected" "Slowest stage duration: ${slowest_stage_duration}s (threshold: ${stage_threshold}s)" || true
  fi
+fi
 
  # Check for log gaps (no cycles in last hour)
  # Use multiple methods to detect cycles for better reliability
@@ -2131,9 +2211,11 @@ check_structured_log_metrics() {
   fi
  fi
 
- if [[ "${should_alert}" == "true" ]]; then
-  log_warning "${COMPONENT}: No cycles detected in last hour (possible log gap) - Log cycles: ${recent_cycles_count}, log_cycles_per_hour: ${log_cycles_per_hour}, daemon_cycles_per_hour: ${daemon_cycles_per_hour}, last_cycle_timestamp: ${last_cycle_timestamp}"
-  send_alert "${COMPONENT}" "WARNING" "log_gap_detected" "No cycles detected in last hour - possible processing gap. ${alert_reason}"
+if [[ "${should_alert}" == "true" ]]; then
+ log_warning "${COMPONENT}: No cycles detected in last hour (possible log gap) - Log cycles: ${recent_cycles_count}, log_cycles_per_hour: ${log_cycles_per_hour}, daemon_cycles_per_hour: ${daemon_cycles_per_hour}, last_cycle_timestamp: ${last_cycle_timestamp}"
+ if command -v send_alert >/dev/null 2>&1; then
+  send_alert "${COMPONENT}" "WARNING" "log_gap_detected" "No cycles detected in last hour - possible processing gap. ${alert_reason}" || true
+ fi
  elif [[ ${recent_cycles_count} -gt 0 ]]; then
   log_debug "${COMPONENT}: Found ${recent_cycles_count} cycles in last hour (no gap detected)"
  fi
@@ -2471,7 +2553,9 @@ check_api_download_success_rate() {
   if [[ "${TEST_MODE:-false}" == "true" ]]; then
    echo "DEBUG: Calling send_alert for low success rate" >&2
   fi
-  send_alert "${COMPONENT}" "WARNING" "api_download_success_rate" "Low API download success rate: ${success_rate}% (threshold: ${success_threshold}%, ${successful_downloads}/${total_downloads})"
+  if command -v send_alert >/dev/null 2>&1; then
+   send_alert "${COMPONENT}" "WARNING" "api_download_success_rate" "Low API download success rate: ${success_rate}% (threshold: ${success_threshold}%, ${successful_downloads}/${total_downloads})" || true
+  fi
   return 1
  fi
 
@@ -2542,7 +2626,9 @@ check_daemon_metrics() {
  if [[ -n "${daemon_status}" ]]; then
   if [[ "${daemon_status}" == "0" ]]; then
    log_warning "${COMPONENT}: Daemon is not active"
-   send_alert "${COMPONENT}" "CRITICAL" "daemon_down" "Daemon service is not active"
+   if command -v send_alert >/dev/null 2>&1; then
+    send_alert "${COMPONENT}" "CRITICAL" "daemon_down" "Daemon service is not active" || true
+   fi
    return 1
   fi
  fi
@@ -2562,7 +2648,9 @@ check_daemon_metrics() {
   local cycle_duration_threshold="${INGESTION_DAEMON_CYCLE_DURATION_THRESHOLD:-30}"
   if [[ ${cycle_duration} -gt ${cycle_duration_threshold} ]]; then
    log_warning "${COMPONENT}: Cycle duration (${cycle_duration}s) exceeds threshold (${cycle_duration_threshold}s)"
-   send_alert "${COMPONENT}" "WARNING" "daemon_cycle_duration" "Cycle duration (${cycle_duration}s) exceeds threshold (${cycle_duration_threshold}s)"
+   if command -v send_alert >/dev/null 2>&1; then
+    send_alert "${COMPONENT}" "WARNING" "daemon_cycle_duration" "Cycle duration (${cycle_duration}s) exceeds threshold (${cycle_duration_threshold}s)" || true
+   fi
   fi
  fi
 
@@ -2581,7 +2669,9 @@ check_daemon_metrics() {
   local success_rate_threshold="${INGESTION_DAEMON_SUCCESS_RATE_THRESHOLD:-95}"
   if [[ ${success_rate} -lt ${success_rate_threshold} ]]; then
    log_warning "${COMPONENT}: Cycle success rate (${success_rate}%) below threshold (${success_rate_threshold}%)"
-   send_alert "${COMPONENT}" "WARNING" "daemon_success_rate" "Cycle success rate (${success_rate}%) below threshold (${success_rate_threshold}%)"
+   if command -v send_alert >/dev/null 2>&1; then
+    send_alert "${COMPONENT}" "WARNING" "daemon_success_rate" "Cycle success rate (${success_rate}%) below threshold (${success_rate_threshold}%)" || true
+   fi
   fi
  fi
 
@@ -2597,7 +2687,9 @@ check_daemon_metrics() {
 
  if [[ -z "${last_cycle_time}" ]]; then
   log_warning "${COMPONENT}: No daemon processing detected in last 5 minutes"
-  send_alert "${COMPONENT}" "CRITICAL" "daemon_no_processing" "No daemon processing detected in last 5 minutes"
+  if command -v send_alert >/dev/null 2>&1; then
+   send_alert "${COMPONENT}" "CRITICAL" "daemon_no_processing" "No daemon processing detected in last 5 minutes" || true
+  fi
   return 1
  fi
 

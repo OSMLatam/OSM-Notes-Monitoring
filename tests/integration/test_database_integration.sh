@@ -25,6 +25,8 @@ source "${BATS_TEST_DIRNAME}/../../bin/lib/monitoringFunctions.sh"
 source "${BATS_TEST_DIRNAME}/../../bin/lib/alertFunctions.sh"
 # shellcheck disable=SC1091
 source "${BATS_TEST_DIRNAME}/../../bin/lib/metricsFunctions.sh"
+# shellcheck disable=SC1091
+source "${BATS_TEST_DIRNAME}/../../bin/monitor/monitorInfrastructure.sh"
 
 setup() {
     # Set test environment

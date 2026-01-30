@@ -298,7 +298,9 @@ check_server_resources() {
    alert_level="CRITICAL"
   fi
   log_warning "${COMPONENT}: CPU usage (${cpu_usage}%) exceeds threshold (${cpu_threshold}%)"
-  send_alert "${COMPONENT}" "${alert_level}" "cpu_usage_high" "CPU usage (${cpu_usage}%) exceeds threshold (${cpu_threshold}%)"
+  if command -v send_alert >/dev/null 2>&1; then
+   send_alert "${COMPONENT}" "${alert_level}" "cpu_usage_high" "CPU usage (${cpu_usage}%) exceeds threshold (${cpu_threshold}%)" || true
+  fi
   overall_result=1
  fi
 
@@ -309,7 +311,9 @@ check_server_resources() {
    alert_level="CRITICAL"
   fi
   log_warning "${COMPONENT}: Memory usage (${memory_usage}%) exceeds threshold (${memory_threshold}%)"
-  send_alert "${COMPONENT}" "${alert_level}" "memory_usage_high" "Memory usage (${memory_usage}%) exceeds threshold (${memory_threshold}%)"
+  if command -v send_alert >/dev/null 2>&1; then
+   send_alert "${COMPONENT}" "${alert_level}" "memory_usage_high" "Memory usage (${memory_usage}%) exceeds threshold (${memory_threshold}%)" || true
+  fi
   overall_result=1
  fi
 
@@ -320,7 +324,9 @@ check_server_resources() {
    alert_level="CRITICAL"
   fi
   log_warning "${COMPONENT}: Disk usage (${disk_usage}%) exceeds threshold (${disk_threshold}%)"
-  send_alert "${COMPONENT}" "${alert_level}" "disk_usage_high" "Disk usage (${disk_usage}%) exceeds threshold (${disk_threshold}%)"
+  if command -v send_alert >/dev/null 2>&1; then
+   send_alert "${COMPONENT}" "${alert_level}" "disk_usage_high" "Disk usage (${disk_usage}%) exceeds threshold (${disk_threshold}%)" || true
+  fi
   overall_result=1
  fi
 
@@ -409,7 +415,9 @@ check_advanced_system_metrics() {
   if [[ "${comparison_result}" == "1" ]]; then
    local load_multiplier="${INFRASTRUCTURE_LOAD_THRESHOLD_MULTIPLIER:-2}"
    log_warning "${COMPONENT}: Load average (${load_1min}) exceeds threshold (${load_threshold} = ${load_multiplier}x ${cpu_count} CPUs)"
-   send_alert "${COMPONENT}" "WARNING" "system_load_high" "Load average (${load_1min}) exceeds threshold (${load_threshold})"
+   if command -v send_alert >/dev/null 2>&1; then
+    send_alert "${COMPONENT}" "WARNING" "system_load_high" "Load average (${load_1min}) exceeds threshold (${load_threshold})" || true
+   fi
   fi
  fi
 
@@ -431,7 +439,9 @@ check_advanced_system_metrics() {
 
   if [[ ${swap_usage_int} -gt ${swap_threshold} ]]; then
    log_warning "${COMPONENT}: Swap usage (${swap_usage}%) exceeds threshold (${swap_threshold}%)"
-   send_alert "${COMPONENT}" "WARNING" "system_swap_high" "Swap usage (${swap_usage}%) exceeds threshold (${swap_threshold}%)"
+   if command -v send_alert >/dev/null 2>&1; then
+    send_alert "${COMPONENT}" "WARNING" "system_swap_high" "Swap usage (${swap_usage}%) exceeds threshold (${swap_threshold}%)" || true
+   fi
   fi
  fi
 
@@ -511,7 +521,9 @@ check_network_connectivity() {
  # Alert if connectivity failures
  if [[ ${connectivity_failures} -gt 0 ]]; then
   log_warning "${COMPONENT}: Network connectivity check found ${connectivity_failures} failure(s)"
-  send_alert "${COMPONENT}" "WARNING" "network_connectivity_failure" "Network connectivity check found ${connectivity_failures} failure(s) out of ${total_checks} hosts checked"
+  if command -v send_alert >/dev/null 2>&1; then
+   send_alert "${COMPONENT}" "WARNING" "network_connectivity_failure" "Network connectivity check found ${connectivity_failures} failure(s) out of ${total_checks} hosts checked" || true
+  fi
   return 1
  fi
 
@@ -529,12 +541,14 @@ check_database_server_health() {
   return 0
  fi
 
- # Check database connection
- if ! check_database_connection; then
-  log_error "${COMPONENT}: Database connection failed"
-  send_alert "${COMPONENT}" "CRITICAL" "database_connection_failed" "Database server connection failed"
-  return 1
+# Check database connection
+if ! check_database_connection; then
+ log_error "${COMPONENT}: Database connection failed"
+ if command -v send_alert >/dev/null 2>&1; then
+  send_alert "${COMPONENT}" "CRITICAL" "database_connection_failed" "Database server connection failed" || true
  fi
+ return 1
+fi
 
  # Get database server status
  local db_version=""
@@ -587,7 +601,9 @@ check_database_server_health() {
   local connection_usage_percent=$(((active_connections * 100) / max_connections))
   if [[ ${connection_usage_percent} -gt 80 ]]; then
    log_warning "${COMPONENT}: Database connection usage (${connection_usage_percent}%) is high"
-   send_alert "${COMPONENT}" "WARNING" "database_connections_high" "Database connection usage (${connection_usage_percent}%, ${active_connections}/${max_connections}) is high"
+   if command -v send_alert >/dev/null 2>&1; then
+    send_alert "${COMPONENT}" "WARNING" "database_connections_high" "Database connection usage (${connection_usage_percent}%, ${active_connections}/${max_connections}) is high" || true
+   fi
    return 1
   fi
  fi
@@ -661,7 +677,9 @@ check_service_dependencies() {
  # Alert if service failures
  if [[ ${service_failures} -gt 0 ]]; then
   log_warning "${COMPONENT}: Service dependencies check found ${service_failures} failure(s)"
-  send_alert "${COMPONENT}" "WARNING" "service_dependency_failure" "Service dependencies check found ${service_failures} failure(s) out of ${total_services} services checked"
+  if command -v send_alert >/dev/null 2>&1; then
+   send_alert "${COMPONENT}" "WARNING" "service_dependency_failure" "Service dependencies check found ${service_failures} failure(s) out of ${total_services} services checked" || true
+  fi
   return 1
  fi
 

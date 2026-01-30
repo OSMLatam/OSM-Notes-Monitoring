@@ -98,27 +98,33 @@ run_planet_check() {
  # Check exit code
  if [[ ${exit_code} -eq 0 ]]; then
   log_info "${COMPONENT}: Planet Notes check passed (duration: ${duration}s)"
-  record_metric "${COMPONENT}" "planet_check_status" "1" "component=ingestion,check=processCheckPlanetNotes"
-  record_metric "${COMPONENT}" "planet_check_duration" "${duration}" "component=ingestion,check=processCheckPlanetNotes"
+  # Record metrics (don't fail if record_metric is not available or fails)
+  if command -v record_metric >/dev/null 2>&1; then
+   record_metric "${COMPONENT}" "planet_check_status" "1" "component=ingestion,check=processCheckPlanetNotes" || true
+   record_metric "${COMPONENT}" "planet_check_duration" "${duration}" "component=ingestion,check=processCheckPlanetNotes" || true
+  fi
 
   # Check planet check duration threshold
   local planet_duration_threshold="${INGESTION_PLANET_CHECK_DURATION_THRESHOLD:-600}"
   if [[ ${duration} -gt ${planet_duration_threshold} ]]; then
    log_warning "${COMPONENT}: Planet check duration (${duration}s) exceeds threshold (${planet_duration_threshold}s)"
-   # Only send alert if send_alert function is available and not mocked
-   if command -v send_alert >/dev/null 2>&1 && [[ "${TEST_MODE:-false}" != "true" ]]; then
-    send_alert "WARNING" "${COMPONENT}" "Planet Notes check took too long: ${duration}s (threshold: ${planet_duration_threshold}s)"
+   # Only send alert if send_alert function is available
+   if command -v send_alert >/dev/null 2>&1; then
+    send_alert "${COMPONENT}" "WARNING" "planet_check_duration" "Planet Notes check took too long: ${duration}s (threshold: ${planet_duration_threshold}s)" || true
    fi
   fi
 
   return 0
  else
   log_error "${COMPONENT}: Planet Notes check failed (exit_code: ${exit_code}, duration: ${duration}s)"
-  record_metric "${COMPONENT}" "planet_check_status" "0" "component=ingestion,check=processCheckPlanetNotes"
-  record_metric "${COMPONENT}" "planet_check_duration" "${duration}" "component=ingestion,check=processCheckPlanetNotes"
-  # Only send alert if send_alert function is available and not mocked
-  if command -v send_alert >/dev/null 2>&1 && [[ "${TEST_MODE:-false}" != "true" ]]; then
-   send_alert "ERROR" "${COMPONENT}" "Planet Notes check failed: exit_code=${exit_code}"
+  # Record metrics (don't fail if record_metric is not available or fails)
+  if command -v record_metric >/dev/null 2>&1; then
+   record_metric "${COMPONENT}" "planet_check_status" "0" "component=ingestion,check=processCheckPlanetNotes" || true
+   record_metric "${COMPONENT}" "planet_check_duration" "${duration}" "component=ingestion,check=processCheckPlanetNotes" || true
+  fi
+  # Only send alert if send_alert function is available
+  if command -v send_alert >/dev/null 2>&1; then
+   send_alert "${COMPONENT}" "ERROR" "planet_check_failed" "Planet Notes check failed: exit_code=${exit_code}" || true
   fi
   return 1
  fi

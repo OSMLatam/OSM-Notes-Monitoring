@@ -14,6 +14,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly SCRIPT_DIR
 PROJECT_ROOT=""
 PROJECT_ROOT="$(dirname "$(dirname "${SCRIPT_DIR}")")"
+# Remove trailing slash if present
+PROJECT_ROOT="${PROJECT_ROOT%/}"
 readonly PROJECT_ROOT
 
 # Source libraries
